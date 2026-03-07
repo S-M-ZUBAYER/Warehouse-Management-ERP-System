@@ -1,16 +1,10 @@
 import { Warehouse } from "lucide-react";
-import WarehouseIllustration from "./WarehouseIllustration";
+import logInLogo from "../../../assets/Login/logInLogo.svg";
+import grozziieLogo from "../../../assets/Login/GrozziieLogo.svg";
 
 export default function AuthLayout({ children, title, subtitle }) {
   return (
-    <div
-      className="min-h-screen flex items-center justify-center p-6 relative overflow-hidden bg-gray-300"
-      style={{
-        // background:
-        //   "linear-gradient(135deg, #0F2744 0%, #1A3A5C 50%, #0D1F38 100%)",
-        fontFamily: "'DM Sans', sans-serif",
-      }}
-    >
+    <div className="min-h-screen flex items-center justify-center p-6 relative overflow-hidden bg-white font-body">
       {/* Ambient glow top-right */}
       <div
         className="absolute pointer-events-none"
@@ -58,70 +52,20 @@ export default function AuthLayout({ children, title, subtitle }) {
       >
         {/* ── Left Panel ── */}
         <div
-          className="hidden lg:flex flex-col items-center justify-center p-12"
+          className="hidden lg:flex flex-col items-center justify-center p-12 bg-[#E6ECF0] rounded-xl m-3"
           style={{
             width: "42%",
-            background:
-              "linear-gradient(160deg, rgba(245,158,11,0.1) 0%, rgba(255,255,255,0.02) 60%)",
+
             borderRight: "1px solid rgba(255,255,255,0.07)",
           }}
         >
           {/* Logo */}
-          <div className="flex items-center gap-3 mb-10 self-start">
-            <div
-              className="w-11 h-11 flex items-center justify-center rounded-xl"
-              style={{ background: "#F59E0B" }}
-            >
-              <Warehouse size={20} color="#0F2744" />
-            </div>
-            <span
-              className="text-white font-bold text-xl tracking-tight"
-              style={{ fontFamily: "'Sora', sans-serif" }}
-            >
-              WareERP
-            </span>
+          <div className="w-full text-center gap-3 mb-10 self-start">
+            <img className="block mx-auto mb-6" src={grozziieLogo} alt="" />
+            <p className="text-sm leading-relaxed text-primary">{subtitle}</p>
           </div>
 
-          <WarehouseIllustration />
-
-          <div className="mt-10 text-center">
-            <h2
-              className="text-white font-bold text-2xl mb-3 leading-snug"
-              style={{ fontFamily: "'Sora', sans-serif" }}
-            >
-              {title}
-            </h2>
-            <p
-              className="text-sm leading-relaxed"
-              style={{ color: "rgba(255,255,255,0.5)" }}
-            >
-              {subtitle}
-            </p>
-          </div>
-
-          {/* Stats row */}
-          <div className="flex gap-8 mt-10">
-            {[
-              ["10K+", "SKUs"],
-              ["99.9%", "Uptime"],
-              ["50+", "Zones"],
-            ].map(([val, label]) => (
-              <div key={label} className="text-center">
-                <div
-                  className="text-xl font-bold"
-                  style={{ fontFamily: "'Sora', sans-serif", color: "#F59E0B" }}
-                >
-                  {val}
-                </div>
-                <div
-                  className="text-xs uppercase tracking-widest mt-0.5"
-                  style={{ color: "rgba(255,255,255,0.4)" }}
-                >
-                  {label}
-                </div>
-              </div>
-            ))}
-          </div>
+          <img src={logInLogo} alt="" />
         </div>
 
         {/* ── Right Panel ── */}

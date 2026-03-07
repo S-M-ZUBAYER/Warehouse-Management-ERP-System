@@ -9,7 +9,7 @@ export default function PrimaryButton({
 }) {
   const variants = {
     primary: {
-      background: "linear-gradient(135deg, #0F2744 0%, #1A3A5C 100%)",
+      background: "#004368",
       color: "#fff",
       boxShadow: "0 4px 14px rgba(15,39,68,0.35)",
     },

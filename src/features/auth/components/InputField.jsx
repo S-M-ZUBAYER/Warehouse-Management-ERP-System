@@ -9,10 +9,7 @@ export default function InputField({
   return (
     <div className="mb-5">
       {label && (
-        <label
-          className="block text-sm font-semibold mb-1.5"
-          style={{ color: "#0F2744", fontFamily: "'DM Sans', sans-serif" }}
-        >
+        <label className="block text-sm font-semibold mb-1.5 text-primary font-body">
           {label}
         </label>
       )}
@@ -27,13 +24,12 @@ export default function InputField({
         )}
         <input
           {...props}
-          className={`w-full rounded-xl text-sm transition-all duration-200 ${className}`}
+          className={`w-full font-body rounded-xl text-sm transition-all duration-200 ${className}`}
           style={{
             padding: `12px ${rightElement ? "44px" : "14px"} 12px ${Icon ? "42px" : "14px"}`,
             background: "#F8FAFC",
             border: `1.5px solid ${error ? "#EF4444" : "#CBD5E1"}`,
             color: "#1E293B",
-            fontFamily: "'DM Sans', sans-serif",
           }}
           onFocus={(e) => {
             e.target.style.borderColor = "#F59E0B";

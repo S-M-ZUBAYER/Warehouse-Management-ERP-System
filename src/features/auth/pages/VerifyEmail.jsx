@@ -23,21 +23,15 @@ export default function VerifyEmail() {
   return (
     <AuthLayout
       title="Almost There!"
-      subtitle="Verify your email to activate your WareERP account and start managing"
+      subtitle="Verify your email to activate your Grozziie account and start managing"
     >
       <div className="max-w-sm mx-auto w-full auth-fade-in text-center">
         {/* Email icon */}
-        <div
-          className="w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-6"
-          style={{ background: "rgba(245,158,11,0.1)" }}
-        >
-          <MailCheck size={36} color="#F59E0B" />
+        <div className="w-20 h-20 text-primary rounded-3xl flex items-center justify-center mx-auto mb-6 bg-surface-card">
+          <MailCheck size={36} />
         </div>
 
-        <h1
-          className="text-3xl font-bold mb-2"
-          style={{ fontFamily: "'Sora', sans-serif", color: "#0F2744" }}
-        >
+        <h1 className="text-3xl font-bold mb-2 text-primary font-display">
           Verify Your Email
         </h1>
         <p
@@ -45,7 +39,7 @@ export default function VerifyEmail() {
           style={{ color: "#64748B" }}
         >
           We've sent a{" "}
-          <strong style={{ color: "#0F2744" }}>6-character code</strong> to your
+          <strong className=" text-primary">6-character code</strong> to your
           email address. Enter it below to confirm your account.
         </p>
 
@@ -63,12 +57,11 @@ export default function VerifyEmail() {
               onPaste={handlePaste}
               disabled={loading || success}
               aria-label={`Code digit ${index + 1}`}
-              className="rounded-xl text-center font-bold transition-all duration-200"
+              className="rounded-xl font-display text-center font-bold transition-all duration-200"
               style={{
                 width: "50px",
                 height: "58px",
                 fontSize: "22px",
-                fontFamily: "'Sora', sans-serif",
                 color: "#0F2744",
                 background: code ? "rgba(245,158,11,0.08)" : "#F8FAFC",
                 border: `2px solid ${
@@ -116,49 +109,11 @@ export default function VerifyEmail() {
           <ShieldCheck size={16} /> Verify & Continue
         </PrimaryButton>
 
-        {/* Divider */}
-        <div
-          className="flex items-center gap-3 my-5"
-          style={{ color: "#CBD5E1" }}
-        >
-          <div className="flex-1 h-px bg-slate-200" />
-          <span className="text-xs" style={{ color: "#94A3B8" }}>
-            or
-          </span>
-          <div className="flex-1 h-px bg-slate-200" />
-        </div>
-
-        {/* Resend */}
-        <button
-          type="button"
-          className="flex items-center gap-2 justify-center w-full text-sm font-semibold transition-colors"
-          style={{
-            background: "#F8FAFC",
-            border: "1.5px solid #E2E8F0",
-            borderRadius: "12px",
-            padding: "12px",
-            color: "#64748B",
-            fontFamily: "'DM Sans', sans-serif",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = "#CBD5E1";
-            e.currentTarget.style.color = "#0F2744";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = "#E2E8F0";
-            e.currentTarget.style.color = "#64748B";
-          }}
-        >
-          <RefreshCw size={14} />
-          Resend verification code
-        </button>
-
         {/* Back to login */}
         <p className="mt-5 text-sm" style={{ color: "#64748B" }}>
           <Link
             to="/login"
-            className="font-semibold transition-colors"
-            style={{ color: "#0F2744", fontFamily: "'DM Sans', sans-serif" }}
+            className="font-semibold transition-colors font-body text-primary"
           >
             ← Back to Login
           </Link>

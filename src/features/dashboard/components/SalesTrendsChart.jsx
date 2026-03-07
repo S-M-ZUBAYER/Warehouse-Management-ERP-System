@@ -19,11 +19,10 @@ const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
     <div
-      className="rounded-xl px-4 py-3 text-sm"
+      className="rounded-xl px-4 py-3 text-sm font-body"
       style={{
         background: "#1E293B",
         boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
-        fontFamily: "'DM Sans', sans-serif",
       }}
     >
       <p className="font-semibold text-white mb-1">{label}</p>
@@ -72,8 +71,8 @@ export default function SalesTrendsChart({ data, platforms, loading }) {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h3
-          className="text-base font-semibold"
-          style={{ fontFamily: "'Sora', sans-serif", color: "#0F172A" }}
+          className="text-base font-semibold font-display"
+          style={{ color: "#0F172A" }}
         >
           Sales Trends
         </h3>
@@ -88,12 +87,11 @@ export default function SalesTrendsChart({ data, platforms, loading }) {
               <span>Select Platform</span>
               <button
                 onClick={() => setShowDropdown((p) => !p)}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5"
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-body"
                 style={{
                   background: "#F8FAFC",
                   border: "1px solid #E2E8F0",
                   cursor: "pointer",
-                  fontFamily: "'DM Sans', sans-serif",
                   fontSize: "12px",
                   color: "#374151",
                   minWidth: "80px",
@@ -121,13 +119,12 @@ export default function SalesTrendsChart({ data, platforms, loading }) {
                       setSelectedPlatform(p);
                       setShowDropdown(false);
                     }}
-                    className="w-full text-left px-4 py-2 text-xs transition-colors"
+                    className="w-full text-left px-4 py-2 text-xs transition-colors font-body"
                     style={{
                       background: selectedPlatform === p ? "#F8FAFC" : "none",
                       border: "none",
                       cursor: "pointer",
                       color: selectedPlatform === p ? "#6366F1" : "#374151",
-                      fontFamily: "'DM Sans', sans-serif",
                       fontWeight: selectedPlatform === p ? 600 : 400,
                     }}
                     onMouseEnter={(e) =>
@@ -147,12 +144,11 @@ export default function SalesTrendsChart({ data, platforms, loading }) {
 
           {/* Date range */}
           <div
-            className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs"
+            className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-body"
             style={{
               background: "#F8FAFC",
               border: "1px solid #E2E8F0",
               color: "#64748B",
-              fontFamily: "'DM Sans', sans-serif",
             }}
           >
             <Calendar size={12} color="#94A3B8" />

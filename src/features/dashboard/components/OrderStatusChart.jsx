@@ -13,11 +13,10 @@ const CustomTooltip = ({ active, payload }) => {
   const pct = total ? ((value / total) * 100).toFixed(1) : 0;
   return (
     <div
-      className="rounded-xl px-4 py-3 text-sm"
+      className="rounded-xl font-body px-4 py-3 text-sm"
       style={{
         background: "#1E293B",
         boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
-        fontFamily: "'DM Sans', sans-serif",
       }}
     >
       <div className="flex items-center gap-2 mb-1">
@@ -71,18 +70,17 @@ export default function OrderStatusChart({ data, loading }) {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h3
-          className="text-base font-semibold"
-          style={{ fontFamily: "'Sora', sans-serif", color: "#0F172A" }}
+          className="text-base font-semibold font-display"
+          style={{ color: "#0F172A" }}
         >
           Order Status
         </h3>
         <div
-          className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs"
+          className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-body"
           style={{
             background: "#F8FAFC",
             border: "1px solid #E2E8F0",
             color: "#64748B",
-            fontFamily: "'DM Sans', sans-serif",
           }}
         >
           <Calendar size={12} color="#94A3B8" />
@@ -120,15 +118,12 @@ export default function OrderStatusChart({ data, loading }) {
           {/* Center label */}
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
             <span
-              className="text-xl font-bold"
-              style={{ fontFamily: "'Sora', sans-serif", color: "#0F172A" }}
+              className="text-xl font-bold font-display"
+              style={{ color: "#0F172A" }}
             >
               {total.toLocaleString()}
             </span>
-            <span
-              className="text-xs"
-              style={{ color: "#94A3B8", fontFamily: "'DM Sans', sans-serif" }}
-            >
+            <span className="text-xs font-body" style={{ color: "#94A3B8" }}>
               Total
             </span>
           </div>
@@ -144,20 +139,18 @@ export default function OrderStatusChart({ data, loading }) {
                   style={{ background: color }}
                 />
                 <span
-                  className="text-xs"
+                  className="text-xs font-body"
                   style={{
                     color: "#64748B",
-                    fontFamily: "'DM Sans', sans-serif",
                   }}
                 >
                   {name}
                 </span>
               </div>
               <span
-                className="text-xs font-semibold ml-2"
+                className="text-xs font-semibold ml-2 font-body"
                 style={{
                   color: "#0F172A",
-                  fontFamily: "'DM Sans', sans-serif",
                 }}
               >
                 {value}

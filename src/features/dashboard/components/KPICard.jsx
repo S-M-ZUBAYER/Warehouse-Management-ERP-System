@@ -53,9 +53,8 @@ export default function KPICard({ label, value, icon, color, bg, loading }) {
 
       {/* Value */}
       <p
-        className="text-2xl font-bold mb-1 leading-none"
+        className="text-2xl font-display font-bold mb-1 leading-none"
         style={{
-          fontFamily: "'Sora', sans-serif",
           color: "#0F172A",
           letterSpacing: "-0.5px",
         }}
@@ -64,10 +63,7 @@ export default function KPICard({ label, value, icon, color, bg, loading }) {
       </p>
 
       {/* Label */}
-      <p
-        className="text-xs font-medium"
-        style={{ color: "#94A3B8", fontFamily: "'DM Sans', sans-serif" }}
-      >
+      <p className="text-xs font-medium font-body" style={{ color: "#94A3B8" }}>
         {label}
       </p>
     </div>

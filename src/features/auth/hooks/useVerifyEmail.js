@@ -55,6 +55,7 @@ export function useVerifyEmail() {
             // This endpoint returns 200 on success, 404 on invalid code
             // authApi wraps axios so we use .get() with params
             const response = await authApi.get(`/v1/user/verify?code=${code}`);
+            console.log(response);
 
             // If we reach here (no error thrown), it's a success
             setSuccess(true);

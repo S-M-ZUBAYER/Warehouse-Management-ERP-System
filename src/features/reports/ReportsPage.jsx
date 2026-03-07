@@ -1,3 +1,10 @@
+import Topbar from "../../components/layout/Topbar";
+
 export default function ReportsPage() {
-  return <div className="text-2xl font-bold">Reports</div>;
+  return (
+    <div className="space-y-6 font-body">
+      {/* ── Page Title ── */}
+      <Topbar PageTitle="Reports"></Topbar>
+    </div>
+  );
 }

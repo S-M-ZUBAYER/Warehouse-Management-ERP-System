@@ -19,12 +19,11 @@ const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
     <div
-      className="rounded-xl px-4 py-3 text-sm"
+      className="rounded-xl px-4 py-3 text-sm font-body"
       style={{
         background: "#1E293B",
         boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
         border: "none",
-        fontFamily: "'DM Sans', sans-serif",
       }}
     >
       <p className="font-semibold text-white mb-2">{label}</p>
@@ -70,18 +69,17 @@ export default function InventoryChart({ data, loading }) {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h3
-          className="text-base font-semibold"
-          style={{ fontFamily: "'Sora', sans-serif", color: "#0F172A" }}
+          className="text-base font-semibold font-display"
+          style={{ color: "#0F172A" }}
         >
           Inventory Status
         </h3>
         <div
-          className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs"
+          className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-body"
           style={{
             background: "#F8FAFC",
             border: "1px solid #E2E8F0",
             color: "#64748B",
-            fontFamily: "'DM Sans', sans-serif",
           }}
         >
           <Calendar size={12} color="#94A3B8" />
@@ -154,10 +152,7 @@ export default function InventoryChart({ data, loading }) {
               className="w-3 h-3 rounded-full"
               style={{ background: color }}
             />
-            <span
-              className="text-xs"
-              style={{ color: "#64748B", fontFamily: "'DM Sans', sans-serif" }}
-            >
+            <span className="text-xs font-body" style={{ color: "#64748B" }}>
               {label}
             </span>
           </div>

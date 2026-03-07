@@ -39,8 +39,8 @@ export default function ForgotPassword() {
           </div>
 
           <h1
-            className="text-3xl font-bold mb-1.5"
-            style={{ fontFamily: "'Sora', sans-serif", color: "#0F2744" }}
+            className="text-3xl font-bold mb-1.5 font-display"
+            style={{ color: "#0F2744" }}
           >
             Reset Password
           </h1>
@@ -63,7 +63,7 @@ export default function ForgotPassword() {
             className="flex-shrink-0 mt-0.5"
             color="#F59E0B"
           />
-          <span style={{ fontFamily: "'DM Sans', sans-serif" }}>
+          <span className=" font-body">
             Check your email inbox for the 6-character verification code we sent
             you.
           </span>
@@ -73,8 +73,8 @@ export default function ForgotPassword() {
           {/* ── Code input - styled differently, centered with large font ── */}
           <div className="mb-5">
             <label
-              className="block text-sm font-semibold mb-1.5"
-              style={{ color: "#0F2744", fontFamily: "'DM Sans', sans-serif" }}
+              className="block text-sm font-body font-semibold mb-1.5"
+              style={{ color: "#0F2744" }}
             >
               Verification Code
             </label>
@@ -87,7 +87,7 @@ export default function ForgotPassword() {
               onChange={handleChange}
               placeholder="A1B2C3"
               autoComplete="one-time-code"
-              className="w-full rounded-xl transition-all duration-200 text-center font-bold uppercase tracking-widest"
+              className="w-full rounded-xl transition-all duration-200 text-center font-display font-bold uppercase tracking-widest"
               style={{
                 padding: "14px",
                 background: "#F8FAFC",
@@ -95,7 +95,6 @@ export default function ForgotPassword() {
                 color: "#0F2744",
                 fontSize: "22px",
                 letterSpacing: "10px",
-                fontFamily: "'Sora', sans-serif",
               }}
               onFocus={(e) => {
                 e.target.style.borderColor = "#F59E0B";
@@ -187,8 +186,8 @@ export default function ForgotPassword() {
         <p className="text-center mt-5 text-sm" style={{ color: "#64748B" }}>
           <Link
             to="/login"
-            className="font-semibold transition-colors"
-            style={{ color: "#0F2744", fontFamily: "'DM Sans', sans-serif" }}
+            className="font-semibold font-body transition-colors"
+            style={{ color: "#0F2744" }}
           >
             ← Back to Login
           </Link>

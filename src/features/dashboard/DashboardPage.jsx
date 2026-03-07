@@ -3,6 +3,7 @@ import KPICard from "./components/KPICard";
 import InventoryChart from "./components/InventoryChart";
 import OrderStatusChart from "./components/OrderStatusChart";
 import SalesTrendsChart from "./components/SalesTrendsChart";
+import Topbar from "../../components/layout/Topbar";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DashboardPage — matches Figma "Dashboard 2" layout exactly:
@@ -31,16 +32,9 @@ export default function DashboardPage() {
   } = useDashboardData();
 
   return (
-    <div className="space-y-6" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+    <div className="space-y-6 font-body">
       {/* ── Page Title ── */}
-      <div>
-        <h1
-          className="text-2xl font-bold"
-          style={{ fontFamily: "'Sora', sans-serif", color: "#0F172A" }}
-        >
-          Dashboard
-        </h1>
-      </div>
+      <Topbar PageTitle="Dashboard"></Topbar>
 
       {/* ── Overview Section ── */}
       <section>

@@ -35,32 +35,26 @@ export default function Login() {
   return (
     <AuthLayout
       title="Warehouse Command Center"
-      subtitle="Manage inventory, orders & logistics from one powerful dashboard"
+      subtitle="Log In to explore our site"
     >
       <div className="max-w-sm mx-auto w-full auth-fade-in bg-white">
         {/* Page heading */}
         <div className="mb-8">
-          <h1
-            className="text-3xl font-bold mb-1.5"
-            style={{ fontFamily: "'Sora', sans-serif", color: "#0F2744" }}
-          >
-            Welcome back
+          <h1 className="text-3xl text-center font-bold mb-1.5 text-primary font-display">
+            Log In
           </h1>
-          <p className="text-sm" style={{ color: "#64748B" }}>
-            Sign in to your WareERP account
-          </p>
         </div>
 
         {/* Login form */}
         <form onSubmit={handleSubmit} noValidate>
           <InputField
             icon={Mail}
-            label="Email Address"
+            label="Email"
             type="email"
             name="email"
             required
             autoComplete="email"
-            placeholder="manager@warehouse.com"
+            placeholder="Enter Your Email Address"
             value={formData.email}
             onChange={handleChange}
             error={emailError || forbiddenError}
@@ -96,16 +90,14 @@ export default function Login() {
           />
 
           {/* Forgot password link */}
-          <div className="flex justify-end -mt-2 mb-5">
+          <div className="flex justify-end -mt-2 mb-10">
             <button
               type="button"
               onClick={() => setShowModal(true)}
-              className="text-sm font-semibold transition-colors"
+              className="text-sm font-light font-body transition-colors text-gray-400"
               style={{
                 background: "none",
                 border: "none",
-                color: "#1A3A5C",
-                fontFamily: "'DM Sans', sans-serif",
               }}
             >
               Forgot password?
@@ -113,17 +105,16 @@ export default function Login() {
           </div>
 
           <PrimaryButton type="submit" loading={loading}>
-            Sign In
+            Log In
           </PrimaryButton>
         </form>
 
         {/* Register link */}
-        <p className="text-center mt-6 text-sm" style={{ color: "#64748B" }}>
+        <p className="text-center mt-12 text-sm" style={{ color: "#64748B" }}>
           Don't have an account?{" "}
           <Link
             to="/register"
-            className="font-bold transition-colors"
-            style={{ color: "#0F2744", fontFamily: "'DM Sans', sans-serif" }}
+            className="font-bold transition-colors text-primary font-body"
           >
             Create account
           </Link>
@@ -149,16 +140,10 @@ export default function Login() {
           >
             {/* Modal header */}
             <div className="flex items-center gap-3 mb-2">
-              <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center"
-                style={{ background: "rgba(245,158,11,0.12)" }}
-              >
-                <Lock size={18} color="#F59E0B" />
+              <div className="w-10 h-10 text-primary bg-surface-card rounded-xl flex items-center justify-center">
+                <Lock size={18} />
               </div>
-              <h2
-                className="text-xl font-bold"
-                style={{ fontFamily: "'Sora', sans-serif", color: "#0F2744" }}
-              >
+              <h2 className="text-xl font-bold text-primary font-display">
                 Reset Password
               </h2>
             </div>
@@ -172,7 +157,7 @@ export default function Login() {
                 label="Email Address"
                 type="email"
                 required
-                placeholder="your@email.com"
+                placeholder="Enter Your Email Address"
                 value={forgotEmail}
                 onChange={(e) => setForgotEmail(e.target.value)}
                 error={forgotError}
@@ -184,12 +169,11 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="flex-1 py-3 rounded-xl text-sm font-semibold transition-colors"
+                  className="flex-1 py-3 rounded-xl text-sm font-body font-semibold transition-colors"
                   style={{
                     background: "#F1F5F9",
                     border: "none",
                     color: "#64748B",
-                    fontFamily: "'DM Sans', sans-serif",
                   }}
                 >
                   Cancel

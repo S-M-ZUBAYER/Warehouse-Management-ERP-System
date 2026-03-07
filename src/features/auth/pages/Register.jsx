@@ -25,20 +25,14 @@ export default function Register() {
   return (
     <AuthLayout
       title="Join WareERP Today"
-      subtitle="Start managing your warehouse operations with precision and efficiency"
+      subtitle="Sign Up to explore our site"
     >
       <div className="max-w-sm mx-auto w-full auth-fade-in">
         {/* Page heading */}
         <div className="mb-7">
-          <h1
-            className="text-3xl font-bold mb-1.5"
-            style={{ fontFamily: "'Sora', sans-serif", color: "#0F2744" }}
-          >
-            Create Account
+          <h1 className="text-3xl text-center font-bold mb-1.5 text-primary font-display">
+            Sign Up
           </h1>
-          <p className="text-sm" style={{ color: "#64748B" }}>
-            Fill in your details to get started
-          </p>
         </div>
 
         <form onSubmit={handleSubmit} noValidate>
@@ -54,38 +48,28 @@ export default function Register() {
             <div
               className="w-14 h-14 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden"
               style={{
-                background: previewUrl ? "none" : "rgba(245,158,11,0.12)",
+                background: previewUrl ? "none" : "#E6ECF0",
               }}
             >
               {previewUrl ? (
                 <img
                   src={previewUrl}
                   alt="Profile preview"
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover text-primary"
                 />
               ) : (
-                <User size={22} color="#F59E0B" />
+                <User size={22} />
               )}
             </div>
 
             <div>
-              <p
-                className="text-sm font-semibold mb-1"
-                style={{
-                  color: "#0F2744",
-                  fontFamily: "'DM Sans', sans-serif",
-                }}
-              >
+              <p className="text-sm font-body text-primary font-semibold mb-1">
                 Profile Photo
               </p>
-              <label
-                className="text-xs font-semibold rounded-lg px-3 py-1.5 cursor-pointer transition-colors"
-                style={{
-                  background: "rgba(245,158,11,0.15)",
-                  color: "#92400E",
-                  fontFamily: "'DM Sans', sans-serif",
-                }}
-              >
+              <p className="text-xs mt-1 mb-1" style={{ color: "#94A3B8" }}>
+                Optional — PNG, JPG up to 5MB
+              </p>
+              <label className="text-xs font-body bg-primary text-white font-semibold rounded-lg px-3 py-1.5 cursor-pointer transition-colors">
                 <input
                   type="file"
                   accept="image/*"
@@ -94,21 +78,18 @@ export default function Register() {
                 />
                 {previewUrl ? "Change photo" : "Upload photo"}
               </label>
-              <p className="text-xs mt-1" style={{ color: "#94A3B8" }}>
-                Optional — PNG, JPG up to 5MB
-              </p>
             </div>
           </div>
 
           {/* Full Name */}
           <InputField
             icon={User}
-            label="Full Name"
+            label="User Name"
             type="text"
             name="userName"
             required
             autoComplete="name"
-            placeholder="John Manager"
+            placeholder="Enter Your User Name"
             value={formData.userName}
             onChange={handleChange}
           />
@@ -116,12 +97,12 @@ export default function Register() {
           {/* Email */}
           <InputField
             icon={Mail}
-            label="Email Address"
+            label="Email"
             type="email"
             name="userEmail"
             required
             autoComplete="email"
-            placeholder="john@warehouse.com"
+            placeholder="Enter Your Email Address"
             value={formData.userEmail}
             onChange={handleChange}
             error={emailError}
@@ -135,7 +116,7 @@ export default function Register() {
             name="userPassword"
             required
             autoComplete="new-password"
-            placeholder="Create a strong password"
+            placeholder="Enter password"
             value={formData.userPassword}
             onChange={handleChange}
             error={error}
@@ -165,7 +146,7 @@ export default function Register() {
             name="confirmPassword"
             required
             autoComplete="new-password"
-            placeholder="Repeat your password"
+            placeholder="Confirm password"
             value={formData.confirmPassword}
             onChange={handleChange}
             error={passwordMatchError}
@@ -188,7 +169,7 @@ export default function Register() {
           />
 
           <PrimaryButton type="submit" loading={loading}>
-            Create Account
+            Sign Up
           </PrimaryButton>
         </form>
 
@@ -197,10 +178,9 @@ export default function Register() {
           Already have an account?{" "}
           <Link
             to="/login"
-            className="font-bold transition-colors"
-            style={{ color: "#0F2744", fontFamily: "'DM Sans', sans-serif" }}
+            className="font-bold transition-colors text-primary font-body"
           >
-            Sign In
+            Log In
           </Link>
         </p>
       </div>
