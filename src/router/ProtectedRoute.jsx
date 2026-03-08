@@ -1,11 +1,15 @@
-// import { Navigate } from "react-router-dom";
-// import { useAuthStore } from "@/stores/authStore";
-
-// export default function ProtectedRoute({ children }) {
-//   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-//   return isAuthenticated ? children : <Navigate to="/login" replace />;
-// }
+import { Navigate } from "react-router-dom";
+import { useAuthStore } from "@/stores/authStore";
 
 export default function ProtectedRoute({ children }) {
-  return children; // remove auth check until login page is built
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  return isAuthenticated ? (
+    children
+  ) : (
+    <Navigate to="/warehouse_management/login" replace />
+  );
 }
+
+// export default function ProtectedRoute({ children }) {
+//   return children; // remove auth check until login page is built
+// }
