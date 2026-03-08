@@ -185,7 +185,7 @@ export default function ForgotPassword() {
         {/* Back to login */}
         <p className="text-center mt-5 text-sm" style={{ color: "#64748B" }}>
           <Link
-            to="/login"
+            to="/warehouse_management/login"
             className="font-semibold font-body transition-colors"
             style={{ color: "#0F2744" }}
           >

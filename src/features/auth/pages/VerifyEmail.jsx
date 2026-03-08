@@ -112,7 +112,7 @@ export default function VerifyEmail() {
         {/* Back to login */}
         <p className="mt-5 text-sm" style={{ color: "#64748B" }}>
           <Link
-            to="/login"
+            to="/warehouse_management/login"
             className="font-semibold transition-colors font-body text-primary"
           >
             ← Back to Login

@@ -47,7 +47,7 @@ export function useForgotPassword() {
             if (res.code === 200 && res.status === "success") {
                 setForgotSuccess(res.message || "Reset email sent! Check your inbox.");
                 setForgotEmail("");
-                setTimeout(() => navigate("/forgotpassword"), 1500);
+                setTimeout(() => navigate("/warehouse_management/forgotpassword"), 1500);
             } else {
                 setForgotError(res.message || "Email not found. Please try another.");
             }
@@ -100,7 +100,7 @@ export function useForgotPassword() {
             if (res.code === 200 && res.status === "success") {
                 setSuccess(res.message || "Password reset successfully!");
                 setFormData({ code: "", newPassword: "", confirmPass: "" });
-                setTimeout(() => navigate("/login"), 2000);
+                setTimeout(() => navigate("/warehouse_management/login"), 2000);
             } else {
                 const msg = res.message || "";
                 if (msg.toLowerCase().includes("code")) {

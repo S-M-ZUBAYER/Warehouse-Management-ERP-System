@@ -113,7 +113,7 @@ export default function Login() {
         <p className="text-center mt-12 text-sm" style={{ color: "#64748B" }}>
           Don't have an account?{" "}
           <Link
-            to="/register"
+            to="/warehouse_management/register"
             className="font-bold transition-colors text-primary font-body"
           >
             Create account
