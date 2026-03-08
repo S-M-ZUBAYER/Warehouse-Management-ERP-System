@@ -32,6 +32,6 @@ and monitor warehouse zones — all in a fast, responsive, and beautiful UI.
 ## 🚀 Getting Started
 
 git clone https://github.com/yourusername/warehouse-erp-system.git
-cd warehouse-erp-system
+cd Warehouse-Management-ERP-System
 npm install
 npm run dev
