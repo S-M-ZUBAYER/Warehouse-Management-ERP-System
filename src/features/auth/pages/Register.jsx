@@ -177,7 +177,7 @@ export default function Register() {
         <p className="text-center mt-5 text-sm" style={{ color: "#64748B" }}>
           Already have an account?{" "}
           <Link
-            to="/login"
+            to="/warehouse_management/login"
             className="font-bold transition-colors text-primary font-body"
           >
             Log In

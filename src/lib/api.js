@@ -35,7 +35,7 @@ api.interceptors.response.use(
             // Token expired — clear storage and redirect
             localStorage.removeItem("token");
             localStorage.removeItem("warehouseUser");
-            window.location.href = "/login";
+            window.location.href = "/warehouse_management/login";
         }
 
         return Promise.reject(error);

@@ -59,7 +59,7 @@ export function useVerifyEmail() {
 
             // If we reach here (no error thrown), it's a success
             setSuccess(true);
-            setTimeout(() => navigate("/login"), 2000);
+            setTimeout(() => navigate("/warehouse_management/login"), 2000);
         } catch (err) {
             const status = err.response?.status;
             if (status === 404) {

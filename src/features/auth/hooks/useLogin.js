@@ -55,7 +55,7 @@ export function useLogin() {
                 // Save to Zustand (also writes localStorage internally)
                 login(formData.email, userData);
 
-                navigate("/");
+                navigate("/warehouse_management");
             } else {
                 const msg = res.message || "";
                 if (msg.includes("email") || msg.includes("incorrect")) {

@@ -98,7 +98,7 @@ export default function Topbar({ PageTitle }) {
 
   const handleLogout = () => {
     logout();
-    navigate("/login");
+    navigate("/warehouse_management/login");
   };
 
   const initials = userFulInfo?.fullName
@@ -116,7 +116,7 @@ export default function Topbar({ PageTitle }) {
       icon: User,
       label: "Profile Info",
       onClick: () => {
-        navigate("/settings/profile");
+        navigate("/warehouse_management/settings/profile");
         setShowDropdown(false);
       },
     },
@@ -124,7 +124,7 @@ export default function Topbar({ PageTitle }) {
       icon: KeyRound,
       label: "Reset Password",
       onClick: () => {
-        navigate("/forgotpassword");
+        navigate("/warehouse_management/forgotpassword");
         setShowDropdown(false);
       },
     },
@@ -132,7 +132,7 @@ export default function Topbar({ PageTitle }) {
       icon: Lock,
       label: "Set Password",
       onClick: () => {
-        navigate("/settings/password");
+        navigate("/warehouse_management/settings/password");
         setShowDropdown(false);
       },
     },

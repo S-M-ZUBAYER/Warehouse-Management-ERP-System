@@ -69,7 +69,7 @@ export function useRegister() {
                     userPassword: "", confirmPassword: "", photo: null,
                 });
                 setPreviewUrl(null);
-                navigate("/verifyemail");
+                navigate("/warehouse_management/verifyemail");
             } else if (res.code === 409 || res.message?.includes("already")) {
                 setEmailError("This email is already registered. Try signing in.");
             } else {
