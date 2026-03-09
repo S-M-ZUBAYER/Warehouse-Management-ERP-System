@@ -10,7 +10,7 @@ import axios from "axios";
 // ─────────────────────────────────────────────────────────────────────────────
 
 const authApi = axios.create({
-    baseURL: "https://grozziieget.zjweiting.com:3091/CustomerService-Chat/api",
+    baseURL: import.meta.env.VITE_AUTH_BASE_URL,
     timeout: 15000,
     headers: {
         "Content-Type": "application/json",

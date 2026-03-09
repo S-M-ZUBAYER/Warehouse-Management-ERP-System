@@ -5,7 +5,7 @@ import axios from "axios";
 // Automatically attaches token from authStore if available
 // ─────────────────────────────────────────────────────────────────────────────
 const api = axios.create({
-    baseURL: import.meta.env.VITE_API_URL || "https://grozziieget.zjweiting.com:3091/CustomerService-Chat/api",
+    baseURL: import.meta.env.VITE_AUTH_BASE_URL,
     timeout: 15000,
     headers: {
         "Content-Type": "application/json",
