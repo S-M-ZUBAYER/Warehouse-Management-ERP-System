@@ -11,7 +11,7 @@ export default function AppShell() {
       <Sidebar />
       <div
         className={`flex flex-col flex-1 transition-all duration-300 overflow-hidden ${
-          sidebarCollapsed ? "ml-16" : "ml-64"
+          sidebarCollapsed ? "ml-16" : "ml-80"
         }`}
       >
         {/* <Topbar /> */}

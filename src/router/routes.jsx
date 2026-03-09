@@ -1,9 +1,5 @@
 import DashboardPage from "@/features/dashboard/DashboardPage";
-import InventoryPage from "@/features/inventory/InventoryPage";
-import OrdersPage from "@/features/orders/OrdersPage";
-import WarehousePage from "@/features/warehouse/WarehousePage";
-import SuppliersPage from "@/features/suppliers/SuppliersPage";
-import ReportsPage from "@/features/reports/ReportsPage";
+import WarehousePage from "@/features/warehouseManagement/WarehousePage";
 import AppShell from "@/components/layout/AppShell";
 import Login from "@/features/auth/pages/Login";
 import Register from "@/features/auth/pages/Register";
@@ -16,6 +12,23 @@ import SubAccountPage from "../features/systemConfigaration/subAccount/SubAccoun
 import RoleManagementPage from "../features/systemConfigaration/roleManagement/RoleManagementPage";
 import ProductListPage from "../features/productManagement/productList/ProductListPage";
 import CombineSKUPage from "../features/productManagement/combineSKU/CombineSKUPage";
+import NewOrderPage from "../features/orderManagement/orderProcessing/newOrder/NewOrderPage";
+import ProcessedOrderPage from "../features/orderManagement/orderProcessing/processedOrder/ProcessedOrderpage";
+import PickUpOrderPage from "../features/orderManagement/orderProcessing/pickUpOrder/pickUpOrderPage";
+import ShippedOrderPage from "../features/orderManagement/orderProcessing/shippedOrder/ShippedOrderPage";
+import CompletedPage from "../features/orderManagement/orderProcessing/completed/CompletedPage";
+import AllOrderPage from "../features/orderManagement/orderProcessing/allOrder/allOrderpage";
+import CanceledOrderPage from "../features/orderManagement/orderProcessing/canceledOrder/CanceledOrderPage";
+import ManualOrderPage from "../features/orderManagement/manualOrder/ManualOrderPage";
+import MerchantSKUPage from "../features/inventoryManagement/merchantSKU/MerchantSKUPage";
+import SKURequestsPage from "../features/inventoryManagement/SKUMapping/SKURequests/SKURequestsPage";
+import SkuIssuesPage from "../features/inventoryManagement/SKUMapping/SKUIssues/SkuIssuesPage";
+import InventoryListPage from "../features/inventoryManagement/inventoryList/InventoryListPage";
+import ManualInboundPage from "../features/inventoryManagement/manualInbound/ManualInboundPage";
+import InboundRequestsPage from "../features/inventoryManagement/Inbound/inboundRequests/InboundRequestsPage";
+import InboundIssuesPage from "../features/inventoryManagement/Inbound/inboundIssues/InboundIssuesPage";
+import OutboundOrderPage from "../features/inventoryManagement/outboundOrder/OutboundOrderPage";
+import InventoryLogPage from "../features/inventoryManagement/inventoryLog/InventoryLogPage";
 
 export const routes = [
   {
@@ -26,7 +39,10 @@ export const routes = [
       </ProtectedRoute>
     ),
     children: [
+      // Dashboard Routes
       { index: true, element: <DashboardPage /> },
+
+      // Product Management Routes
       {
         path: "/warehouse_management/products/list",
         element: <ProductListPage />,
@@ -35,16 +51,83 @@ export const routes = [
         path: "/warehouse_management/products/combine_sku",
         element: <CombineSKUPage />,
       },
-      { path: "/warehouse_management/inventory", element: <InventoryPage /> },
-      { path: "/warehouse_management/orders", element: <OrdersPage /> },
-      { path: "/warehouse_management/warehouse", element: <WarehousePage /> },
-      {
-        path: "/warehouse_management/inventory/returns/requests",
-        element: <InventoryPage />,
-      },
-      { path: "/warehouse_management/suppliers", element: <SuppliersPage /> },
-      { path: "/warehouse_management/reports", element: <ReportsPage /> },
 
+      // Inventory Management Routes
+      {
+        path: "/warehouse_management/inventory/merchant_SKU",
+        element: <MerchantSKUPage />,
+      },
+      {
+        path: "/warehouse_management/inventory/SKU_mapping/requests",
+        element: <SKURequestsPage />,
+      },
+      {
+        path: "/warehouse_management/inventory/SKU_mapping/issues",
+        element: <SkuIssuesPage />,
+      },
+      {
+        path: "/warehouse_management/inventory/list",
+        element: <InventoryListPage />,
+      },
+      {
+        path: "/warehouse_management/inventory/manual_inbound",
+        element: <ManualInboundPage />,
+      },
+      {
+        path: "/warehouse_management/inventory/inbound/requests",
+        element: <InboundRequestsPage />,
+      },
+      {
+        path: "/warehouse_management/inventory/inbound/issues",
+        element: <InboundIssuesPage />,
+      },
+      {
+        path: "/warehouse_management/inventory/outbound_order",
+        element: <OutboundOrderPage />,
+      },
+      {
+        path: "/warehouse_management/inventory/log",
+        element: <InventoryLogPage />,
+      },
+
+      // Order Management Routes
+      {
+        path: "/warehouse_management/orders/processing/new_order",
+        element: <NewOrderPage />,
+      },
+      {
+        path: "/warehouse_management/orders/processing/processed",
+        element: <ProcessedOrderPage />,
+      },
+      {
+        path: "/warehouse_management/orders/processing/pick_up",
+        element: <PickUpOrderPage />,
+      },
+      {
+        path: "/warehouse_management/orders/processing/shipped",
+        element: <ShippedOrderPage />,
+      },
+      {
+        path: "/warehouse_management/orders/processing/completed",
+        element: <CompletedPage />,
+      },
+      {
+        path: "/warehouse_management/orders/processing/all_order",
+        element: <AllOrderPage />,
+      },
+      {
+        path: "/warehouse_management/orders/processing/canceled",
+        element: <CanceledOrderPage />,
+      },
+      {
+        path: "/warehouse_management/orders/manual_order",
+        element: <ManualOrderPage />,
+      },
+
+      // Warehouse Management Routes
+      { path: "/warehouse_management/warehouse", element: <WarehousePage /> },
+
+      // System Configaration Mantnageme Routes
       {
         path: "/warehouse_management/config/store_authorization",
         element: <StoreAuthorizationPage />,
