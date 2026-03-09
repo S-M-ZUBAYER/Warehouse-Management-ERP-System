@@ -13,6 +13,7 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
+  base: '/warehouse_management',
   resolve: {
     alias: { '@': path.resolve(__dirname, './src') },
   },
