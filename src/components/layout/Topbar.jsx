@@ -152,7 +152,7 @@ export default function Topbar({ PageTitle }) {
       }}
     >
       {/* Page Title */}
-      <h1 className="text-2xl font-bold font-display text-primary">
+      <h1 className="text-[28px] font-bold font-display text-primary-text">
         {PageTitle}
       </h1>
 

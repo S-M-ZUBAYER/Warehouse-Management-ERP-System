@@ -29,6 +29,7 @@ import InboundRequestsPage from "../features/inventoryManagement/Inbound/inbound
 import InboundIssuesPage from "../features/inventoryManagement/Inbound/inboundIssues/InboundIssuesPage";
 import OutboundOrderPage from "../features/inventoryManagement/outboundOrder/OutboundOrderPage";
 import InventoryLogPage from "../features/inventoryManagement/inventoryLog/InventoryLogPage";
+import AddCombineSKUPage from "../features/productManagement/combineSKU/AddCombineSKUPage";
 
 export const routes = [
   {
@@ -50,6 +51,10 @@ export const routes = [
       {
         path: "/warehouse_management/products/combine_sku",
         element: <CombineSKUPage />,
+      },
+      {
+        path: "/warehouse_management/products/combine_sku/add",
+        element: <AddCombineSKUPage />,
       },
 
       // Inventory Management Routes
