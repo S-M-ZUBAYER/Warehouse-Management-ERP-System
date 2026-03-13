@@ -1,16 +1,5 @@
 import { X } from "lucide-react";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// AddWarehouseModal — matches Figma image 2 exactly:
-//   • Title: "Add Warehouse" + X close button
-//   • Warehouse Attribute: radio — Own Warehouse | Third party Warehouse
-//   • *Warehouse Name (required, full width)
-//   • Manager (full width)
-//   • Phone Number (full width)
-//   • Location (full width)
-//   • Footer: Cancel | Add
-// ─────────────────────────────────────────────────────────────────────────────
-
 function ModalInput({
   label,
   name,

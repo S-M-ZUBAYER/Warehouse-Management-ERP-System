@@ -1,13 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// NotFound — 404 page for Warehouse ERP
-// Design: Dark navy + amber accent, warehouse SVG illustration,
-//         animated floating boxes, staggered text reveal
-// Only Tailwind CSS + inline keyframe styles
-// ─────────────────────────────────────────────────────────────────────────────
-
 export default function NotFound() {
   const navigate = useNavigate();
   const [visible, setVisible] = useState(false);

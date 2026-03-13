@@ -1,8 +1,3 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// ConfirmModal — matches Figma image 4 exactly
-// "Are you sure you want to save? This will save all the changes you've made so far."
-// ─────────────────────────────────────────────────────────────────────────────
-
 export default function ConfirmModal({
   isOpen,
   title,
