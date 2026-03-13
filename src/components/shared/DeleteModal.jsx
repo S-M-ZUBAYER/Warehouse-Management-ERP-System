@@ -1,10 +1,5 @@
 import { AlertTriangle } from "lucide-react";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DeleteModal — "Are you sure?" confirmation dialog
-// Matches Figma page 4 design exactly
-// ─────────────────────────────────────────────────────────────────────────────
-
 export default function DeleteModal({
   isOpen,
   title,
