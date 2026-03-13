@@ -29,22 +29,18 @@ export default function ForgotPassword() {
     >
       <div className="max-w-sm mx-auto w-full auth-fade-in">
         {/* Page heading */}
-        <div className="mb-8">
+        <div className="mb-8 text-center">
           {/* Icon badge */}
-          <div
-            className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5"
-            style={{ background: "rgba(245,158,11,0.12)" }}
-          >
-            <KeyRound size={22} color="#F59E0B" />
+          <div className=" flex justify-center items-center">
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5 bg-surface-card text-primary">
+              <KeyRound size={22} />
+            </div>
           </div>
 
-          <h1
-            className="text-3xl font-bold mb-1.5 font-display"
-            style={{ color: "#0F2744" }}
-          >
+          <h1 className="text-3xl font-bold mb-1.5 font-display text-primary-text ">
             Reset Password
           </h1>
-          <p className="text-sm" style={{ color: "#64748B" }}>
+          <p className="text-sm text-primary-text">
             Enter your 6-character code and choose a new password
           </p>
         </div>
