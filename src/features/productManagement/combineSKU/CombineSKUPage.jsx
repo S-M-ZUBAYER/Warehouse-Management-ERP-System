@@ -80,33 +80,50 @@ export default function CombineSKUPage() {
           <table className="w-full text-sm font-body">
             <thead>
               <tr className="border-b border-surface-border bg-white">
-                <th className="w-14 pl-5 py-3 text-left">
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                    Select
-                  </span>
+                <th className="py-3 pl-5 text-left w-36">
+                  {" "}
+                  {/* ✅ fixed width instead of max-w */}
+                  <div className="flex items-center">
+                    {" "}
+                    {/* ✅ move flex to inner div, not th */}
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      ref={(el) => {
+                        if (el) {
+                          el.indeterminate = someSelected && !allSelected;
+                        }
+                      }}
+                      onChange={toggleAll}
+                      className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
+                    />
+                    <span className="pl-2 text-base font-semibold text-primary-text whitespace-nowrap">
+                      Select All
+                    </span>
+                  </div>
                 </th>
                 <th className="w-16 py-3 text-left">
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <span className="font-semibold text-base text-primary-text  tracking-wide">
                     Image
                   </span>
                 </th>
                 <th className="w-28 py-3 text-left pr-4">
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <span className="font-semibold text-base text-primary-text  tracking-wide">
                     SKU
                   </span>
                 </th>
                 <th className="py-3 text-left pr-4">
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <span className="font-semibold text-base text-primary-text  tracking-wide">
                     Bundle SKU Name
                   </span>
                 </th>
                 <th className="w-24 py-3 text-left pr-4">
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <span className="font-semibold text-base text-primary-text  tracking-wide">
                     Details
                   </span>
                 </th>
                 <th className="w-24 py-3 text-left pr-5">
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <span className="font-semibold text-base text-primary-text  tracking-wide">
                     Actions
                   </span>
                 </th>

@@ -26,10 +26,7 @@ export default function Pagination({
   return (
     <div className="flex items-center justify-between px-1 mt-4">
       {/* Count */}
-      <p
-        className="text-xs text-slate-500"
-        style={{ fontFamily: "'DM Sans', sans-serif" }}
-      >
+      <p className="text-xs text-slate-500 font-body">
         Showing{" "}
         <span className="font-semibold text-slate-700">
           {start}–{end}
@@ -103,10 +100,9 @@ function PageBtn({ page, current, onClick }) {
       className={`w-8 h-8 rounded-lg text-xs font-semibold transition-colors
         ${
           isActive
-            ? "bg-primary text-white border border-primary"
-            : "border border-surface-border text-slate-600 hover:bg-surface-card"
+            ? "bg-primary text-white border border-primary font-body"
+            : "border border-surface-border text-slate-600 hover:bg-surface-card font-body"
         }`}
-      style={{ fontFamily: "'DM Sans', sans-serif" }}
     >
       {page}
     </button>

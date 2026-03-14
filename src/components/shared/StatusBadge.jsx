@@ -30,9 +30,8 @@ export default function StatusBadge({ status }) {
   const cfg = CONFIG[status?.toLowerCase()] || CONFIG.inactive;
   return (
     <span
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border
+      className={`inline-flex items-center font-body gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border
                   ${cfg.text} ${cfg.bg} ${cfg.border}`}
-      style={{ fontFamily: "'DM Sans', sans-serif" }}
     >
       <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
       {cfg.label}

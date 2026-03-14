@@ -66,10 +66,7 @@ export default function ProductTable({
 
   return (
     <div className="overflow-x-auto rounded-xl border border-surface-border bg-white">
-      <table
-        className="w-full text-sm"
-        style={{ fontFamily: "'DM Sans', sans-serif" }}
-      >
+      <table className="w-full text-sm font-body">
         {/* ── Head ── */}
         <thead>
           <tr className="bg-surface-card border-b border-surface-border">
