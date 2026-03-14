@@ -42,8 +42,9 @@ export default function SelectDropdown({
                    hover:border-primary/40 focus:outline-none focus:border-primary"
       >
         <span
-          className={display ? "text-slate-700" : "text-slate-400"}
-          style={{ fontFamily: "'DM Sans', sans-serif" }}
+          className={
+            display ? "text-slate-700 font-body" : "text-slate-400 font-body"
+          }
         >
           {display || placeholder}
         </span>

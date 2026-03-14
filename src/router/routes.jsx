@@ -30,6 +30,7 @@ import InboundIssuesPage from "../features/inventoryManagement/Inbound/inboundIs
 import OutboundOrderPage from "../features/inventoryManagement/outboundOrder/OutboundOrderPage";
 import InventoryLogPage from "../features/inventoryManagement/inventoryLog/InventoryLogPage";
 import AddCombineSKUPage from "../features/productManagement/combineSKU/AddCombineSKUPage";
+import OrderDetailPage from "../features/orderManagement/orderProcessing/allOrder/component/OrderDetailPage";
 
 export const routes = [
   {
@@ -127,6 +128,10 @@ export const routes = [
       {
         path: "/warehouse_management/orders/manual_order",
         element: <ManualOrderPage />,
+      },
+      {
+        path: "/warehouse_management/orders/detail/:id",
+        element: <OrderDetailPage />,
       },
 
       // Warehouse Management Routes

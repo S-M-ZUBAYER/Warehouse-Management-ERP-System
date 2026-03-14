@@ -243,9 +243,8 @@ export default function NotFound() {
           }}
         >
           <span
-            className="block font-black leading-none select-none"
+            className="block font-black leading-none select-none font-display"
             style={{
-              fontFamily: "'Sora', sans-serif",
               fontSize: "clamp(80px, 18vw, 130px)",
               color: "transparent",
               WebkitTextStroke: "2px rgba(245,158,11,0.25)",
@@ -256,9 +255,8 @@ export default function NotFound() {
           </span>
           {/* Filled 404 on top — offset */}
           <span
-            className="absolute top-1 left-1 block font-black leading-none select-none pointer-events-none"
+            className="absolute top-1 left-1 block font-black font-display leading-none select-none pointer-events-none"
             style={{
-              fontFamily: "'Sora', sans-serif",
               fontSize: "clamp(80px, 18vw, 130px)",
               background:
                 "linear-gradient(135deg, #F59E0B 0%, #FCD34D 50%, #F59E0B 100%)",
@@ -287,9 +285,8 @@ export default function NotFound() {
 
         {/* Heading */}
         <h1
-          className="text-2xl font-bold text-white mb-3 leading-tight"
+          className="text-2xl font-bold font-display text-white mb-3 leading-tight"
           style={{
-            fontFamily: "'Sora', sans-serif",
             animation: "fadeSlideUp 0.5s ease both",
             animationDelay: "0.25s",
           }}
@@ -299,10 +296,9 @@ export default function NotFound() {
 
         {/* Subtext */}
         <p
-          className="text-sm leading-relaxed mb-10 max-w-xs"
+          className="text-sm font-body leading-relaxed mb-10 max-w-xs"
           style={{
             color: "rgba(255,255,255,0.45)",
-            fontFamily: "'DM Sans', sans-serif",
             animation: "fadeSlideUp 0.5s ease both",
             animationDelay: "0.3s",
           }}
@@ -322,12 +318,11 @@ export default function NotFound() {
           {/* Back button */}
           <button
             onClick={() => navigate(-1)}
-            className="flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all duration-200"
+            className="flex items-center font-body gap-2 px-5 py-3 rounded-xl text-sm font-semibold transition-all duration-200"
             style={{
               background: "rgba(255,255,255,0.06)",
               border: "1.5px solid rgba(255,255,255,0.12)",
               color: "rgba(255,255,255,0.7)",
-              fontFamily: "'DM Sans', sans-serif",
               cursor: "pointer",
             }}
             onMouseEnter={(e) => {
@@ -357,12 +352,11 @@ export default function NotFound() {
           {/* Back to Dashboard — primary CTA */}
           <button
             onClick={() => navigate("/warehouse_management")}
-            className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-200 group"
+            className="flex items-center font-body gap-2 px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-200 group"
             style={{
               background: "linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%)",
               border: "none",
               color: "#0F2744",
-              fontFamily: "'DM Sans', sans-serif",
               cursor: "pointer",
               boxShadow: "0 4px 20px rgba(245,158,11,0.35)",
             }}
@@ -423,7 +417,6 @@ export default function NotFound() {
             color: "rgba(255,255,255,0.25)",
             background: "rgba(255,255,255,0.04)",
             border: "1px solid rgba(255,255,255,0.07)",
-            fontFamily: "'JetBrains Mono', monospace",
             animation: "fadeSlideUp 0.5s ease both",
             animationDelay: "0.45s",
           }}
