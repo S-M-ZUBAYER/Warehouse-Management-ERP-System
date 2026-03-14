@@ -17,10 +17,7 @@ function FormField({
 }) {
   return (
     <div>
-      <label
-        className="block text-xs font-semibold text-slate-600 mb-1.5"
-        style={{ fontFamily: "'DM Sans', sans-serif" }}
-      >
+      <label className="block text-xs font-semibold text-slate-600 mb-1.5 font-body">
         {label}
         {required && <span className="text-red-400 ml-0.5">*</span>}
       </label>
@@ -52,17 +49,11 @@ export default function ParticularsPanel({
   errors,
 }) {
   return (
-    <div
-      className="flex flex-col gap-5 h-full"
-      style={{ fontFamily: "'DM Sans', sans-serif" }}
-    >
+    <div className="flex flex-col gap-5 h-full font-body">
       {/* ── Selected SKUs list ── */}
       <div className="bg-white rounded-xl border border-surface-border overflow-hidden">
         <div className="px-5 py-3.5 border-b border-surface-border flex items-center justify-between">
-          <h3
-            className="text-sm font-bold text-primary"
-            style={{ fontFamily: "'Sora', sans-serif" }}
-          >
+          <h3 className="text-sm font-bold text-primary font-display">
             Particulars
           </h3>
           {selectedSkus.length > 0 && (
@@ -179,10 +170,7 @@ export default function ParticularsPanel({
 
       {/* ── Form fields ── */}
       <div className="bg-white rounded-xl border border-surface-border p-5 space-y-4">
-        <h4
-          className="text-sm font-bold text-primary"
-          style={{ fontFamily: "'Sora', sans-serif" }}
-        >
+        <h4 className="text-sm font-bold text-primary font-display">
           Combine SKU Details
         </h4>
 

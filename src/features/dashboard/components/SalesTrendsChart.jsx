@@ -81,8 +81,8 @@ export default function SalesTrendsChart({ data, platforms, loading }) {
           {/* Platform selector */}
           <div className="relative">
             <div
-              className="flex items-center gap-2 text-xs"
-              style={{ color: "#64748B", fontFamily: "'DM Sans', sans-serif" }}
+              className="flex items-center gap-2 text-xs font-body"
+              style={{ color: "#64748B" }}
             >
               <span>Select Platform</span>
               <button

@@ -31,18 +31,12 @@ export default function DeleteModal({
         </div>
 
         {/* Title */}
-        <h3
-          className="text-lg font-bold text-primary mb-2"
-          style={{ fontFamily: "'Sora', sans-serif" }}
-        >
+        <h3 className="text-lg font-bold text-primary mb-2 font-display">
           {title || "Are you sure?"}
         </h3>
 
         {/* Message */}
-        <p
-          className="text-sm text-slate-500 mb-7 leading-relaxed"
-          style={{ fontFamily: "'DM Sans', sans-serif" }}
-        >
+        <p className="text-sm text-slate-500 mb-7 leading-relaxed font-body">
           {message ||
             "Do you really want to delete this record? This process cannot be undone."}
         </p>
@@ -51,17 +45,15 @@ export default function DeleteModal({
         <div className="flex gap-3 w-full">
           <button
             onClick={onCancel}
-            className="flex-1 py-2.5 rounded-xl text-sm font-semibold border border-surface-border
+            className="flex-1 py-2.5 rounded-xl text-sm font-semibold font-body border border-surface-border
                        text-slate-600 hover:bg-surface-card transition-colors duration-150"
-            style={{ fontFamily: "'DM Sans', sans-serif" }}
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
             className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-red-500
-                       hover:bg-red-600 text-white transition-colors duration-150"
-            style={{ fontFamily: "'DM Sans', sans-serif" }}
+                       hover:bg-red-600 text-white transition-colors duration-150 font-body"
           >
             Delete
           </button>

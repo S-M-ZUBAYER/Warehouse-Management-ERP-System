@@ -21,10 +21,7 @@ export default function SKUListPanel({
     >
       {/* Panel header */}
       <div className="px-5 py-4 border-b border-surface-border">
-        <h3
-          className="text-sm font-bold text-primary mb-3"
-          style={{ fontFamily: "'Sora', sans-serif" }}
-        >
+        <h3 className="text-sm font-bold font-display text-primary mb-3">
           Select SKUs
           {selectedIds.length > 0 && (
             <span className="ml-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-primary text-white">

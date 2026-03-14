@@ -15,10 +15,7 @@ export default function ProductFilters({
   const [catOpen, setCatOpen] = useState(false);
 
   return (
-    <div
-      className="flex flex-wrap items-center gap-3 p-4 bg-white rounded-xl border border-surface-border"
-      style={{ fontFamily: "'DM Sans', sans-serif" }}
-    >
+    <div className="flex flex-wrap items-center gap-3 p-4 bg-white rounded-xl border border-surface-border font-body">
       {/* Search */}
       <div className="relative flex-1 min-w-48">
         <Search

@@ -88,7 +88,7 @@ export default function ProductListPage() {
       {/* ── Product list card ── */}
       <div className="bg-white rounded-xl border border-surface-border overflow-hidden">
         {/* Card header */}
-        <div className="px-5 py-4 border-b border-surface-border">
+        <div className="px-5 py-4 ">
           <h2 className="text-base font-bold text-slate-800 font-display">
             Product list
           </h2>
@@ -140,46 +140,57 @@ export default function ProductListPage() {
 
         {/* ── Table ── */}
         <div className="overflow-x-auto">
-          <table className="w-full text-sm font-body">
+          <table className="w-full text-lg font-body">
             <thead>
               <tr className="border-b border-surface-border bg-white">
-                <th className="w-14 pl-5 py-3 text-left">
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                    Select
+                <th className="py-3 pl-5 text-left max-w-40 flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    ref={(el) => {
+                      if (el) {
+                        el.indeterminate = someSelected && !allSelected; // ✅ Fix: only indeterminate when SOME (not all) are selected
+                      }
+                    }}
+                    onChange={toggleAll}
+                    className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
+                  />
+                  <span className="pl-2 text-base font-semibold text-primary-text">
+                    Select All
                   </span>
                 </th>
                 <th className="w-16 py-3 text-left">
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <span className="text-base font-semibold text-primary-text  tracking-wide">
                     Image
                   </span>
                 </th>
                 <th className="w-24 py-3 text-left pr-4">
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <span className="text-base font-semibold text-primary-text  tracking-wide">
                     SKU
                   </span>
                 </th>
                 <th className="py-3 text-left pr-4">
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <span className="text-base font-semibold text-primary-text  tracking-wide">
                     Product Name
                   </span>
                 </th>
-                <th className="w-40 py-3 text-left pr-4">
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                <th className="w-50 py-3 text-left pr-4">
+                  <span className="text-base font-semibold text-primary-text  tracking-wide">
                     Available in Inventory
                   </span>
                 </th>
-                <th className="w-40 py-3 text-left pr-4">
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                <th className="w-50 py-3 text-left pr-4">
+                  <span className="text-base font-semibold text-primary-text  tracking-wide">
                     In transit Inventory
                   </span>
                 </th>
                 <th className="w-20 py-3 text-left pr-4">
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <span className="text-base font-semibold text-primary-text  tracking-wide">
                     Details
                   </span>
                 </th>
                 <th className="w-20 py-3 text-left pr-5">
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  <span className="text-base font-semibold text-primary-text  tracking-wide">
                     Actions
                   </span>
                 </th>
