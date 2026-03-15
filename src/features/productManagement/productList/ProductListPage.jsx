@@ -143,21 +143,23 @@ export default function ProductListPage() {
           <table className="w-full text-lg font-body">
             <thead>
               <tr className="border-b border-surface-border bg-white">
-                <th className="py-3 pl-5 text-left max-w-40 flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    ref={(el) => {
-                      if (el) {
-                        el.indeterminate = someSelected && !allSelected; // ✅ Fix: only indeterminate when SOME (not all) are selected
-                      }
-                    }}
-                    onChange={toggleAll}
-                    className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
-                  />
-                  <span className="pl-2 text-base font-semibold text-primary-text">
-                    Select All
-                  </span>
+                <th className="py-3 pl-5 w-36 text-left">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      ref={(el) => {
+                        if (el) {
+                          el.indeterminate = someSelected && !allSelected; // ✅ Fix: only indeterminate when SOME (not all) are selected
+                        }
+                      }}
+                      onChange={toggleAll}
+                      className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
+                    />
+                    <span className="pl-2 text-base font-semibold text-primary-text">
+                      Select All
+                    </span>
+                  </label>
                 </th>
                 <th className="w-16 py-3 text-left">
                   <span className="text-base font-semibold text-primary-text  tracking-wide">

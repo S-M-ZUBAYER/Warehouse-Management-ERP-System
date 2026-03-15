@@ -1,14 +1,3 @@
-// import Topbar from "../../../components/layout/Topbar";
-
-// export default function SubAccountPage() {
-//   return (
-//     <div className="space-y-6 font-body">
-//       {/* ── Page Title ── */}
-//       <Topbar PageTitle="Sub Account"></Topbar>
-//     </div>
-//   );
-// }
-
 import { Search, Plus, Pencil, Trash2 } from "lucide-react";
 import { useRef, useEffect } from "react";
 import Topbar from "../../../components/layout/Topbar";
@@ -97,7 +86,7 @@ export default function SubAccountPage() {
       <Topbar PageTitle="Sub Account" />
 
       {/* Search bar */}
-      <div className="bg-white rounded-xl border border-surface-border p-4 flex items-center gap-3">
+      <div className="bg-white rounded-xl border border-surface-border p-7 flex items-center gap-3">
         <div className="relative flex-1 max-w-xs">
           <Search
             size={14}
