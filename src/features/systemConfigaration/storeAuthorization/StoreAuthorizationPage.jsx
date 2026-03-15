@@ -122,21 +122,6 @@ export default function StoreAuthorizationPage() {
                       <div className="w-2 h-2 rounded-full bg-primary" />
                     )}
                   </div>
-                  {/* {p !== "All" && (
-                    <span
-                      className="w-5 h-5 rounded flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                      style={{
-                        background:
-                          p === "Shopee"
-                            ? "#EE4D2D"
-                            : p === "Lazada"
-                              ? "#0F146D"
-                              : "#000",
-                      }}
-                    >
-                      {p[0]}
-                    </span>
-                  )} */}
                   <img
                     className={`text-sm ${p === "All" ? "w-4 h-3" : "w-20 h-6"} text-slate-700 select-none`}
                     src={
@@ -229,7 +214,7 @@ export default function StoreAuthorizationPage() {
             <thead>
               <tr className="border-b border-surface-border">
                 {[
-                  "Select",
+                  "Select All",
                   "Marketplace Name",
                   "Store Nickname",
                   "Store ID",
@@ -243,7 +228,24 @@ export default function StoreAuthorizationPage() {
                     className={`py-3 text-left text-lg font-semibold text-primary-text
                     ${i === 0 ? "pl-5 w-14 pr-4" : "pr-4"} ${i === 7 ? "pr-5" : ""}`}
                   >
-                    {h}
+                    {h === "Select All" ? (
+                      <div className="flex justify-start items-center w-32">
+                        <input
+                          type="checkbox"
+                          checked={allSelected}
+                          ref={(el) => {
+                            if (el) {
+                              el.indeterminate = !allSelected; // ✅ Fix: only indeterminate when SOME (not all) are selected
+                            }
+                          }}
+                          onChange={toggleAll}
+                          className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
+                        />
+                        <span className="pl-2">{h}</span>
+                      </div>
+                    ) : (
+                      h
+                    )}
                   </th>
                 ))}
               </tr>

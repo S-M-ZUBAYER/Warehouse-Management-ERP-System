@@ -45,7 +45,7 @@ export default function RoleManagementPage() {
       <Topbar PageTitle="Role Management" />
 
       {/* Search bar */}
-      <div className="bg-white rounded-xl border border-surface-border p-4 flex items-center gap-3">
+      <div className="bg-white rounded-xl border border-surface-border p-7 flex items-center gap-3">
         <div className="relative flex-1 max-w-xs">
           <Search
             size={14}

@@ -80,7 +80,7 @@ export default function CombineSKUPage() {
           <table className="w-full text-sm font-body">
             <thead>
               <tr className="border-b border-surface-border bg-white">
-                <th className="py-3 pl-5 text-left w-36">
+                <th className="py-3 pl-5 text-left w-32">
                   {" "}
                   {/* ✅ fixed width instead of max-w */}
                   <div className="flex items-center">
