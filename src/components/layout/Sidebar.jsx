@@ -60,13 +60,13 @@ const navItems = [
         icon: RotateCcw,
         children: [
           {
-            label: "SKU Requests",
-            to: "/warehouse_management/inventory/SKU_mapping/requests",
+            label: "By Product",
+            to: "/warehouse_management/inventory/SKU_mapping/byProduct",
             icon: FileText,
           },
           {
-            label: "SKU Issues",
-            to: "/warehouse_management/inventory/SKU_mapping/issues",
+            label: "By Merchant",
+            to: "/warehouse_management/inventory/SKU_mapping/byMerchant",
             icon: AlertCircle,
           },
         ],
@@ -86,13 +86,18 @@ const navItems = [
         icon: RotateCcw,
         children: [
           {
-            label: "Inbound Requests",
-            to: "/warehouse_management/inventory/inbound/requests",
+            label: "Draft",
+            to: "/warehouse_management/inventory/inbound/draft",
             icon: FileText,
           },
           {
-            label: "Inbound Issues",
-            to: "/warehouse_management/inventory/inbound/issues",
+            label: "On The Way",
+            to: "/warehouse_management/inventory/inbound/onTheWay",
+            icon: AlertCircle,
+          },
+          {
+            label: "Complete",
+            to: "/warehouse_management/inventory/inbound/completed",
             icon: AlertCircle,
           },
         ],

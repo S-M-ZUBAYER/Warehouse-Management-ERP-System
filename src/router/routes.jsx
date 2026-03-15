@@ -20,17 +20,18 @@ import CompletedPage from "../features/orderManagement/orderProcessing/completed
 import AllOrderPage from "../features/orderManagement/orderProcessing/allOrder/allOrderpage";
 import CanceledOrderPage from "../features/orderManagement/orderProcessing/canceledOrder/CanceledOrderPage";
 import ManualOrderPage from "../features/orderManagement/manualOrder/ManualOrderPage";
-import MerchantSKUPage from "../features/inventoryManagement/merchantSKU/MerchantSKUPage";
-import SKURequestsPage from "../features/inventoryManagement/SKUMapping/SKURequests/SKURequestsPage";
-import SkuIssuesPage from "../features/inventoryManagement/SKUMapping/SKUIssues/SkuIssuesPage";
 import InventoryListPage from "../features/inventoryManagement/inventoryList/InventoryListPage";
 import ManualInboundPage from "../features/inventoryManagement/manualInbound/ManualInboundPage";
-import InboundRequestsPage from "../features/inventoryManagement/Inbound/inboundRequests/InboundRequestsPage";
-import InboundIssuesPage from "../features/inventoryManagement/Inbound/inboundIssues/InboundIssuesPage";
 import OutboundOrderPage from "../features/inventoryManagement/outboundOrder/OutboundOrderPage";
 import InventoryLogPage from "../features/inventoryManagement/inventoryLog/InventoryLogPage";
 import AddCombineSKUPage from "../features/productManagement/combineSKU/AddCombineSKUPage";
 import OrderDetailPage from "../features/orderManagement/orderProcessing/allOrder/component/OrderDetailPage";
+import ByMerchantSKUMappingsPage from "../features/inventoryManagement/SKUMapping/byMerchantSKUMapping/ByMerchantSKUMappingsPage";
+import ByProductSKUMappingsPage from "../features/inventoryManagement/SKUMapping/byProductSKUMapping/ByProductSKUMappingPage";
+import MerchantSKUPage from "../features/inventoryManagement/merchantSKU/MerchantSKUPage";
+import InboundCompletedPage from "../features/inventoryManagement/Inbound/completed/InboundCompletedPage";
+import InboundOnTheWayPage from "../features/inventoryManagement/Inbound/onTheWay/InboundOnTheWayPage";
+import InboundDraftPage from "../features/inventoryManagement/Inbound/draft/InboundDraftPage";
 
 export const routes = [
   {
@@ -64,12 +65,12 @@ export const routes = [
         element: <MerchantSKUPage />,
       },
       {
-        path: "/warehouse_management/inventory/SKU_mapping/requests",
-        element: <SKURequestsPage />,
+        path: "/warehouse_management/inventory/SKU_mapping/byProduct",
+        element: <ByProductSKUMappingsPage />,
       },
       {
-        path: "/warehouse_management/inventory/SKU_mapping/issues",
-        element: <SkuIssuesPage />,
+        path: "/warehouse_management/inventory/SKU_mapping/byMerchant",
+        element: <ByMerchantSKUMappingsPage />,
       },
       {
         path: "/warehouse_management/inventory/list",
@@ -80,12 +81,16 @@ export const routes = [
         element: <ManualInboundPage />,
       },
       {
-        path: "/warehouse_management/inventory/inbound/requests",
-        element: <InboundRequestsPage />,
+        path: "/warehouse_management/inventory/inbound/draft",
+        element: <InboundDraftPage />,
       },
       {
-        path: "/warehouse_management/inventory/inbound/issues",
-        element: <InboundIssuesPage />,
+        path: "/warehouse_management/inventory/inbound/onTheWay",
+        element: <InboundOnTheWayPage />,
+      },
+      {
+        path: "/warehouse_management/inventory/inbound/completed",
+        element: <InboundCompletedPage />,
       },
       {
         path: "/warehouse_management/inventory/outbound_order",
