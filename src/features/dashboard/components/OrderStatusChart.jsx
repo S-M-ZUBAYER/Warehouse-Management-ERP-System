@@ -69,10 +69,7 @@ export default function OrderStatusChart({ data, loading }) {
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h3
-          className="text-base font-semibold font-display"
-          style={{ color: "#0F172A" }}
-        >
+        <h3 className="text-lg font-semibold font-display text-primary-text">
           Order Status
         </h3>
         <div
@@ -141,7 +138,7 @@ export default function OrderStatusChart({ data, loading }) {
                 <span
                   className="text-xs font-body"
                   style={{
-                    color: "#64748B",
+                    color: "#333333",
                   }}
                 >
                   {name}
@@ -150,7 +147,7 @@ export default function OrderStatusChart({ data, loading }) {
               <span
                 className="text-xs font-semibold ml-2 font-body"
                 style={{
-                  color: "#0F172A",
+                  color: "#333333",
                 }}
               >
                 {value}

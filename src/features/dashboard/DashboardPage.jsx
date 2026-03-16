@@ -39,10 +39,8 @@ export default function DashboardPage() {
       {/* ── Overview Section ── */}
       <section>
         <h2
-          className="text-sm font-semibold mb-4"
+          className="text-xl font-semibold mb-4 text-primary-text"
           style={{
-            color: "#64748B",
-            textTransform: "uppercase",
             letterSpacing: "0.5px",
           }}
         >

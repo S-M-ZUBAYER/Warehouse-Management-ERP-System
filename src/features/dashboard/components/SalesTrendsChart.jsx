@@ -70,20 +70,14 @@ export default function SalesTrendsChart({ data, platforms, loading }) {
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h3
-          className="text-base font-semibold font-display"
-          style={{ color: "#0F172A" }}
-        >
+        <h3 className="text-lg text-primary-text font-semibold font-display">
           Sales Trends
         </h3>
 
         <div className="flex items-center gap-3">
           {/* Platform selector */}
           <div className="relative">
-            <div
-              className="flex items-center gap-2 text-xs font-body"
-              style={{ color: "#64748B" }}
-            >
+            <div className="flex items-center gap-2 text-xs text-primary-text font-body">
               <span>Select Platform</span>
               <button
                 onClick={() => setShowDropdown((p) => !p)}

@@ -46,7 +46,7 @@ export default function Login() {
         </div>
 
         {/* Login form */}
-        <form onSubmit={handleSubmit} noValidate>
+        <form onSubmit={handleSubmit}>
           <InputField
             icon={Mail}
             label="Email"
@@ -151,7 +151,7 @@ export default function Login() {
               Enter your email and we'll send you a reset code.
             </p>
 
-            <form onSubmit={handleForgotSubmit} noValidate>
+            <form onSubmit={handleForgotSubmit}>
               <InputField
                 icon={Mail}
                 label="Email Address"

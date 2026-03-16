@@ -5,7 +5,9 @@ import {
   Package,
   ShoppingCart,
   Warehouse,
-  Settings,
+  BaggageClaim,
+  ShoppingBasket,
+  Bolt,
   ChevronDown,
   ChevronRight,
   PanelRight,
@@ -116,7 +118,7 @@ const navItems = [
   },
   {
     label: "Order Management",
-    icon: ShoppingCart,
+    icon: ShoppingBasket,
     children: [
       {
         label: "Order Processing",
@@ -173,7 +175,7 @@ const navItems = [
   },
   {
     label: "System Configuration",
-    icon: Settings,
+    icon: Bolt,
     children: [
       {
         label: "Store Authorization",
@@ -396,7 +398,7 @@ function UpgradePlan({ collapsed }) {
     <div onClick={handleToUpgradePlan} className="flex-shrink-0 px-3 py-3 ">
       <div className="rounded-xl bg-[#FFFFFF] border border-surface-card p-3">
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-xs font-semibold text-[#004368]">
+          <span className="text-xs font-semibold text-primary-text">
             Free Trial
           </span>
           <span className="text-xs text-[#6B8299]">30 Days left</span>
