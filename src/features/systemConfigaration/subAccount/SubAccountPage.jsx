@@ -138,7 +138,7 @@ export default function SubAccountPage() {
                 ].map((h, i) => (
                   <th
                     key={h}
-                    className={`py-3 text-left text-xs font-semibold text-slate-600
+                    className={`py-4 text-left text-xs font-semibold text-slate-600
                       ${i === 0 ? "pl-5 w-14" : "pr-4"} ${i === 6 ? "pr-5" : ""}`}
                   >
                     {h}
@@ -152,7 +152,7 @@ export default function SubAccountPage() {
                   key={acc.id}
                   className="hover:bg-surface/50 transition-colors"
                 >
-                  <td className="pl-5 py-3">
+                  <td className="pl-5 py-2">
                     <input
                       type="checkbox"
                       checked={selectedIds.includes(acc.id)}
@@ -160,7 +160,7 @@ export default function SubAccountPage() {
                       className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
                     />
                   </td>
-                  <td className="py-3 pr-4">
+                  <td className="py-2 pr-4">
                     <img
                       src={acc.image}
                       alt={acc.name}
@@ -170,19 +170,19 @@ export default function SubAccountPage() {
                       }}
                     />
                   </td>
-                  <td className="py-3 pr-4 text-slate-800 font-medium">
+                  <td className="py-2 pr-4 text-slate-800 font-medium">
                     {acc.name}
                   </td>
-                  <td className="py-3 pr-4 text-slate-600 font-mono text-xs">
+                  <td className="py-2 pr-4 text-slate-600 font-mono text-xs">
                     {acc.accountId}
                   </td>
-                  <td className="py-3 pr-4 text-slate-600">{acc.role}</td>
-                  <td className="py-3 pr-4 text-slate-500 text-xs">
+                  <td className="py-2 pr-4 text-slate-600">{acc.role}</td>
+                  <td className="py-2 pr-4 text-slate-500 text-xs">
                     {acc.createdAt}
                   </td>
 
                   {/* Actions */}
-                  <td className="py-3 pr-5">
+                  <td className="py-2 pr-5">
                     <div
                       className="relative"
                       ref={(el) => (actionRefs.current[acc.id] = el)}
