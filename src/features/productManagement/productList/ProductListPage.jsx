@@ -44,7 +44,7 @@ export default function ProductListPage() {
   return (
     <div className="space-y-4 font-body">
       {/* ── Page Title ── */}
-      <Topbar PageTitle="Product List"></Topbar>
+      <Topbar PageTitle="Product Management"></Topbar>
       {/* ── Top Filter Bar ── */}
       <div className="bg-white rounded-xl border border-surface-border p-4">
         <div className="grid grid-cols-4 gap-3">
@@ -89,13 +89,13 @@ export default function ProductListPage() {
       <div className="bg-white rounded-xl border border-surface-border overflow-hidden">
         {/* Card header */}
         <div className="px-5 py-4 ">
-          <h2 className="text-base font-bold text-slate-800 font-display">
+          <h2 className="text-xl font-bold text-slate-800 font-display">
             Product list
           </h2>
         </div>
 
         {/* Toolbar */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-surface-border gap-3">
+        <div className="flex items-center justify-between px-5 py-3 pb-7 border-b border-surface-border gap-3">
           {/* Left: Search + Bulk Action */}
           <div className="flex items-center gap-3">
             {/* Search */}
@@ -208,7 +208,7 @@ export default function ProductListPage() {
                     className={`transition-colors hover:bg-surface/60 ${isChecked ? "bg-blue-50/40" : ""}`}
                   >
                     {/* Checkbox */}
-                    <td className="pl-5 py-3">
+                    <td className="pl-5 py-2">
                       <input
                         type="checkbox"
                         checked={isChecked}
@@ -218,7 +218,7 @@ export default function ProductListPage() {
                     </td>
 
                     {/* Image */}
-                    <td className="py-3">
+                    <td className="py-2">
                       <img
                         src={product.image}
                         alt={product.name}
@@ -231,42 +231,42 @@ export default function ProductListPage() {
                     </td>
 
                     {/* SKU */}
-                    <td className="py-3 pr-4">
+                    <td className="py-2 pr-4">
                       <span className="text-sm font-medium text-slate-700">
                         {product.sku}
                       </span>
                     </td>
 
                     {/* Product Name */}
-                    <td className="py-3 pr-4">
+                    <td className="py-2 pr-4">
                       <span className="text-sm text-slate-700">
                         {product.name}
                       </span>
                     </td>
 
                     {/* Available in Inventory */}
-                    <td className="py-3 pr-4">
+                    <td className="py-2 pr-4">
                       <span className="text-sm text-slate-600">
                         {product.availableInventory} units
                       </span>
                     </td>
 
                     {/* In transit Inventory */}
-                    <td className="py-3 pr-4">
+                    <td className="py-2 pr-4">
                       <span className="text-sm text-slate-600">
                         {product.inTransitInventory} units
                       </span>
                     </td>
 
                     {/* Details link */}
-                    <td className="py-3 pr-4">
+                    <td className="py-2 pr-4">
                       <button className="text-sm font-medium text-primary hover:underline transition-colors">
                         Details
                       </button>
                     </td>
 
                     {/* Actions — 3-dot menu */}
-                    <td className="py-3 pr-5">
+                    <td className="py-2 pr-5">
                       <button className="flex items-center gap-0.5 text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-lg hover:bg-surface-card">
                         <span className="w-1 h-1 rounded-full bg-current" />
                         <span className="w-1 h-1 rounded-full bg-current mx-0.5" />
@@ -283,7 +283,7 @@ export default function ProductListPage() {
         {/* ── Footer: Export + Print ── */}
         <div className="flex justify-end gap-3 px-5 py-4 border-t border-surface-border">
           <button
-            className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold
+            className="flex items-center gap-2 px-14 py-2.5 text-base font-semibold
                        border border-surface-border rounded-lg text-slate-700 bg-white
                        hover:bg-surface-card transition-colors"
           >
@@ -291,7 +291,7 @@ export default function ProductListPage() {
             <ChevronDown size={13} className="text-slate-400" />
           </button>
           <button
-            className="px-6 py-2.5 text-sm font-semibold rounded-lg bg-primary
+            className="px-16 py-2.5 text-base font-semibold rounded-lg bg-primary
                        hover:bg-primary-dark text-white transition-colors"
           >
             Print

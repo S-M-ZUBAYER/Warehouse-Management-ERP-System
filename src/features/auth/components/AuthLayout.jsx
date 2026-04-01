@@ -43,7 +43,7 @@ export default function AuthLayout({ children, title, subtitle }) {
 
       {/* Card */}
       <div
-        className="relative z-10 w-full flex rounded-3xl overflow-hidden"
+        className="relative z-10 w-full flex rounded-2xl overflow-hidden"
         style={{
           maxWidth: "1080px",
           boxShadow:
@@ -52,7 +52,7 @@ export default function AuthLayout({ children, title, subtitle }) {
       >
         {/* ── Left Panel ── */}
         <div
-          className="hidden lg:flex flex-col items-center justify-center p-12 bg-[#E6ECF0] rounded-xl m-3"
+          className="hidden lg:flex flex-col items-center justify-center p-12 bg-[#E6ECF0] rounded-xl m-2"
           style={{
             width: "42%",
 

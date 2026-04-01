@@ -29,7 +29,7 @@ export default function KPICard({ label, value, icon, color, bg, loading }) {
 
   return (
     <div
-      className="rounded-2xl p-5 bg-white transition-all duration-200 cursor-default group"
+      className="rounded-2xl p-4 bg-white transition-all duration-200 cursor-default group"
       style={{
         border: "1px solid #F1F5F9",
         boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
@@ -45,7 +45,7 @@ export default function KPICard({ label, value, icon, color, bg, loading }) {
     >
       {/* Icon */}
       <div
-        className="w-10 h-10 rounded-xl flex items-center justify-center mb-4"
+        className="w-10 h-10 rounded-xl flex items-center justify-center mb-11"
         style={{ background: bg }}
       >
         <Icon size={20} color={color} strokeWidth={1.8} />
@@ -53,7 +53,7 @@ export default function KPICard({ label, value, icon, color, bg, loading }) {
 
       {/* Value */}
       <p
-        className="text-2xl font-display font-bold mb-1 leading-none"
+        className="text-xl font-display font-bold mb-1 leading-none"
         style={{
           color: "#0F172A",
           letterSpacing: "-0.5px",

@@ -131,7 +131,7 @@ export default function AddCombineSKUPage() {
           <div className="overflow-auto max-h-[600px]">
             <table className="w-full text-xs font-body">
               <thead className="sticky top-0 bg-white z-10">
-                <tr className="">
+                <tr className=" border-y-2 border-surface-border ">
                   {/* <th className="w-10 pl-4 pr-8 py-2.5 text-left">
                     <th
                       type="checkbox"
@@ -149,7 +149,7 @@ export default function AddCombineSKUPage() {
                       Select
                     </span>
                   </th>
-                  <th className="w-12 py-2.5 text-left">
+                  <th className="w-12 py-2.5 pr-6 text-left">
                     <span className="font-semibold text-primary-text text-base tracking-wide">
                       Image
                     </span>
@@ -178,7 +178,7 @@ export default function AddCombineSKUPage() {
                     <tr
                       key={sku.id}
                       onClick={() => toggleSku(sku.id)}
-                      className={`cursor-pointer transition-colors hover:bg-surface/70
+                      className={`cursor-pointer border-b border-surface-border transition-colors hover:bg-surface/70
                         ${isChecked ? "bg-blue-50/50" : ""}`}
                     >
                       <td className="pl-4 py-2.5">
@@ -224,7 +224,7 @@ export default function AddCombineSKUPage() {
         {/* RIGHT PANEL — Preview selection */}
         <div className="bg-white rounded-xl border  border-surface-border overflow-hidden">
           {/* Panel header */}
-          <div className="flex items-center justify-between px-4 py-4 ">
+          <div className="flex items-center justify-between px-4 py-3.5 ">
             <h3 className="text-xl font-bold text-primary-text font-display">
               Preview selection
             </h3>
@@ -247,8 +247,8 @@ export default function AddCombineSKUPage() {
             ) : (
               <table className="w-full text-xs font-body">
                 <thead className="sticky top-0 bg-white z-10">
-                  <tr className="">
-                    <th className="w-12 pl-4 py-2.5 text-left">
+                  <tr className="border-y-2 border-surface-border">
+                    <th className="w-12 pl-4 py-2.5 pr-6 text-left">
                       <span className="font-semibold text-primary-text text-base tracking-wide">
                         Image
                       </span>
@@ -274,7 +274,7 @@ export default function AddCombineSKUPage() {
                   {selectedSkus.map((sku) => (
                     <tr
                       key={sku.id}
-                      className="hover:bg-surface/50 transition-colors"
+                      className="border-b border-surface-border hover:bg-surface/50 transition-colors"
                     >
                       <td className="pl-4 py-2.5">
                         <img
@@ -406,7 +406,7 @@ export default function AddCombineSKUPage() {
         </button>
         <button
           onClick={handleSaveClick}
-          className="px-6 py-2.5 text-sm font-semibold rounded-lg bg-primary
+          className="px-10 py-2.5 text-sm font-semibold rounded-lg bg-primary
                      hover:bg-primary-dark text-white transition-colors"
         >
           Save

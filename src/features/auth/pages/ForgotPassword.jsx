@@ -65,7 +65,7 @@ export default function ForgotPassword() {
           </span>
         </div>
 
-        <form onSubmit={handleResetSubmit} noValidate>
+        <form onSubmit={handleResetSubmit}>
           {/* ── Code input - styled differently, centered with large font ── */}
           <div className="mb-5">
             <label
