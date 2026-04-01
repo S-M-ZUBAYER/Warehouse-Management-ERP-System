@@ -33,10 +33,10 @@ export default function SetPermissionModal({
       >
         {/* Header */}
         <div className="px-8 pt-8 pb-4 text-center">
-          <h2 className="text-lg font-bold text-slate-800 font-display mb-1">
+          <h2 className="text-2xl font-semibold text-slate-800 font-display mb-1">
             Set Permission
           </h2>
-          <p className="text-xs text-slate-500">
+          <p className="text-sm text-slate-500">
             The selected sub-accounts have permission to view store data
           </p>
         </div>
@@ -77,7 +77,7 @@ export default function SetPermissionModal({
                 {["Select", "Sub-Accounts", "Full Name", "Roles"].map((h) => (
                   <th
                     key={h}
-                    className="py-3 text-left text-[16px] font-semibold text-slate-600 pr-4"
+                    className="py-3 text-left text-[16px] font-semibold text-primary-text pr-4"
                   >
                     {h}
                   </th>
@@ -110,7 +110,7 @@ export default function SetPermissionModal({
         </div>
 
         {/* Footer */}
-        <div className="flex justify-center gap-4 px-8 py-5 ">
+        <div className="flex justify-end gap-4 px-9 py-9 ">
           <button
             onClick={onClose}
             className="px-10 py-2.5 text-sm font-semibold border border-surface-border

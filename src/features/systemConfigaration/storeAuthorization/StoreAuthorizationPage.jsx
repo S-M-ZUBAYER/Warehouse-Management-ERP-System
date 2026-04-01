@@ -1,5 +1,13 @@
 import { useState, useRef, useEffect } from "react";
-import { Search, Plus, ChevronDown } from "lucide-react";
+import {
+  Search,
+  Plus,
+  ChevronDown,
+  Pencil,
+  RefreshCw,
+  Link,
+  ShieldCheck,
+} from "lucide-react";
 import Topbar from "../../../components/layout/Topbar";
 import { useStoreAuthorization } from "./hooks/useStoreAuthorization";
 import AuthStatusBadge from "./component/AuthStatusBadge";
@@ -209,7 +217,7 @@ export default function StoreAuthorizationPage() {
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto z-50">
           <table className="w-full text-sm font-body">
             <thead>
               <tr className="border-b border-surface-border">
@@ -305,11 +313,12 @@ export default function StoreAuthorizationPage() {
                       {openActionId === store.id && (
                         <div
                           className="absolute right-0 top-full mt-1 z-30 bg-white rounded-xl
-                                        border border-surface-border shadow-lg py-1 w-40"
+                border border-surface-border shadow-lg py-1 w-44"
                         >
                           {[
                             {
                               label: "Edit",
+                              icon: Pencil,
                               action: () => {
                                 openEditStore(store);
                                 setOpenActionId(null);
@@ -317,10 +326,12 @@ export default function StoreAuthorizationPage() {
                             },
                             {
                               label: "Reauthorization",
+                              icon: RefreshCw,
                               action: () => setOpenActionId(null),
                             },
                             {
                               label: "Set Permission",
+                              icon: ShieldCheck,
                               action: () => {
                                 openPermModal(store);
                                 setOpenActionId(null);
@@ -328,20 +339,28 @@ export default function StoreAuthorizationPage() {
                             },
                             {
                               label: "Unlink",
+                              icon: Link,
                               action: () => setOpenActionId(null),
                               danger: true,
                             },
-                          ].map(({ label, action, danger }) => (
+                          ].map(({ label, icon: Icon, action, danger }) => (
                             <button
                               key={label}
                               onClick={action}
-                              className={`w-full text-left px-4 py-2 text-xs transition-colors
-                                ${
-                                  danger
-                                    ? "text-red-500 hover:bg-red-50"
-                                    : "text-slate-700 hover:bg-surface-card"
-                                }`}
+                              className={`w-full flex items-center  gap-2.5 px-4 py-2 text-xs transition-colors
+          ${
+            danger
+              ? "text-red-500 hover:bg-red-50"
+              : "text-slate-700 border-b hover:bg-surface-card"
+          }`}
                             >
+                              <Icon
+                                size={13}
+                                className={
+                                  danger ? "text-red-400" : "text-slate-400"
+                                }
+                                strokeWidth={1.8}
+                              />
                               {label}
                             </button>
                           ))}
