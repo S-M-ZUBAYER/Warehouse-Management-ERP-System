@@ -153,7 +153,7 @@ export default function AddWarehouseModal({
           <div className="flex items-center justify-end gap-3 pt-2">
             <button
               onClick={onClose}
-              className="px-5 py-2.5 text-sm font-semibold border border-surface-border
+              className="px-10 py-2.5 text-sm font-semibold border border-surface-border
                          rounded-lg text-primary-text bg-white hover:bg-surface-card transition-colors"
             >
               Cancel
@@ -161,7 +161,7 @@ export default function AddWarehouseModal({
             <button
               onClick={onAdd}
               disabled={saving}
-              className="px-6 py-2.5 text-sm font-semibold rounded-lg bg-primary
+              className="px-10 py-2.5 text-sm font-semibold rounded-lg bg-primary
                          hover:bg-primary-dark text-white transition-colors
                          disabled:opacity-60 disabled:cursor-not-allowed
                          flex items-center gap-2"

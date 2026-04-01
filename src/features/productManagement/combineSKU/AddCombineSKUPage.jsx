@@ -1,8 +1,9 @@
-import { ArrowLeft, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, Search, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAddCombineSKU } from "../hooks/useAddCombineSKU";
 import ConfirmModal from "../../../components/shared/ConfirmModal";
 import Topbar from "../../../components/layout/Topbar";
+import { WAREHOUSES } from "../../inventoryManagement/shared/mockData";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AddCombineSKUPage — Matches Figma Image 3 exactly:
@@ -52,7 +53,7 @@ export default function AddCombineSKUPage() {
             }
             className="flex items-center gap-2 cursor-pointer"
           >
-            <ArrowLeft size={18} />
+            <ArrowLeft size={20} />
             Back to Combine SKU
           </span>
         }
@@ -381,16 +382,21 @@ export default function AddCombineSKUPage() {
             <p className="text-xs font-semibold text-slate-600 mb-1.5">
               Select Warehouse
             </p>
-            <input
-              type="text"
+
+            <select
               name="warehouse"
-              placeholder="Warehouse name here"
               value={form.warehouse}
               onChange={handleFormChange}
               className="w-full px-3 py-2 text-sm bg-white border border-surface-border rounded-lg
-                         text-slate-700 placeholder-slate-400 outline-none
-                         focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
-            />
+                           text-slate-700 placeholder-slate-400 outline-none
+                           focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
+            >
+              {WAREHOUSES.map((warehouse, index) => (
+                <option key={index} value={warehouse}>
+                  {warehouse}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
@@ -399,14 +405,14 @@ export default function AddCombineSKUPage() {
       <div className="flex justify-end gap-3 pt-1">
         <button
           onClick={() => navigate("/warehouse_management/products/combine_sku")}
-          className="px-6 py-2.5 text-sm font-semibold border border-surface-border
+          className="px-16 py-2.5 text-sm font-semibold border border-surface-border
                      rounded-lg text-slate-700 bg-white hover:bg-surface-card transition-colors"
         >
           Cancel
         </button>
         <button
           onClick={handleSaveClick}
-          className="px-10 py-2.5 text-sm font-semibold rounded-lg bg-primary
+          className="px-16 py-2.5 text-sm font-semibold rounded-lg bg-primary
                      hover:bg-primary-dark text-white transition-colors"
         >
           Save

@@ -14,7 +14,7 @@ import ProductListPage from "../features/productManagement/productList/ProductLi
 import CombineSKUPage from "../features/productManagement/combineSKU/CombineSKUPage";
 import NewOrderPage from "../features/orderManagement/orderProcessing/newOrder/NewOrderPage";
 import ProcessedOrderPage from "../features/orderManagement/orderProcessing/processedOrder/ProcessedOrderpage";
-import PickUpOrderPage from "../features/orderManagement/orderProcessing/pickUpOrder/pickUpOrderPage";
+import PickUpOrderPage from "../features/orderManagement/orderProcessing/pickUpOrder/PickUpOrderPage";
 import ShippedOrderPage from "../features/orderManagement/orderProcessing/shippedOrder/ShippedOrderPage";
 import CompletedPage from "../features/orderManagement/orderProcessing/completed/CompletedPage";
 import AllOrderPage from "../features/orderManagement/orderProcessing/allOrder/allOrderpage";
