@@ -30,12 +30,12 @@ export default function Register() {
       <div className="max-w-sm mx-auto w-full auth-fade-in">
         {/* Page heading */}
         <div className="mb-7">
-          <h1 className="text-3xl text-center font-bold mb-1.5 text-primary font-display">
+          <h1 className="text-4xl text-center font-semibold mb-1.5 text-primary font-display">
             Sign Up
           </h1>
         </div>
 
-        <form onSubmit={handleSubmit} noValidate>
+        <form onSubmit={handleSubmit}>
           {/* ── Avatar Upload ── */}
           <div
             className="flex items-center gap-4 mb-5 p-4 rounded-xl"
@@ -168,9 +168,11 @@ export default function Register() {
             }
           />
 
-          <PrimaryButton type="submit" loading={loading}>
-            Sign Up
-          </PrimaryButton>
+          <div className="mt-[10px]">
+            <PrimaryButton type="submit" loading={loading}>
+              Sign Up
+            </PrimaryButton>
+          </div>
         </form>
 
         {/* Login link */}

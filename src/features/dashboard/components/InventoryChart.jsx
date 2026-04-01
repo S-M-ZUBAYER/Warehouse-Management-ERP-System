@@ -68,12 +68,7 @@ export default function InventoryChart({ data, loading }) {
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h3
-          className="text-base font-semibold font-display"
-          style={{ color: "#0F172A" }}
-        >
-          Inventory Status
-        </h3>
+        <h3 className="text-lg font-semibold font-display">Inventory Status</h3>
         <div
           className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-body"
           style={{
