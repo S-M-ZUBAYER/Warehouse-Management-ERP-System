@@ -16,7 +16,7 @@ import { MOCK_PROCESSED_ORDERS } from "../../shared/mockData";
 
 const SUB_TABS = ["Pushing", "Push Successful", "Withdraw"];
 
-export default function ProcessedOrder() {
+export default function ProcessedOrderPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("Pushing");
   const list = useOrderList(MOCK_PROCESSED_ORDERS);

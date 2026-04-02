@@ -16,7 +16,7 @@ const api = axios.create({
 // ── Request interceptor: attach token only when it exists ─────────────────
 api.interceptors.request.use(
     (config) => {
-        const token = localStorage.getItem("token");
+        const token = localStorage.getItem("whmAccessToken");
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
@@ -33,7 +33,8 @@ api.interceptors.response.use(
 
         if (status === 401) {
             // Token expired — clear storage and redirect
-            localStorage.removeItem("token");
+            localStorage.removeItem("whmAccessToken");
+            localStorage.removeItem("whmRefreshToken");
             localStorage.removeItem("warehouseUser");
             window.location.href = "/warehouse_management/login";
         }
