@@ -10,7 +10,7 @@ import axios from "axios";
 // ─────────────────────────────────────────────────────────────────────────────
 
 const authApi = axios.create({
-    baseURL: import.meta.env.VITE_AUTH_BASE_URL,
+    baseURL: import.meta.env.VITE_AUTH_BASE_LOGIN_URL,
     timeout: 15000,
     headers: {
         "Content-Type": "application/json",
