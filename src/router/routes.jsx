@@ -7,7 +7,7 @@ import ForgotPassword from "@/features/auth/pages/ForgotPassword";
 import VerifyEmail from "@/features/auth/pages/VerifyEmail";
 import ProtectedRoute from "./ProtectedRoute";
 import NotFound from "../components/shared/NotFound";
-import StoreAuthorizationPage from "../features/systemConfigaration/storeAuthorization/storeAuthorizationPage";
+import StoreAuthorizationPage from "../features/systemConfigaration/storeAuthorization/StoreAuthorizationPage";
 import SubAccountPage from "../features/systemConfigaration/subAccount/SubAccountPage";
 import RoleManagementPage from "../features/systemConfigaration/roleManagement/RoleManagementPage";
 import ProductListPage from "../features/productManagement/productList/ProductListPage";

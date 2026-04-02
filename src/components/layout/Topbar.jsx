@@ -185,9 +185,12 @@ export default function Topbar({ PageTitle }) {
             >
               {userFulInfo?.image ? (
                 <img
-                  src={userFulInfo.image}
-                  alt="avatar"
-                  className="w-full h-full object-cover"
+                  src={
+                    userFulInfo.image?.startsWith("data:image")
+                      ? userFulInfo.image
+                      : `data:image/jpeg;base64,${userFulInfo.image}`
+                  }
+                  alt="user"
                 />
               ) : (
                 initials
