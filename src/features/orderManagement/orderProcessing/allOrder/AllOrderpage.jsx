@@ -15,7 +15,7 @@ import { MOCK_ALL_ORDERS } from "../../shared/mockData";
 // No action buttons, no Actions column — only Details link
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function AllOrder() {
+export default function AllOrderPage() {
   const navigate = useNavigate();
   const list = useOrderList(MOCK_ALL_ORDERS);
 
