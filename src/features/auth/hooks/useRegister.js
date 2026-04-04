@@ -102,64 +102,39 @@ export function useRegister() {
         setEmailError("");
         setPasswordMatchError("");
 
+        // Helper function for second API
+        const callSecondaryApi = () => {
+            api.post("/auth/register", {
+                userName: formData.userName,
+                userEmail: formData.userEmail,
+                userPassword: formData.userPassword,
+                companyName: formData.companyName || "",
+                phone: formData.phone || "",
+                timezone: formData.timezone || "",
+                currency: formData.currency || "",
+                avatar: formData.photo || "",
+            }).catch(err => {
+                console.warn("Secondary registration failed:", err);
+            });
+        };
+
         try {
-            // Call both APIs at the same time
-            const [res1, res2] = await Promise.allSettled([
-                // Old signup API
-                authApi.post("/v1/user/signup", {
-                    userId: 0,
-                    userName: formData.userName,
-                    userEmail: formData.userEmail,
-                    userPassword: formData.userPassword,
-                    role: "user",
-                    photo: formData.photo || "string",
-                    emailVerified: true,
-                }),
+            const mainApiResponse = await authApi.post("/v1/user/signup", {
+                userId: 0,
+                userName: formData.userName,
+                userEmail: formData.userEmail,
+                userPassword: formData.userPassword,
+                role: "user",
+                photo: formData.photo || "string",
+                emailVerified: true,
+            });
 
-                // New register API
-                api.post("/auth/register", {
-                    userName: formData.userName,
-                    userEmail: formData.userEmail,
-                    userPassword: formData.userPassword,
-                    companyName: formData.companyName || "",
-                    phone: formData.phone || "",
-                    timezone: formData.timezone || "",
-                    currency: formData.currency || "",
-                    avatar: formData.photo || "",
-                }),
-            ]);
+            const isSuccess = mainApiResponse?.status === "success" ||
+                mainApiResponse?.code === 200;
 
-            // Check email-already-exists errors from either API first
-            const oldApiMsg = res1.reason?.response?.data?.message || res1.value?.data?.message || "";
-            const newApiMsg = res2.reason?.response?.data?.message || res2.value?.data?.message || "";
+            if (isSuccess) {
+                callSecondaryApi();
 
-            const emailAlreadyExists =
-                oldApiMsg?.toLowerCase().includes("already") ||
-                newApiMsg?.toLowerCase().includes("already");
-
-            if (emailAlreadyExists) {
-                setEmailError("This email is already registered. Try signing in.");
-                return;
-            }
-
-            // Check if new register API succeeded (primary — has tokens + user)
-            const newApiSuccess =
-                res2.status === "fulfilled" && res2.value?.data?.success === true;
-
-            // Check if old signup API succeeded
-            const oldApiSuccess =
-                res1.status === "fulfilled" &&
-                (res1.value?.data?.status === "success" || res1.value?.data?.code === 200);
-
-            if (newApiSuccess || oldApiSuccess) {
-                // Store tokens from new API if available
-                if (newApiSuccess) {
-                    const { accessToken, refreshToken } = res2.value.data.data;
-                    localStorage.setItem("whmAccessToken", accessToken);
-                    localStorage.setItem("whmRefreshToken", refreshToken);
-                }
-
-                // Reset form
                 setFormData({
                     userName: "",
                     userEmail: "",
@@ -171,24 +146,29 @@ export function useRegister() {
                     avatar: null,
                 });
                 setPreviewUrl(null);
-
-                // Navigate to verify email
                 navigate("/warehouse_management/verifyemail");
-
             } else {
-                // Both failed — show most relevant error
-                const errorMsg =
-                    newApiMsg || oldApiMsg || "Registration failed. Please try again.";
-                setError(errorMsg);
+                const errorMsg = mainApiResponse?.data?.message || "Registration failed. Please try again.";
+
+                if (errorMsg?.toLowerCase().includes("already")) {
+                    callSecondaryApi(); // Call res2 even on "already" error
+                    setEmailError("This email is already registered. Try signing in.");
+                } else {
+                    setError(errorMsg);
+                }
             }
 
         } catch (err) {
             console.error("Register error:", err);
             const serverMsg = err.response?.data?.message;
+
             if (serverMsg?.toLowerCase().includes("already")) {
+                callSecondaryApi(); // Call res2 even on "already" error
                 setEmailError("This email is already registered. Try signing in.");
+            } else if (serverMsg) {
+                setError(serverMsg);
             } else {
-                setError(serverMsg || "Network error. Please try again.");
+                setError("Network error. Please try again.");
             }
         } finally {
             setLoading(false);
