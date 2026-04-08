@@ -1,14 +1,7 @@
-import { X, ChevronDown } from "lucide-react";
+import { X } from "lucide-react";
 import { NestedPageRow } from "./NestedPageRow";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// AddRoleModal — Image 9
-// Basic Information: *Role (required) + Description
-// Set Permissions: table with Select checkbox | Webpage name | Details (chevron)
-// Footer: Cancel | Add
-// ─────────────────────────────────────────────────────────────────────────────
-
-export default function AddRoleModal({
+export default function EditRoleModal({
   open,
   onClose,
   form,
@@ -16,7 +9,7 @@ export default function AddRoleModal({
   togglePermission,
   errors,
   saving,
-  onAdd,
+  onSave,
   pages,
 }) {
   if (!open) return null;
@@ -37,12 +30,12 @@ export default function AddRoleModal({
         {/* Header */}
         <div className="flex items-center justify-between px-7 pt-7 pb-5">
           <h2 className="text-lg font-bold text-slate-800 font-display">
-            Add New Role
+            Edit Role
           </h2>
           <button
             onClick={onClose}
             className="w-7 h-7 flex items-center justify-center rounded-full
-                       text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                                   text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
           >
             <X size={16} />
           </button>
@@ -66,8 +59,12 @@ export default function AddRoleModal({
                   onChange={onChange}
                   placeholder="Input role name here"
                   className={`w-full px-3.5 py-2.5 text-sm rounded-xl border bg-white
-                              placeholder-slate-400 text-slate-700 outline-none transition-all
-                              ${errors.role ? "border-red-300 focus:border-red-400" : "border-surface-border focus:border-primary focus:ring-2 focus:ring-primary/10"}`}
+                                                placeholder-slate-400 text-slate-700 outline-none transition-all
+                                                ${
+                                                  errors.role
+                                                    ? "border-red-300 focus:border-red-400"
+                                                    : "border-surface-border focus:border-primary focus:ring-2 focus:ring-primary/10"
+                                                }`}
                 />
                 {errors.role && (
                   <p className="text-xs text-red-500 mt-1">{errors.role}</p>
@@ -84,8 +81,8 @@ export default function AddRoleModal({
                   onChange={onChange}
                   placeholder="Describe the role"
                   className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-surface-border
-                             bg-white placeholder-slate-400 text-slate-700 outline-none transition-all
-                             focus:border-primary focus:ring-2 focus:ring-primary/10"
+                                               bg-white placeholder-slate-400 text-slate-700 outline-none transition-all
+                                               focus:border-primary focus:ring-2 focus:ring-primary/10"
                 />
               </div>
             </div>
@@ -98,12 +95,8 @@ export default function AddRoleModal({
             </p>
             <div className="border border-surface-border rounded-xl overflow-hidden">
               <div className="max-h-96 overflow-y-auto">
-                {" "}
-                {/* 👈 scroll wrapper */}
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 z-10 bg-white">
-                    {" "}
-                    {/* 👈 sticky header */}
                     <tr className="border-b border-surface-border">
                       <th className="py-2.5 text-center text-xs font-semibold text-slate-600 w-16">
                         Select
@@ -136,20 +129,21 @@ export default function AddRoleModal({
             <button
               onClick={onClose}
               className="px-6 py-2.5 text-sm font-semibold border border-surface-border
-                         rounded-xl text-slate-700 bg-white hover:bg-surface-card transition-colors"
+                                       rounded-xl text-slate-700 bg-white hover:bg-surface-card transition-colors"
             >
               Cancel
             </button>
             <button
-              onClick={onAdd}
+              onClick={onSave}
               disabled={saving}
               className="px-6 py-2.5 text-sm font-semibold bg-primary hover:bg-primary-dark
-                         text-white rounded-xl transition-colors disabled:opacity-60 flex items-center gap-2"
+                                       text-white rounded-xl transition-colors disabled:opacity-60
+                                       flex items-center gap-2"
             >
               {saving && (
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               )}
-              Add
+              Save Changes
             </button>
           </div>
         </div>

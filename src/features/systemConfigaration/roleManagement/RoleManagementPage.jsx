@@ -3,10 +3,8 @@ import { useRef, useEffect } from "react";
 import Topbar from "../../../components/layout/Topbar";
 import { useRoleManagement } from "./hooks/useRoleManagement";
 import AddRoleModal from "./component/AddRoleModal";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// RoleManagementPage — Image 8 (list) + Image 9 (Add New Role modal)
-// ─────────────────────────────────────────────────────────────────────────────
+import EditRoleModal from "./component/EditRoleModal";
+import DeleteRoleModal from "./component/DeleteRoleModal";
 
 export default function RoleManagementPage() {
   const {
@@ -25,6 +23,22 @@ export default function RoleManagementPage() {
     saving,
     handleAdd,
     pages,
+    // ── Edit ──
+    editModal,
+    openEditModal,
+    closeEditModal,
+    handleEdit,
+    editSaving,
+    editForm,
+    handleEditFormChange,
+    toggleEditPermission,
+    editErrors,
+    // ── Delete ──
+    deleteModal,
+    openDeleteModal,
+    closeDeleteModal,
+    handleDelete,
+    deleting,
   } = useRoleManagement();
 
   const actionRefs = useRef({});
@@ -41,7 +55,7 @@ export default function RoleManagementPage() {
   }, [openActionId]);
 
   return (
-    <div className="space-y-4 font-body">
+    <div className=" font-body">
       <Topbar PageTitle="Role Management" />
 
       {/* Search bar */}
@@ -57,8 +71,8 @@ export default function RoleManagementPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-3 py-2 text-sm border border-surface-border rounded-lg
-                       text-slate-700 placeholder-slate-400 outline-none bg-white
-                       focus:border-primary focus:ring-2 focus:ring-primary/10"
+                                   text-slate-700 placeholder-slate-400 outline-none bg-white
+                                   focus:border-primary focus:ring-2 focus:ring-primary/10"
           />
         </div>
         <button className="px-5 py-2 text-sm font-semibold bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors">
@@ -67,7 +81,7 @@ export default function RoleManagementPage() {
       </div>
 
       {/* Roles List card */}
-      <div className="bg-white rounded-xl border border-surface-border overflow-hidden">
+      <div className="bg-white rounded-xl border border-surface-border overflow-hidden ">
         <div className="flex items-center justify-between px-5 py-4 border-b border-surface-border">
           <h2 className="text-base font-bold text-slate-800 font-display">
             Roles List
@@ -75,7 +89,7 @@ export default function RoleManagementPage() {
           <button
             onClick={openModal}
             className="flex items-center gap-2 px-4 py-2 text-sm font-semibold
-                       bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors"
+                                   bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors"
           >
             <Plus size={14} />
             Add Role
@@ -111,8 +125,6 @@ export default function RoleManagementPage() {
                   <td className="pl-5 py-3.5 pr-4 text-slate-800 font-medium">
                     {role.name}
                   </td>
-
-                  {/* Link status */}
                   <td className="py-3.5 pr-4">
                     <span
                       className={`text-sm ${role.linkStatus === "Linked" ? "text-emerald-600" : "text-slate-500"}`}
@@ -120,7 +132,6 @@ export default function RoleManagementPage() {
                       {role.linkStatus}
                     </span>
                   </td>
-
                   <td className="py-3.5 pr-4 text-slate-500 text-xs">
                     {role.createdAt}
                   </td>
@@ -141,7 +152,7 @@ export default function RoleManagementPage() {
                           )
                         }
                         className="flex items-center gap-0.5 p-1.5 rounded-lg text-slate-400
-                                   hover:text-slate-600 hover:bg-surface-card transition-colors"
+                                                           hover:text-slate-600 hover:bg-surface-card transition-colors"
                       >
                         {[1, 2, 3].map((d) => (
                           <span
@@ -154,22 +165,24 @@ export default function RoleManagementPage() {
                       {openActionId === role.id && (
                         <div
                           className="absolute right-0 top-full mt-1 z-30 bg-white rounded-xl
-                                        border border-surface-border shadow-lg py-1 w-32"
+                                                                border border-surface-border shadow-lg py-1 w-32"
                         >
-                          {["Edit", "Delete"].map((action) => (
-                            <button
-                              key={action}
-                              onClick={() => setOpenActionId(null)}
-                              className={`w-full text-left px-4 py-2 text-xs transition-colors
-                                ${
-                                  action === "Delete"
-                                    ? "text-red-500 hover:bg-red-50"
-                                    : "text-slate-700 hover:bg-surface-card"
-                                }`}
-                            >
-                              {action}
-                            </button>
-                          ))}
+                          {/* ── Edit button ── */}
+                          <button
+                            onClick={() => openEditModal(role)}
+                            className="w-full text-left px-4 py-2 text-xs transition-colors
+                                                                   text-slate-700 hover:bg-surface-card"
+                          >
+                            Edit
+                          </button>
+                          {/* ── Delete button ── */}
+                          <button
+                            onClick={() => openDeleteModal(role)}
+                            className="w-full text-left px-4 py-2 text-xs transition-colors
+                                                                   text-red-500 hover:bg-red-50"
+                          >
+                            Delete
+                          </button>
                         </div>
                       )}
                     </div>
@@ -181,7 +194,7 @@ export default function RoleManagementPage() {
         </div>
       </div>
 
-      {/* Add Role Modal */}
+      {/* ── Modals ── */}
       <AddRoleModal
         open={showModal}
         onClose={closeModal}
@@ -192,6 +205,26 @@ export default function RoleManagementPage() {
         saving={saving}
         onAdd={handleAdd}
         pages={pages}
+      />
+
+      <EditRoleModal
+        open={editModal.open}
+        onClose={closeEditModal}
+        form={editForm}
+        onChange={handleEditFormChange}
+        togglePermission={toggleEditPermission}
+        errors={editErrors}
+        saving={editSaving}
+        onSave={handleEdit}
+        pages={pages}
+      />
+
+      <DeleteRoleModal
+        open={deleteModal.open}
+        role={deleteModal.role}
+        onClose={closeDeleteModal}
+        onConfirm={handleDelete}
+        deleting={deleting}
       />
     </div>
   );
