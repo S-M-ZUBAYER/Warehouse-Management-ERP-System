@@ -1,4 +1,7 @@
 import { useState, useMemo } from "react";
+import api from "../../../../lib/api";
+import useDebounce from "../../../../hooks/useDebounce";
+import { useQuery } from "@tanstack/react-query";
 
 const MOCK_SUB_ACCOUNTS = [
     { id: 1, name: "Sophia Voss", accountId: "W120378", role: "Digital Marketer", createdAt: "01 Dec 2025  16:20", image: "https://i.pravatar.cc/36?img=1" },
@@ -10,11 +13,14 @@ const MOCK_SUB_ACCOUNTS = [
 ];
 
 const MARKETPLACE_STORES = [
-    { id: 1, marketplace: "Shopee", storeName: "Shopee" },
-    { id: 2, marketplace: "Lazada", storeName: "Lazada" },
-    { id: 3, marketplace: "Tokopedia", storeName: "Tokopedia" },
-    { id: 4, marketplace: "Bukalapak", storeName: "Bukalapak" },
-    { id: 5, marketplace: "Zalora", storeName: "Zalora" },
+    { id: 1, marketplace: "Shopee", storeName: "Shopee1" },
+    { id: 2, marketplace: "Shopee", storeName: "Shopee2" },
+    { id: 3, marketplace: "Lazada", storeName: "Lazada1" },
+    { id: 4, marketplace: "Lazada", storeName: "Lazada2" },
+    { id: 5, marketplace: "TikTok", storeName: "TikTok1" },
+    { id: 6, marketplace: "TikTok", storeName: "TikTok2" },
+    { id: 7, marketplace: "TikTok", storeName: "TikTok3" },
+
 ];
 
 const WAREHOUSES = [
@@ -32,6 +38,38 @@ const EMPTY_FORM = {
     name: "", department: "",
     designation: "", phoneNumber: "",
     email: "", address: "",
+};
+
+
+const fetchAllWarehouses = async (search = '') => {
+    const firstRes = await api.get(`/warehouses?page=1&limit=20&search=${search}`);
+    const totalPages = firstRes.pagination?.totalPages ?? 1;
+
+    if (totalPages === 1) return firstRes.data;
+
+    // Fetch remaining pages in parallel
+    const rest = await Promise.all(
+        Array.from({ length: totalPages - 1 }, (_, i) =>
+            api.get(`/warehouses?page=${i + 2}&limit=20&search=${search}`)
+        )
+    );
+
+    return [...firstRes.data, ...rest.flatMap((r) => r.data)];
+};
+
+const fetchAllRoles = async () => {
+    const firstRes = await api.get(`/roles?page=1&limit=20`);
+    const totalPages = firstRes.pagination?.totalPages ?? 1;
+
+    if (totalPages === 1) return firstRes.data;
+
+    const rest = await Promise.all(
+        Array.from({ length: totalPages - 1 }, (_, i) =>
+            api.get(`/roles?page=${i + 2}&limit=20`)
+        )
+    );
+
+    return [...firstRes.data, ...rest.flatMap((r) => r.data)];
 };
 
 export function useSubAccount() {
@@ -52,6 +90,19 @@ export function useSubAccount() {
     const [selectedStores, setSelectedStores] = useState([]);
     const [selectedWarehouses, setSelectedWarehouses] = useState([]);
     const [storeMarketplace, setStoreMarketplace] = useState("All");
+    const debouncedSearch = useDebounce(warehouseSearch, 300);
+
+    const {
+        data: warehouses = [],
+        isLoading: warehouseLoading,
+        isError: isWarehouseError,
+        error: warehouseError,
+    } = useQuery({
+        queryKey: ['warehouses-all', debouncedSearch],
+        queryFn: () => fetchAllWarehouses(debouncedSearch),
+        staleTime: 1000 * 60 * 2,
+        placeholderData: (prev) => prev,
+    });
 
     const filtered = useMemo(() => {
         if (!search.trim()) return accounts;
@@ -72,11 +123,25 @@ export function useSubAccount() {
         return list;
     }, [storeSearch]);
 
-    const filteredWarehouses = useMemo(() => {
-        if (!warehouseSearch.trim()) return WAREHOUSES;
-        const q = warehouseSearch.toLowerCase();
-        return WAREHOUSES.filter((w) => w.name.toLowerCase().includes(q));
-    }, [warehouseSearch]);
+    const {
+        data: roles = [],
+        isLoading: rolesLoading,
+        isError: rolesError,
+    } = useQuery({
+        queryKey: ['roles-all'],
+        queryFn: fetchAllRoles,
+        staleTime: 1000 * 60 * 5, // cache 5 mins
+    });
+
+    // Map to options format for FormSelect
+    const roleOptions = roles.map((r) => ({
+        name: r.name,
+        id: r.id,        // or r.name if your form expects a string
+    }));
+
+
+
+    const filteredWarehouses = warehouses;
 
     const toggleSelect = (id) => setSelectedIds((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
     const toggleStore = (id) => setSelectedStores((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
@@ -129,7 +194,12 @@ export function useSubAccount() {
         filteredStores, filteredWarehouses,
         selectedStores, selectedWarehouses,
         toggleStore, toggleWarehouse,
-        roles: ROLES,
-        warehouses: WAREHOUSES,
+        roles: roleOptions,
+        rolesLoading,
+        rolesError,
+        warehouses: warehouses,
+        warehouseError,
+        isWarehouseError,
+        warehouseLoading
     };
 }

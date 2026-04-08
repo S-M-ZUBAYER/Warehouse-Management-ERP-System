@@ -102,9 +102,21 @@ export default function AddAccountPage({
   roles,
   warehouses,
 }) {
+  console.log(roles);
+
   return (
     <div className="space-y-4 font-body">
-      <Topbar PageTitle="Back to Sub Account" showBack onBack={onBack} />
+      <Topbar
+        PageTitle={
+          <span
+            onClick={onBack}
+            className="flex items-center gap-2 cursor-pointer"
+          >
+            <ArrowLeft size={20} />
+            Back to Sub Account
+          </span>
+        }
+      />
 
       <div className="grid grid-cols-5 gap-4 items-start">
         {/* ── LEFT — Basic Information ── */}
@@ -163,12 +175,12 @@ export default function AddAccountPage({
               name="role"
               value={form.role}
               onChange={onChange}
-              options={roles}
+              options={roles?.map((role) => role?.name)}
               placeholder="Select role from here"
               required
               error={errors.role}
             />
-            <FormSelect
+            {/* <FormSelect
               label="Select Warehouse"
               name="warehouse"
               value={form.warehouse}
@@ -176,7 +188,7 @@ export default function AddAccountPage({
               options={warehouses.map((w) => w.name)}
               placeholder="Warehouse name here"
               required
-            />
+            /> */}
             <FormInput
               label="Account ID"
               name="accountId"
@@ -236,6 +248,8 @@ export default function AddAccountPage({
               onChange={onChange}
               placeholder="Write email here"
             />
+          </div>
+          <div className="w-full">
             <FormInput
               label="Address"
               name="address"
@@ -282,43 +296,48 @@ export default function AddAccountPage({
                 </button>
               </div>
             </div>
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-y border-surface-border bg-surface/50">
-                  <th className="py-2.5 pl-5 text-left font-semibold text-slate-600 w-14">
-                    Select
-                  </th>
-                  <th className="py-2.5 text-left font-semibold text-slate-600">
-                    Marketplace Name
-                  </th>
-                  <th className="py-2.5 pr-5 text-left font-semibold text-slate-600">
-                    Store name
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-surface-border">
-                {filteredStores.map((s) => (
-                  <tr key={s.id} className="hover:bg-surface/50">
-                    <td className="py-2.5 pl-5">
-                      <input
-                        type="checkbox"
-                        checked={selectedStores.includes(s.id)}
-                        onChange={() => onToggleStore(s.id)}
-                        className="w-3.5 h-3.5 rounded border-slate-300 accent-primary cursor-pointer"
-                      />
-                    </td>
-                    <td className="py-2.5 text-slate-700">{s.marketplace}</td>
-                    <td className="py-2.5 pr-5 text-slate-700">
-                      {s.storeName}
-                    </td>
+            {/* 1. Wrap the table in a container div */}
+            <div className="max-h-60 overflow-y-auto border border-surface-border ">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 z-10 bg-white">
+                  {" "}
+                  {/* 2. Make the header sticky */}
+                  <tr className="border-y border-surface-border bg-surface/50">
+                    <th className="py-2.5 pl-5 text-left font-semibold text-slate-600 w-14">
+                      Select
+                    </th>
+                    <th className="py-2.5 text-left font-semibold text-slate-600">
+                      Marketplace Name
+                    </th>
+                    <th className="py-2.5 pr-5 text-left font-semibold text-slate-600">
+                      Store name
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-surface-border">
+                  {filteredStores.map((s) => (
+                    <tr key={s.id} className="hover:bg-surface/50">
+                      <td className="py-2.5 pl-5">
+                        <input
+                          type="checkbox"
+                          checked={selectedStores.includes(s.id)}
+                          onChange={() => onToggleStore(s.id)}
+                          className="w-3.5 h-3.5 rounded border-slate-300 accent-primary cursor-pointer"
+                        />
+                      </td>
+                      <td className="py-2.5 text-slate-700">{s.marketplace}</td>
+                      <td className="py-2.5 pr-5 text-slate-700">
+                        {s.storeName}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {/* Warehouse Permissions */}
-          <div className="bg-white rounded-xl border border-surface-border overflow-hidden">
+          <div className="bg-white rounded-xl border border-surface-border overflow-hidden ">
             <div className="px-5 pt-4 pb-3">
               <h3 className="text-sm font-bold text-slate-800 font-display mb-3">
                 Warehouse Permissions
@@ -351,33 +370,35 @@ export default function AddAccountPage({
                 </button>
               </div>
             </div>
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-y border-surface-border bg-surface/50">
-                  <th className="py-2.5 pl-5 text-left font-semibold text-slate-600 w-14">
-                    Select
-                  </th>
-                  <th className="py-2.5 pr-5 text-left font-semibold text-slate-600">
-                    Warehouse Name
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-surface-border">
-                {filteredWarehouses.map((w) => (
-                  <tr key={w.id} className="hover:bg-surface/50">
-                    <td className="py-2.5 pl-5">
-                      <input
-                        type="checkbox"
-                        checked={selectedWarehouses.includes(w.id)}
-                        onChange={() => onToggleWarehouse(w.id)}
-                        className="w-3.5 h-3.5 rounded border-slate-300 accent-primary cursor-pointer"
-                      />
-                    </td>
-                    <td className="py-2.5 pr-5 text-slate-700">{w.name}</td>
+            <div className="max-h-44 overflow-y-auto border-t border-surface-border">
+              <table className="w-full text-xs ">
+                <thead>
+                  <tr className="border-y border-surface-border bg-surface/50">
+                    <th className="py-2.5 pl-5 text-left font-semibold text-slate-600 w-14">
+                      Select
+                    </th>
+                    <th className="py-2.5 pr-5 text-left font-semibold text-slate-600">
+                      Warehouse Name
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-surface-border">
+                  {filteredWarehouses.map((w) => (
+                    <tr key={w.id} className="hover:bg-surface/50">
+                      <td className="py-2.5 pl-5">
+                        <input
+                          type="checkbox"
+                          checked={selectedWarehouses.includes(w.id)}
+                          onChange={() => onToggleWarehouse(w.id)}
+                          className="w-3.5 h-3.5 rounded border-slate-300 accent-primary cursor-pointer"
+                        />
+                      </td>
+                      <td className="py-2.5 pr-5 text-slate-700">{w.name}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
