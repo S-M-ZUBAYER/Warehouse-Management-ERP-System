@@ -84,7 +84,7 @@ export default function AddWarehouseModal({
               Warehouse Attribute
             </p>
             <div className="flex items-center gap-6">
-              {["Own Warehouse", "Third party Warehouse"].map((option) => (
+              {["own_warehouse", "third_party_warehouse"].map((option) => (
                 <label
                   key={option}
                   className="flex items-center gap-2 cursor-pointer group"
@@ -146,7 +146,18 @@ export default function AddWarehouseModal({
             name="location"
             value={form.location}
             onChange={onFormChange}
-            placeholder="Warehouse address/Location here"
+            placeholder="Warehouse full address/location with country name"
+            required
+            error={errors.name}
+          />
+          <ModalInput
+            label="Country"
+            name="country"
+            value={form.country}
+            onChange={onFormChange}
+            placeholder="Warehouse Country Full Name (Malaysia)"
+            required
+            error={errors.name}
           />
 
           {/* ── Footer Buttons ── */}

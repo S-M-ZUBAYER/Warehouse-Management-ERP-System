@@ -11,6 +11,9 @@ export default function RoleManagementPage() {
     search,
     setSearch,
     roles,
+    isRolesError,
+    rolesLoading,
+    rolesError,
     openActionId,
     setOpenActionId,
     showModal,
@@ -57,7 +60,6 @@ export default function RoleManagementPage() {
   return (
     <div className=" font-body">
       <Topbar PageTitle="Role Management" />
-
       {/* Search bar */}
       <div className="bg-white rounded-xl border border-surface-border p-7 flex items-center gap-3">
         <div className="relative flex-1 max-w-xs">
@@ -79,9 +81,8 @@ export default function RoleManagementPage() {
           Search
         </button>
       </div>
-
       {/* Roles List card */}
-      <div className="bg-white rounded-xl border border-surface-border overflow-hidden ">
+      <div className="bg-white rounded-xl border border-surface-border overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-surface-border">
           <h2 className="text-base font-bold text-slate-800 font-display">
             Roles List
@@ -89,111 +90,135 @@ export default function RoleManagementPage() {
           <button
             onClick={openModal}
             className="flex items-center gap-2 px-4 py-2 text-sm font-semibold
-                                   bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors"
+                       bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors"
           >
             <Plus size={14} />
             Add Role
           </button>
         </div>
-
         <div className="overflow-x-auto">
-          <table className="w-full text-sm font-body">
-            <thead>
-              <tr className="border-b border-surface-border">
-                {[
-                  { label: "Role Name", cls: "pl-5 w-[22%]" },
-                  { label: "Sub Account Linking Status", cls: "w-[22%]" },
-                  { label: "Create Time", cls: "w-[22%]" },
-                  { label: "Updated Time", cls: "w-[22%]" },
-                  { label: "Actions", cls: "pr-5 w-[12%]" },
-                ].map(({ label, cls }) => (
-                  <th
-                    key={label}
-                    className={`py-3 text-left text-xs font-semibold text-slate-600 pr-4 ${cls}`}
-                  >
-                    {label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-surface-border">
-              {roles.map((role) => (
-                <tr
-                  key={role.id}
-                  className="hover:bg-surface/50 transition-colors"
-                >
-                  <td className="pl-5 py-3.5 pr-4 text-slate-800 font-medium">
-                    {role.name}
-                  </td>
-                  <td className="py-3.5 pr-4">
-                    <span
-                      className={`text-sm ${role.linkStatus === "Linked" ? "text-emerald-600" : "text-slate-500"}`}
-                    >
-                      {role.linkStatus}
-                    </span>
-                  </td>
-                  <td className="py-3.5 pr-4 text-slate-500 text-xs">
-                    {role.createdAt}
-                  </td>
-                  <td className="py-3.5 pr-4 text-slate-500 text-xs">
-                    {role.updatedAt}
-                  </td>
+          {/* ── Loading ── */}
+          {rolesLoading && (
+            <div className="flex items-center justify-center py-16 text-slate-400 text-sm">
+              Loading roles...
+            </div>
+          )}
 
-                  {/* Actions — 3-dot */}
-                  <td className="py-3.5 pr-5">
-                    <div
-                      className="relative"
-                      ref={(el) => (actionRefs.current[role.id] = el)}
-                    >
-                      <button
-                        onClick={() =>
-                          setOpenActionId(
-                            openActionId === role.id ? null : role.id,
-                          )
-                        }
-                        className="flex items-center gap-0.5 p-1.5 rounded-lg text-slate-400
-                                                           hover:text-slate-600 hover:bg-surface-card transition-colors"
-                      >
-                        {[1, 2, 3].map((d) => (
-                          <span
-                            key={d}
-                            className="w-1 h-1 rounded-full bg-current mx-px"
-                          />
-                        ))}
-                      </button>
+          {/* ── Error ── */}
+          {isRolesError && (
+            <div className="flex items-center justify-center py-16 text-red-500 text-sm">
+              {rolesError?.message ?? "Failed to load roles"}
+            </div>
+          )}
 
-                      {openActionId === role.id && (
-                        <div
-                          className="absolute right-0 top-full mt-1 z-30 bg-white rounded-xl
-                                                                border border-surface-border shadow-lg py-1 w-32"
-                        >
-                          {/* ── Edit button ── */}
-                          <button
-                            onClick={() => openEditModal(role)}
-                            className="w-full text-left px-4 py-2 text-xs transition-colors
-                                                                   text-slate-700 hover:bg-surface-card"
-                          >
-                            Edit
-                          </button>
-                          {/* ── Delete button ── */}
-                          <button
-                            onClick={() => openDeleteModal(role)}
-                            className="w-full text-left px-4 py-2 text-xs transition-colors
-                                                                   text-red-500 hover:bg-red-50"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </td>
+          {/* ── Empty ── */}
+          {!rolesLoading && !isRolesError && roles.length === 0 && (
+            <div className="flex items-center justify-center py-16 text-slate-400 text-sm">
+              {search.trim()
+                ? `No roles found for "${search}"`
+                : "No roles found"}
+            </div>
+          )}
+
+          {/* ── Table ── */}
+          {!rolesLoading && !isRolesError && roles.length > 0 && (
+            <table className="w-full text-sm font-body">
+              <thead>
+                <tr className="border-b border-surface-border">
+                  {[
+                    { label: "Role Name", cls: "pl-5 w-[22%]" },
+                    { label: "Sub Account Linking Status", cls: "w-[22%]" },
+                    { label: "Create Time", cls: "w-[22%]" },
+                    { label: "Updated Time", cls: "w-[22%]" },
+                    { label: "Actions", cls: "pr-5 w-[12%]" },
+                  ].map(({ label, cls }) => (
+                    <th
+                      key={label}
+                      className={`py-3 text-left text-xs font-semibold text-slate-600 pr-4 ${cls}`}
+                    >
+                      {label}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+              </thead>
+              <tbody className="divide-y divide-surface-border">
+                {roles.map((role) => (
+                  <tr
+                    key={role.id}
+                    className="hover:bg-surface/50 transition-colors"
+                  >
+                    <td className="pl-5 py-3.5 pr-4 text-slate-800 font-medium">
+                      {role.name}
+                    </td>
+                    <td className="py-3.5 pr-4">
+                      <span
+                        className={`text-sm ${role.linkStatus === "Linked" ? "text-emerald-600" : "text-slate-500"}`}
+                      >
+                        {role.linkStatus ?? "—"}
+                      </span>
+                    </td>
+                    <td className="py-3.5 pr-4 text-slate-500 text-xs">
+                      {role.createdAt ?? "—"}
+                    </td>
+                    <td className="py-3.5 pr-4 text-slate-500 text-xs">
+                      {role.updatedAt ?? "—"}
+                    </td>
 
+                    {/* Actions — 3-dot */}
+                    <td className="py-3.5 pr-5">
+                      <div
+                        className="relative"
+                        ref={(el) => (actionRefs.current[role.id] = el)}
+                      >
+                        <button
+                          onClick={() =>
+                            setOpenActionId(
+                              openActionId === role.id ? null : role.id,
+                            )
+                          }
+                          className="flex items-center gap-0.5 p-1.5 rounded-lg text-slate-400
+                                                   hover:text-slate-600 hover:bg-surface-card transition-colors"
+                        >
+                          {[1, 2, 3].map((d) => (
+                            <span
+                              key={d}
+                              className="w-1 h-1 rounded-full bg-current mx-px"
+                            />
+                          ))}
+                        </button>
+
+                        {openActionId === role.id && (
+                          <div
+                            className="absolute right-0 top-full mt-1 z-30 bg-white rounded-xl
+                                                       border border-surface-border shadow-lg py-1 w-32"
+                          >
+                            <button
+                              onClick={() => openEditModal(role)}
+                              className="w-full text-left px-4 py-2 text-xs transition-colors
+                                                           text-slate-700 hover:bg-surface-card"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => openDeleteModal(role)}
+                              className="w-full text-left px-4 py-2 text-xs transition-colors
+                                                           text-red-500 hover:bg-red-50"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>{" "}
+        {/* ✅ closes overflow-x-auto */}
+      </div>{" "}
+      {/* ✅ closes Roles List card */}
       {/* ── Modals ── */}
       <AddRoleModal
         open={showModal}
@@ -206,7 +231,6 @@ export default function RoleManagementPage() {
         onAdd={handleAdd}
         pages={pages}
       />
-
       <EditRoleModal
         open={editModal.open}
         onClose={closeEditModal}
@@ -218,7 +242,6 @@ export default function RoleManagementPage() {
         onSave={handleEdit}
         pages={pages}
       />
-
       <DeleteRoleModal
         open={deleteModal.open}
         role={deleteModal.role}
