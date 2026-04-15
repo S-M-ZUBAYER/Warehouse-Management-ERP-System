@@ -1,102 +1,279 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { toast } from "react-hot-toast";
+import { COMBINE_SKU_KEYS } from "./useCombineSKUList";
+import api from "../../../lib/api";
+import useDebounce from "../../../hooks/useDebounce";
 
-const ALL_SKUS = [
-    { id: 1, sku: "WM-012", name: "Ergonomic wireless mouse with 3k...", availableInventory: 125, image: "https://placehold.co/36x36/1a1a2e/fff?text=M" },
-    { id: 2, sku: "KB-045", name: "Compact mechanical keyboard with...", availableInventory: 200, image: "https://placehold.co/36x36/16213e/fff?text=K" },
-    { id: 3, sku: "SSD-123", name: "Portable external SSD 1TB", availableInventory: 0, image: "https://placehold.co/36x36/0f3460/fff?text=S" },
-    { id: 4, sku: "HP-678", name: "Noise-cancelling over-ear headphones", availableInventory: 75, image: "https://placehold.co/36x36/533483/fff?text=H" },
-    { id: 5, sku: "WC-234", name: "High-definition webcam 1080p", availableInventory: 100, image: "https://placehold.co/36x36/2b2d42/fff?text=W" },
-    { id: 6, sku: "SH-456", name: "Smartphone holder with adjustable ..", availableInventory: 300, image: "https://placehold.co/36x36/8d99ae/004368?text=S" },
-    { id: 7, sku: "BP-789", name: "Ultra-slim laptop backpack", availableInventory: 10, image: "https://placehold.co/36x36/3a3a3c/fff?text=B" },
-    { id: 8, sku: "CP-321", name: "Wireless charging pad for smartphones", availableInventory: 180, image: "https://placehold.co/36x36/004368/fff?text=C" },
-    { id: 9, sku: "CC-987", name: "High-speed HDMI cable 6ft", availableInventory: 500, image: "https://placehold.co/36x36/1b4332/fff?text=H" },
-    { id: 10, sku: "GR-222", name: "Smart home hub for automation", availableInventory: 90, image: "https://placehold.co/36x36/212529/fff?text=G" },
-];
+// ─────────────────────────────────────────────────────────────────────────────
+// API helpers
+// ─────────────────────────────────────────────────────────────────────────────
 
-// Pre-selected for preview panel (matching Figma right panel)
-const INITIAL_SELECTED = [1, 2, 3, 4, 5, 6];
+/** GET /combine-skus/picker — searchable merchant SKU list with stock */
+const fetchSkuPicker = ({ search, page = 1, limit = 10 }) => {
+    const qs = new URLSearchParams({ page, limit });
+    if (search?.trim()) qs.set("search", search.trim());
+    return api.get(`/combine-skus/picker?${qs.toString()}`).then((r) => r);
+};
 
-export function useAddCombineSKU() {
-    const [skuSearch, setSkuSearch] = useState("");
-    const [selectedIds, setSelectedIds] = useState(INITIAL_SELECTED);
-    const [quantities, setQuantities] = useState(
-        Object.fromEntries(INITIAL_SELECTED.map((id) => [id, 1]))
+/** Fetch all warehouses (same pattern as merchant SKU hook) */
+const fetchAllWarehouses = async (search = "") => {
+    const qs = search
+        ? `?page=1&limit=20&search=${encodeURIComponent(search)}`
+        : "?page=1&limit=20";
+    const first = await api.get(`/warehouses${qs}`);
+    const totalPages = first.pagination?.totalPages ?? 1;
+    if (totalPages === 1) return first.data;
+    const rest = await Promise.all(
+        Array.from({ length: totalPages - 1 }, (_, i) =>
+            api.get(`/warehouses?page=${i + 2}&limit=20&search=${encodeURIComponent(search)}`)
+        )
     );
-    const [form, setForm] = useState({
-        combineSKUName: "",
-        gtin: "",
-        weight: "",
-        length: "",
-        width: "",
-        height: "",
-        warehouse: "",
-    });
+    return [...first.data, ...rest.flatMap((r) => r.data)];
+};
+
+/** POST /combine-skus */
+const createCombineSku = (body) =>
+    api.post("/combine-skus", body).then((r) => r.data);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Empty form
+// ─────────────────────────────────────────────────────────────────────────────
+const EMPTY_FORM = {
+    combineSKUName: "",
+    combineSkuCode: "",
+    gtin: "",
+    weight: "",
+    length: "",
+    width: "",
+    height: "",
+    warehouseId: "",
+    warehouseName: "",
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hook
+// ─────────────────────────────────────────────────────────────────────────────
+export function useAddCombineSKU() {
+    const navigate = useNavigate();
+    const queryClient = useQueryClient();
+
+    // ── SKU picker state ──────────────────────────────────────────────────────
+    const [skuSearch, setSkuSearch] = useState("");
+    const [selectedIds, setSelectedIds] = useState([]);
+    const [quantities, setQuantities] = useState({});
+
+    // ── Warehouse search (inside bottom section) ───────────────────────────────
+    const [warehouseSearch, setWarehouseSearch] = useState("");
+
+    // ── Form state ────────────────────────────────────────────────────────────
+    const [form, setForm] = useState(EMPTY_FORM);
+    const [errors, setErrors] = useState({});
+
+    // ── Modal state ───────────────────────────────────────────────────────────
     const [showSaveModal, setShowSaveModal] = useState(false);
-    const [saving, setSaving] = useState(false);
 
-    const filteredSkus = useMemo(() => {
-        if (!skuSearch.trim()) return ALL_SKUS;
-        const q = skuSearch.toLowerCase();
-        return ALL_SKUS.filter(
-            (s) => s.name.toLowerCase().includes(q) || s.sku.toLowerCase().includes(q)
-        );
-    }, [skuSearch]);
+    // Debounced values
+    const debouncedSkuSearch = useDebounce(skuSearch, 300);
+    const debouncedWhSearch = useDebounce(warehouseSearch, 300);
 
-    const selectedSkus = ALL_SKUS.filter((s) => selectedIds.includes(s.id));
+    // ── Query: SKU picker ─────────────────────────────────────────────────────
+    const {
+        data: pickerData,
+        isLoading: pickerLoading,
+        isFetching: pickerFetching,
+        isError: isPickerError,
+    } = useQuery({
+        queryKey: COMBINE_SKU_KEYS.picker(debouncedSkuSearch),
+        queryFn: () => fetchSkuPicker({ search: debouncedSkuSearch }),
+        staleTime: 1000 * 60 * 2,
+        gcTime: 1000 * 60 * 5,
+        placeholderData: (prev) => prev,
+    });
 
-    const toggleSku = (id) => {
+    const filteredSkus = pickerData?.data ?? [];
+
+    // ── Query: warehouses ─────────────────────────────────────────────────────
+    const {
+        data: warehouses = [],
+        isLoading: warehouseLoading,
+        isError: isWarehouseError,
+    } = useQuery({
+        queryKey: ["warehouses", "add-combine", debouncedWhSearch],
+        queryFn: () => fetchAllWarehouses(debouncedWhSearch),
+        staleTime: 1000 * 60 * 2,
+        gcTime: 1000 * 60 * 5,
+        placeholderData: (prev) => prev,
+    });
+
+    // ── Derived: selected SKU objects (from picker list) ──────────────────────
+    // Keep a local map so we don't lose SKU data when the search changes
+    const [skuMap, setSkuMap] = useState({});
+    const selectedSkus = selectedIds
+        .map((id) => skuMap[id])
+        .filter(Boolean);
+
+    // ── SKU selection helpers ─────────────────────────────────────────────────
+    const toggleSku = useCallback((id) => {
         setSelectedIds((prev) => {
             if (prev.includes(id)) return prev.filter((x) => x !== id);
+            // Cache the SKU data at selection time
+            const sku = filteredSkus.find((s) => s.id === id);
+            if (sku) setSkuMap((m) => ({ ...m, [id]: sku }));
             setQuantities((q) => ({ ...q, [id]: 1 }));
             return [...prev, id];
         });
-    };
+    }, [filteredSkus]);
 
-    const updateQty = (id, val) => {
+    const updateQty = useCallback((id, val) => {
         setQuantities((prev) => ({ ...prev, [id]: Math.max(1, Number(val) || 1) }));
-    };
+    }, []);
 
-    const removeFromPreview = (id) => {
+    const removeFromPreview = useCallback((id) => {
         setSelectedIds((prev) => prev.filter((x) => x !== id));
-    };
+    }, []);
 
-    const clearAll = () => {
+    const clearAll = useCallback(() => {
         setSelectedIds([]);
         setQuantities({});
-    };
+    }, []);
 
-    const handleFormChange = (e) => {
+    const allTableSelected = filteredSkus.length > 0 &&
+        filteredSkus.every((s) => selectedIds.includes(s.id));
+
+    const toggleAll = useCallback(() => {
+        const ids = filteredSkus.map((s) => s.id);
+        const allSel = ids.every((id) => selectedIds.includes(id));
+        if (allSel) {
+            setSelectedIds((prev) => prev.filter((id) => !ids.includes(id)));
+        } else {
+            const newIds = ids.filter((id) => !selectedIds.includes(id));
+            newIds.forEach((id) => {
+                const sku = filteredSkus.find((s) => s.id === id);
+                if (sku) setSkuMap((m) => ({ ...m, [id]: sku }));
+                setQuantities((q) => ({ ...q, [id]: 1 }));
+            });
+            setSelectedIds((prev) => [...prev, ...newIds]);
+        }
+    }, [filteredSkus, selectedIds]);
+
+    // ── Warehouse select ──────────────────────────────────────────────────────
+    const handleWarehouseSelect = useCallback((wh) => {
+        setForm((prev) => ({
+            ...prev,
+            warehouseId: String(wh.id),
+            warehouseName: wh.name,
+        }));
+        if (errors.warehouseId) setErrors((p) => ({ ...p, warehouseId: "" }));
+    }, [errors]);
+
+    // ── Form change ───────────────────────────────────────────────────────────
+    const handleFormChange = useCallback((e) => {
         const { name, value } = e.target;
         setForm((prev) => ({ ...prev, [name]: value }));
-    };
+        if (errors[name]) setErrors((p) => ({ ...p, [name]: "" }));
+    }, [errors]);
 
-    const handleSaveClick = () => setShowSaveModal(true);
+    // ── Validation ────────────────────────────────────────────────────────────
+    const validate = useCallback(() => {
+        const e = {};
+        if (!form.combineSKUName.trim()) e.combineSKUName = "Combine SKU Name is required";
+        if (!form.combineSkuCode.trim()) e.combineSkuCode = "Combine SKU Code is required";
+        if (selectedIds.length === 0) e.items = "Select at least one merchant SKU";
+        return e;
+    }, [form, selectedIds]);
 
-    const confirmSave = async () => {
-        setSaving(true);
-        await new Promise((r) => setTimeout(r, 800));
-        setSaving(false);
-        setShowSaveModal(false);
-    };
+    // ── Create mutation ───────────────────────────────────────────────────────
+    const createMutation = useMutation({
+        mutationFn: createCombineSku,
+        onSuccess: (data) => {
+            toast.success(`Combine SKU "${data.combine_sku_code}" created successfully`);
+            queryClient.invalidateQueries({ queryKey: COMBINE_SKU_KEYS.all() });
+            setShowSaveModal(false);
+            navigate("/warehouse_management/products/combine_sku");
+        },
+        onError: (err) => {
+            const msg = err?.response?.data?.message ?? "Failed to create Combine SKU";
+            const fieldErrors = err?.response?.data?.errors ?? [];
+            if (fieldErrors.length) {
+                const mapped = {};
+                fieldErrors.forEach(({ field, message }) => {
+                    const local = field === "combineName" ? "combineSKUName"
+                        : field === "combineSkuCode" ? "combineSkuCode"
+                            : field;
+                    mapped[local] = message;
+                });
+                setErrors(mapped);
+            }
+            toast.error(msg);
+            setShowSaveModal(false);
+        },
+    });
+
+    const handleSaveClick = useCallback(() => {
+        const e = validate();
+        if (Object.keys(e).length) {
+            setErrors(e);
+            toast.error("Please fix the highlighted fields");
+            return;
+        }
+        setShowSaveModal(true);
+    }, [validate]);
+
+    const confirmSave = useCallback(() => {
+        const body = {
+            combineName: form.combineSKUName.trim(),
+            combineSkuCode: form.combineSkuCode.trim(),
+            gtin: form.gtin || undefined,
+            weight: form.weight || undefined,
+            length: form.length || undefined,
+            width: form.width || undefined,
+            height: form.height || undefined,
+            warehouseId: form.warehouseId ? Number(form.warehouseId) : undefined,
+            status: "active",
+            items: selectedIds.map((id) => ({
+                merchantSkuId: id,
+                quantity: quantities[id] ?? 1,
+            })),
+        };
+        createMutation.mutate(body);
+    }, [form, selectedIds, quantities, createMutation]);
 
     return {
+        // SKU picker
         skuSearch, setSkuSearch,
-        filteredSkus, selectedIds, selectedSkus,
-        quantities, toggleSku, updateQty, removeFromPreview, clearAll,
-        form, handleFormChange,
+        filteredSkus,
+        pickerLoading,
+        pickerFetching,
+        isPickerError,
+
+        // selection
+        selectedIds,
+        selectedSkus,
+        quantities,
+        toggleSku,
+        updateQty,
+        removeFromPreview,
+        clearAll,
+        allTableSelected,
+        toggleAll,
+
+        // warehouse
+        warehouseSearch, setWarehouseSearch,
+        warehouses,
+        warehouseLoading,
+        isWarehouseError,
+        handleWarehouseSelect,
+
+        // form
+        form, errors,
+        handleFormChange,
+
+        // save
         showSaveModal, setShowSaveModal,
-        saving, handleSaveClick, confirmSave,
-        allTableSelected: filteredSkus.length > 0 && filteredSkus.every((s) => selectedIds.includes(s.id)),
-        toggleAll: () => {
-            const ids = filteredSkus.map((s) => s.id);
-            const allSel = ids.every((id) => selectedIds.includes(id));
-            if (allSel) {
-                setSelectedIds((prev) => prev.filter((id) => !ids.includes(id)));
-            } else {
-                const newIds = ids.filter((id) => !selectedIds.includes(id));
-                newIds.forEach((id) => setQuantities((q) => ({ ...q, [id]: 1 })));
-                setSelectedIds((prev) => [...prev, ...newIds]);
-            }
-        },
+        saving: createMutation.isPending,
+        handleSaveClick,
+        confirmSave,
     };
 }
