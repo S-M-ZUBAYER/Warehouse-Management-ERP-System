@@ -1,98 +1,297 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useCallback } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { toast } from "react-hot-toast";
+import { COMBINE_SKU_KEYS } from "./useCombineSKUList";
+import api from "../../../lib/api";
+import useDebounce from "../../../hooks/useDebounce";
 
-const MOCK_SKUS = [
-    { id: 1, sku: "SKU-001", name: "Wireless Bluetooth Headphones Pro", qty: 120, price: 89.90, image: "https://placehold.co/36x36/E6ECF0/004368?text=S1" },
-    { id: 2, sku: "SKU-002", name: "Ergonomic Office Chair", qty: 34, price: 299.00, image: "https://placehold.co/36x36/E6ECF0/004368?text=S2" },
-    { id: 3, sku: "SKU-003", name: "Stainless Steel Water Bottle 750ml", qty: 280, price: 24.90, image: "https://placehold.co/36x36/E6ECF0/004368?text=S3" },
-    { id: 4, sku: "SKU-004", name: "Running Shoes Air Cushion Series", qty: 89, price: 119.00, image: "https://placehold.co/36x36/E6ECF0/004368?text=S4" },
-    { id: 5, sku: "SKU-005", name: "Portable Solar Charger 20000mAh", qty: 56, price: 69.90, image: "https://placehold.co/36x36/E6ECF0/004368?text=S5" },
-    { id: 6, sku: "SKU-006", name: "Bamboo Cutting Board Set", qty: 150, price: 39.90, image: "https://placehold.co/36x36/E6ECF0/004368?text=S6" },
-    { id: 7, sku: "SKU-007", name: "Yoga Mat Premium Anti-Slip 6mm", qty: 67, price: 49.90, image: "https://placehold.co/36x36/E6ECF0/004368?text=S7" },
-    { id: 8, sku: "SKU-008", name: "Smart LED Desk Lamp USB Charging", qty: 43, price: 79.90, image: "https://placehold.co/36x36/E6ECF0/004368?text=S8" },
-    { id: 9, sku: "SKU-009", name: "Leather Wallet Slim RFID Blocking", qty: 92, price: 45.00, image: "https://placehold.co/36x36/E6ECF0/004368?text=S9" },
-    { id: 10, sku: "SKU-010", name: "Ceramic Non-Stick Frying Pan 28cm", qty: 78, price: 89.00, image: "https://placehold.co/36x36/E6ECF0/004368?text=S10" },
-];
+// ─────────────────────────────────────────────────────────────────────────────
+// API helpers
+// ─────────────────────────────────────────────────────────────────────────────
 
-export function useCombineSKU() {
-    const [search, setSearch] = useState("");
-    const [selectedSkus, setSelectedSkus] = useState([]);
-    const [particulars, setParticulars] = useState({
-        combineName: "",
-        combineSkuCode: "",
-        description: "",
-        sellingPrice: "",
-        costPrice: "",
-        weight: "",
-    });
+/** GET /combine-skus/picker — filtered by warehouseId when provided */
+const fetchSkuPicker = ({ search, warehouseId, page = 1, limit = 50 }) => {
+    const qs = new URLSearchParams({ page, limit });
+    if (search?.trim()) qs.set("search", search.trim());
+    if (warehouseId) qs.set("warehouseId", warehouseId); // ← filter by warehouse
+    return api.get(`/combine-skus/picker?${qs.toString()}`).then((r) => r);
+};
+
+/** Fetch all warehouses */
+const fetchAllWarehouses = async (search = "") => {
+    const qs = search
+        ? `?page=1&limit=20&search=${encodeURIComponent(search)}`
+        : "?page=1&limit=20";
+    const first = await api.get(`/warehouses${qs}`);
+    const totalPages = first.pagination?.totalPages ?? 1;
+    if (totalPages === 1) return first.data;
+    const rest = await Promise.all(
+        Array.from({ length: totalPages - 1 }, (_, i) =>
+            api.get(`/warehouses?page=${i + 2}&limit=20&search=${encodeURIComponent(search)}`)
+        )
+    );
+    return [...first.data, ...rest.flatMap((r) => r.data)];
+};
+
+/** POST /combine-skus */
+const createCombineSku = (body) =>
+    api.post("/combine-skus", body).then((r) => r.data);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Empty form
+// ─────────────────────────────────────────────────────────────────────────────
+const EMPTY_FORM = {
+    combineSKUName: "",
+    combineSkuCode: "",
+    gtin: "",
+    weight: "",
+    length: "",
+    width: "",
+    height: "",
+    warehouseId: "",
+    warehouseName: "",
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hook
+// ─────────────────────────────────────────────────────────────────────────────
+export function useAddCombineSKU() {
+    const navigate = useNavigate();
+    const queryClient = useQueryClient();
+
+    // ── SKU picker state ──────────────────────────────────────────────────────
+    const [skuSearch, setSkuSearch] = useState("");
+    const [selectedIds, setSelectedIds] = useState([]);
+    const [quantities, setQuantities] = useState({});
+    const [skuMap, setSkuMap] = useState({});
+
+    // ── Warehouse search ──────────────────────────────────────────────────────
+    const [warehouseSearch, setWarehouseSearch] = useState("");
+
+    // ── Form state ────────────────────────────────────────────────────────────
+    const [form, setForm] = useState(EMPTY_FORM);
     const [errors, setErrors] = useState({});
-    const [saving, setSaving] = useState(false);
-    const [saved, setSaved] = useState(false);
 
-    const filteredSkus = useMemo(() => {
-        if (!search.trim()) return MOCK_SKUS;
-        const q = search.toLowerCase();
-        return MOCK_SKUS.filter(
-            (s) =>
-                s.name.toLowerCase().includes(q) ||
-                s.sku.toLowerCase().includes(q)
-        );
-    }, [search]);
+    // ── Modal state ───────────────────────────────────────────────────────────
+    const [showSaveModal, setShowSaveModal] = useState(false);
 
-    const toggleSku = useCallback((sku) => {
-        setSelectedSkus((prev) =>
-            prev.find((s) => s.id === sku.id)
-                ? prev.filter((s) => s.id !== sku.id)
-                : [...prev, { ...sku, combineQty: 1 }]
-        );
+    // Debounced values
+    const debouncedSkuSearch = useDebounce(skuSearch, 300);
+    const debouncedWhSearch = useDebounce(warehouseSearch, 300);
+
+    // ── Query: SKU picker — only runs when warehouse is selected ──────────────
+    const {
+        data: pickerData,
+        isLoading: pickerLoading,
+        isFetching: pickerFetching,
+        isError: isPickerError,
+    } = useQuery({
+        queryKey: COMBINE_SKU_KEYS.picker(debouncedSkuSearch, form.warehouseId),
+        queryFn: () => fetchSkuPicker({ search: debouncedSkuSearch, warehouseId: form.warehouseId }),
+        enabled: !!form.warehouseId, // ← only fetch when warehouse is chosen
+        staleTime: 1000 * 60 * 2,
+        gcTime: 1000 * 60 * 5,
+        placeholderData: (prev) => prev,
+    });
+
+    const filteredSkus = pickerData?.data ?? [];
+
+    // ── Query: warehouses ─────────────────────────────────────────────────────
+    const {
+        data: warehouses = [],
+        isLoading: warehouseLoading,
+        isError: isWarehouseError,
+    } = useQuery({
+        queryKey: ["warehouses", "add-combine", debouncedWhSearch],
+        queryFn: () => fetchAllWarehouses(debouncedWhSearch),
+        staleTime: 1000 * 60 * 2,
+        gcTime: 1000 * 60 * 5,
+        placeholderData: (prev) => prev,
+    });
+
+    // ── Derived: selected SKU objects ─────────────────────────────────────────
+    const selectedSkus = selectedIds.map((id) => skuMap[id]).filter(Boolean);
+
+    // ── SKU selection helpers ─────────────────────────────────────────────────
+
+    const toggleSku = useCallback((id) => {
+        // Guard: warehouse must be selected first
+        if (!form.warehouseId) {
+            toast.error("Please select a warehouse before adding SKUs");
+            return;
+        }
+        setSelectedIds((prev) => {
+            if (prev.includes(id)) return prev.filter((x) => x !== id);
+            const sku = filteredSkus.find((s) => s.id === id);
+            if (sku) setSkuMap((m) => ({ ...m, [id]: sku }));
+            setQuantities((q) => ({ ...q, [id]: 1 }));
+            return [...prev, id];
+        });
+    }, [form.warehouseId, filteredSkus]);
+
+    const updateQty = useCallback((id, val) => {
+        setQuantities((prev) => ({ ...prev, [id]: Math.max(1, Number(val) || 1) }));
     }, []);
 
-    const updateQty = useCallback((id, qty) => {
-        setSelectedSkus((prev) =>
-            prev.map((s) => (s.id === id ? { ...s, combineQty: Math.max(1, Number(qty)) } : s))
-        );
+    const removeFromPreview = useCallback((id) => {
+        setSelectedIds((prev) => prev.filter((x) => x !== id));
     }, []);
 
-    const removeSelected = useCallback((id) => {
-        setSelectedSkus((prev) => prev.filter((s) => s.id !== id));
+    const clearAll = useCallback(() => {
+        setSelectedIds([]);
+        setQuantities({});
     }, []);
 
-    const handleParticularsChange = useCallback((e) => {
+    const allTableSelected =
+        !!form.warehouseId &&
+        filteredSkus.length > 0 &&
+        filteredSkus.every((s) => selectedIds.includes(s.id));
+
+    const toggleAll = useCallback(() => {
+        // Guard: warehouse must be selected first
+        if (!form.warehouseId) {
+            toast.error("Please select a warehouse before adding SKUs");
+            return;
+        }
+        const ids = filteredSkus.map((s) => s.id);
+        const allSel = ids.every((id) => selectedIds.includes(id));
+        if (allSel) {
+            setSelectedIds((prev) => prev.filter((id) => !ids.includes(id)));
+        } else {
+            const newIds = ids.filter((id) => !selectedIds.includes(id));
+            newIds.forEach((id) => {
+                const sku = filteredSkus.find((s) => s.id === id);
+                if (sku) setSkuMap((m) => ({ ...m, [id]: sku }));
+                setQuantities((q) => ({ ...q, [id]: 1 }));
+            });
+            setSelectedIds((prev) => [...prev, ...newIds]);
+        }
+    }, [form.warehouseId, filteredSkus, selectedIds]);
+
+    // ── Warehouse select ──────────────────────────────────────────────────────
+    const handleWarehouseSelect = useCallback((wh) => {
+        setForm((prev) => ({
+            ...prev,
+            warehouseId: String(wh.id),
+            warehouseName: wh.name ?? "",
+        }));
+        // Clear previously selected SKUs when warehouse changes
+        setSelectedIds([]);
+        setQuantities({});
+        setSkuMap({});
+        if (errors.warehouseId) setErrors((p) => ({ ...p, warehouseId: "" }));
+    }, [errors]);
+
+    // ── Form change ───────────────────────────────────────────────────────────
+    const handleFormChange = useCallback((e) => {
         const { name, value } = e.target;
-        setParticulars((prev) => ({ ...prev, [name]: value }));
-        setErrors((prev) => ({ ...prev, [name]: "" }));
-    }, []);
+        setForm((prev) => ({ ...prev, [name]: value }));
+        if (errors[name]) setErrors((p) => ({ ...p, [name]: "" }));
+    }, [errors]);
 
-    const validate = () => {
+    // ── Validation ────────────────────────────────────────────────────────────
+    const validate = useCallback(() => {
         const e = {};
-        if (!particulars.combineName.trim()) e.combineName = "Combine name is required";
-        if (!particulars.combineSkuCode.trim()) e.combineSkuCode = "SKU code is required";
-        if (selectedSkus.length < 2) e.skus = "Select at least 2 SKUs to combine";
+        if (!form.combineSKUName.trim()) e.combineSKUName = "Combine SKU Name is required";
+        if (!form.combineSkuCode.trim()) e.combineSkuCode = "Combine SKU Code is required";
+        if (!form.gtin.trim()) e.gtin = "GTIN is required";
+        if (!form.warehouseId) e.warehouseId = "Warehouse is required";
+        if (selectedIds.length === 0) e.items = "Select at least one merchant SKU";
         return e;
-    };
+    }, [form, selectedIds]);
 
-    const handleSave = async () => {
+    // ── Create mutation ───────────────────────────────────────────────────────
+    const createMutation = useMutation({
+        mutationFn: createCombineSku,
+        onSuccess: (data) => {
+            toast.success(`Combine SKU "${data.combine_sku_code}" created successfully`);
+            queryClient.invalidateQueries({ queryKey: COMBINE_SKU_KEYS.all() });
+            setShowSaveModal(false);
+            navigate("/warehouse_management/products/combine_sku");
+        },
+        onError: (err) => {
+            const msg = err?.response?.data?.message ?? "Failed to create Combine SKU";
+            const fieldErrors = err?.response?.data?.errors ?? [];
+            if (fieldErrors.length) {
+                const mapped = {};
+                fieldErrors.forEach(({ field, message }) => {
+                    const local =
+                        field === "combineName" ? "combineSKUName"
+                            : field === "combineSkuCode" ? "combineSkuCode"
+                                : field;
+                    mapped[local] = message;
+                });
+                setErrors(mapped);
+            }
+            toast.error(msg);
+            setShowSaveModal(false);
+        },
+    });
+
+    const handleSaveClick = useCallback(() => {
         const e = validate();
-        if (Object.keys(e).length) { setErrors(e); return; }
+        if (Object.keys(e).length) {
+            setErrors(e);
+            toast.error("Please fix the highlighted fields");
+            return;
+        }
+        setShowSaveModal(true);
+    }, [validate]);
 
-        setSaving(true);
-        await new Promise((r) => setTimeout(r, 800)); // simulate API
-        setSaving(false);
-        setSaved(true);
-        setTimeout(() => setSaved(false), 3000);
-    };
-
-    const handleCancel = () => {
-        setSelectedSkus([]);
-        setParticulars({ combineName: "", combineSkuCode: "", description: "", sellingPrice: "", costPrice: "", weight: "" });
-        setErrors({});
-    };
+    const confirmSave = useCallback(() => {
+        const body = {
+            combineName: form.combineSKUName.trim(),
+            combineSkuCode: form.combineSkuCode.trim(),
+            gtin: form.gtin || undefined,
+            weight: form.weight || undefined,
+            length: form.length || undefined,
+            width: form.width || undefined,
+            height: form.height || undefined,
+            warehouseId: form.warehouseId ? Number(form.warehouseId) : undefined,
+            status: "active",
+            items: selectedIds.map((id) => ({
+                merchantSkuId: id,
+                quantity: quantities[id] ?? 1,
+            })),
+        };
+        createMutation.mutate(body);
+    }, [form, selectedIds, quantities, createMutation]);
 
     return {
-        search, setSearch,
-        filteredSkus, selectedSkus,
-        toggleSku, updateQty, removeSelected,
-        particulars, handleParticularsChange, errors,
-        saving, saved,
-        handleSave, handleCancel,
+        // SKU picker
+        skuSearch, setSkuSearch,
+        filteredSkus,
+        pickerLoading,
+        pickerFetching,
+        isPickerError,
+
+        // selection
+        selectedIds,
+        selectedSkus,
+        quantities,
+        toggleSku,
+        updateQty,
+        removeFromPreview,
+        clearAll,
+        allTableSelected,
+        toggleAll,
+
+        // warehouse
+        warehouseSearch, setWarehouseSearch,
+        warehouses,
+        warehouseLoading,
+        isWarehouseError,
+        handleWarehouseSelect,
+
+        // form
+        form, errors,
+        handleFormChange,
+
+        // save
+        showSaveModal, setShowSaveModal,
+        saving: createMutation.isPending,
+        handleSaveClick,
+        confirmSave,
     };
 }
