@@ -583,6 +583,8 @@ export function useProductList() {
     }, [form, validate, createMutation]);
 
     const handleCloseModal = useCallback(() => {
+        console.log("call this function");
+
         setShowAddModal(false);
         setForm(EMPTY_FORM);
         setErrors({});
