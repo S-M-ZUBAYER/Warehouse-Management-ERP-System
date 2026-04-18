@@ -11,10 +11,34 @@ import useDebounce from "../../../hooks/useDebounce";
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** GET /combine-skus/picker — searchable merchant SKU list with stock */
-const fetchSkuPicker = ({ search, page = 1, limit = 10 }) => {
-    const qs = new URLSearchParams({ page, limit });
-    if (search?.trim()) qs.set("search", search.trim());
-    return api.get(`/combine-skus/picker?${qs.toString()}`).then((r) => r);
+const fetchAllSkuPicker = async ({ search, limit = 10 }) => {
+    // Helper to build query string
+    const buildQuery = (page) => {
+        const qs = new URLSearchParams({
+            page: page.toString(),
+            limit: limit.toString()
+        });
+        if (search?.trim()) qs.set("search", search.trim());
+        return qs.toString();
+    };
+
+    // Fetch first page
+    const firstPage = await api.get(`/combine-skus/picker?${buildQuery(1)}`);
+    const totalPages = firstPage.pagination?.totalPages ?? 1;
+
+    // If only one page, return the data
+    if (totalPages === 1) return firstPage.data;
+
+    // Fetch remaining pages in parallel
+    const remainingPages = Array.from(
+        { length: totalPages - 1 },
+        (_, i) => api.get(`/combine-skus/picker?${buildQuery(i + 2)}`)
+    );
+
+    const restPages = await Promise.all(remainingPages);
+
+    // Combine all data from all pages
+    return [...firstPage.data, ...restPages.flatMap(page => page.data)];
 };
 
 /** Fetch all warehouses (same pattern as merchant SKU hook) */
@@ -85,14 +109,21 @@ export function useAddCombineSKU() {
         isFetching: pickerFetching,
         isError: isPickerError,
     } = useQuery({
-        queryKey: COMBINE_SKU_KEYS.picker(debouncedSkuSearch),
-        queryFn: () => fetchSkuPicker({ search: debouncedSkuSearch }),
+        queryKey: COMBINE_SKU_KEYS.picker(debouncedSkuSearch, 'all'),
+        queryFn: () => fetchAllSkuPicker({
+            search: debouncedSkuSearch,
+            limit: 10  // Fetch 10 items per request, but will get all pages
+        }),
         staleTime: 1000 * 60 * 2,
         gcTime: 1000 * 60 * 5,
         placeholderData: (prev) => prev,
     });
 
-    const filteredSkus = pickerData?.data ?? [];
+    // filteredSkus will now contain ALL data from all pages
+    const filteredSkus = pickerData?.filter(sku => sku?.warehouse?.id == form?.warehouseId) ?? [];
+
+
+
 
     // ── Query: warehouses ─────────────────────────────────────────────────────
     const {

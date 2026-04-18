@@ -18,6 +18,7 @@ import { useInboundList } from "../hooks/useInboundList";
 import { useInboundDropdowns } from "../hooks/useInboundDropdowns";
 import { useCreateInbound } from "../hooks/useCreateInbound";
 import { useShipInbound } from "../hooks/useShipInbound";
+import { toast } from "sonner";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // InboundDraftPage — Draft List + Create Inbound sub-page
@@ -401,7 +402,13 @@ function CreateInboundPage({ onBack }) {
             )}
           </div>
           <button
-            onClick={() => setShowSkuModal(true)}
+            onClick={() => {
+              if (form.warehouseId) {
+                setShowSkuModal(true);
+              } else {
+                toast.error("Please select the warehouse first");
+              }
+            }}
             className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors"
           >
             <Plus size={14} /> Select Merchant SKU
@@ -507,7 +514,6 @@ function CreateInboundPage({ onBack }) {
           Save
         </button>
       </div>
-
       <SelectMerchantSKUModal
         open={showSkuModal}
         onClose={() => setShowSkuModal(false)}
