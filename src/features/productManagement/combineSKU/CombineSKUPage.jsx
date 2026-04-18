@@ -80,7 +80,7 @@ export default function CombineSKUPage() {
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
-                setPage(1);
+                // setPage(1);
               }}
               className="w-96 pl-9 pr-3 py-2 text-sm bg-white border border-surface-border rounded-lg
                 text-slate-700 placeholder-slate-400 outline-none

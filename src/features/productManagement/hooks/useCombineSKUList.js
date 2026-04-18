@@ -19,6 +19,8 @@ export const COMBINE_SKU_KEYS = {
 // API helpers
 // ─────────────────────────────────────────────────────────────────────────────
 const fetchCombineSkus = (params) => {
+    console.log("call");
+
     const qs = new URLSearchParams();
     qs.set("page", params.page ?? 1);
     qs.set("limit", params.limit ?? 10); // ← changed from 20 to 10
