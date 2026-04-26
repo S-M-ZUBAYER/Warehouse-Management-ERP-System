@@ -1,7 +1,7 @@
 // import { useState, useMemo } from "react";
 // import { useQuery, useQueryClient } from "@tanstack/react-query";
 // import api from "../../../../lib/api";
-// import { toast } from "react-hot-toast";
+// import { toast } from "sonner";
 
 // const PAGE_LIMIT_ROLES = 10;
 
@@ -396,7 +396,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import api from "../../../../lib/api";
-import { toast } from "sonner"; // ✅ unified: was react-hot-toast in original
+import { toast } from "sonner"; // ✅ unified: was sonner in original
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants & query keys

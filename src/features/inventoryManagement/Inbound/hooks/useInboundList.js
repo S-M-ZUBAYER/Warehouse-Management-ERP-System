@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'react-hot-toast';
+import { toast } from 'sonner';
 import api from '../../../../lib/api';
 import useDebounce from '../../../../hooks/useDebounce';
 
@@ -17,6 +17,8 @@ export const INBOUND_KEYS = {
 // API helpers
 // ─────────────────────────────────────────────────────────────────────────────
 const fetchInboundList = (params) => {
+    console.log(params);
+
     const qs = new URLSearchParams();
     qs.set('page', params.page ?? 1);
     qs.set('limit', params.limit ?? 20);
@@ -86,6 +88,8 @@ export function useInboundList({ status }) {
     });
 
     const items = listData?.data ?? [];
+    console.log(listData);
+
     const pagination = listData?.pagination ?? { total: 0, totalPages: 1, page: 1, limit: 20 };
 
     // ── Cancel mutation ───────────────────────────────────────────────────────
