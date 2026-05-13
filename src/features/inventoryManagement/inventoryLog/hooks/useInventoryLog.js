@@ -18,13 +18,14 @@ export const WAREHOUSE_KEYS = {
 // ─────────────────────────────────────────────────────────────────────────────
 // API helpers
 // ─────────────────────────────────────────────────────────────────────────────
+
 const fetchLedger = (params) => {
     const qs = new URLSearchParams();
     qs.set('page', params.page ?? 1);
     qs.set('limit', params.limit ?? 10);
     if (params.warehouseId) qs.set('warehouseId', params.warehouseId);
     if (params.movementType) qs.set('movementType', params.movementType);
-    if (params.search?.trim()) qs.set('search', params.search.trim());
+    if (params.skuName?.trim()) qs.set('skuName', params.skuName.trim()); // ✅ match backend
     return api.get(`/stock/ledger?${qs.toString()}`).then((r) => r);
 };
 
@@ -36,10 +37,9 @@ const fetchWarehouses = () =>
 // ─────────────────────────────────────────────────────────────────────────────
 export const MOVEMENT_TYPE_OPTIONS = [
     { value: '', label: 'All Types' },
-    { value: 'inbound', label: 'Inbound' },
+    { value: 'inbound_receipt', label: 'Inbound Receipt' },
     { value: 'sale_deduction', label: 'Sale Deduction' },
-    { value: 'adjustment', label: 'Adjustment' },
-    { value: 'transfer', label: 'Transfer' },
+    { value: 'manual_adjustment', label: 'Manual Adjustment' },
     { value: 'return', label: 'Return' },
 ];
 
@@ -50,18 +50,19 @@ export function useInventoryLog() {
     // ── Filter state ────────────────────────────────────────────────────────────
     const [warehouseId, setWarehouseId] = useState('');
     const [movementType, setMovementType] = useState('');
-    const [search, setSearch] = useState('');
+    const [skuName, setSkuName] = useState("");       // input field
+    const [searchSku, setSearchSku] = useState("");   // actual API param
     const [page, setPage] = useState(1);
     const [selectedIds, setSelectedIds] = useState([]);
 
-    const debouncedSearch = useDebounce(search, 350);
+    // const debouncedSearch = useDebounce(skuName, 350);
 
     const listParams = {
         page,
         limit: 10,
         warehouseId: warehouseId || undefined,
         movementType: movementType || undefined,
-        search: debouncedSearch,
+        skuName: searchSku, // ✅ use this instead
     };
 
     // ── Ledger query ────────────────────────────────────────────────────────────
@@ -123,9 +124,14 @@ export function useInventoryLog() {
     }, []);
 
     const handleSetSearch = useCallback((val) => {
-        setSearch(val);
+        setSkuName(val);
         setPage(1);
     }, []);
+
+    const handleSearch = useCallback(() => {
+        setSearchSku(skuName.trim());
+        setPage(1);
+    }, [skuName]);
 
     return {
         // filters
@@ -133,8 +139,9 @@ export function useInventoryLog() {
         setWarehouseId: handleSetWarehouseId,
         movementType,
         setMovementType: handleSetMovementType,
-        search,
-        setSearch: handleSetSearch,
+        skuName,
+        setSkuName,
+        handleSearch,
         page,
         setPage,
 

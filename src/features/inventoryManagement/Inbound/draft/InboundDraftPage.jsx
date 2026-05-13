@@ -19,6 +19,11 @@ import { useInboundDropdowns } from "../hooks/useInboundDropdowns";
 import { useCreateInbound } from "../hooks/useCreateInbound";
 import { useShipInbound } from "../hooks/useShipInbound";
 import { toast } from "sonner";
+import { exportRowsToCsv, printRows } from "../../../../utils/tableOutput";
+import {
+  buildInboundOutputRows,
+  inboundOutputColumns,
+} from "../../shared/inboundOutput";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // InboundDraftPage — Draft List + Create Inbound sub-page
@@ -54,8 +59,10 @@ function DraftListPage({ onCreateClick }) {
     setWarehouseId,
     timeType,
     setTimeType,
-    timeFilter,
-    setTimeFilter,
+    dateFrom,
+    setDateFrom,
+    dateTo,
+    setDateTo,
     inboundType,
     setInboundType,
     search,
@@ -71,8 +78,6 @@ function DraftListPage({ onCreateClick }) {
     selectedIds,
     toggleSelect,
     toggleAll,
-    allSelected,
-    someSelected,
     openCancelModal,
     showCancelModal,
     setShowCancelModal,
@@ -99,7 +104,6 @@ function DraftListPage({ onCreateClick }) {
     { label: "Ship", icon: Ship, onClick: openShipModal },
     { label: "Cancel", icon: X, onClick: openCancelModal, danger: true },
   ];
-
   return (
     <div className="space-y-4 font-body">
       <Topbar PageTitle="Inbound" />
@@ -111,8 +115,10 @@ function DraftListPage({ onCreateClick }) {
         warehouseLoading={warehouseLoading}
         timeType={timeType}
         setTimeType={setTimeType}
-        timeFilter={timeFilter}
-        setTimeFilter={setTimeFilter}
+        dateFrom={dateFrom}
+        setDateFrom={setDateFrom}
+        dateTo={dateTo}
+        setDateTo={setDateTo}
         inboundType={inboundType}
         setInboundType={setInboundType}
         search={search}
@@ -225,10 +231,16 @@ function DraftListPage({ onCreateClick }) {
         )}
 
         <div className="flex justify-end gap-3 px-5 py-4 border-t border-surface-border">
-          <button className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold border border-surface-border rounded-lg text-slate-700 bg-white hover:bg-surface-card transition-colors">
+          <button
+            onClick={() => exportRowsToCsv(buildInboundOutputRows(items), inboundOutputColumns, "draft-inbounds.csv", "inbound")}
+            className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold border border-surface-border rounded-lg text-slate-700 bg-white hover:bg-surface-card transition-colors"
+          >
             Export <ChevronDown size={13} className="text-slate-400" />
           </button>
-          <button className="px-6 py-2.5 text-sm font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors">
+          <button
+            onClick={() => printRows(buildInboundOutputRows(items), inboundOutputColumns, "Draft Inbounds", "inbound")}
+            className="px-6 py-2.5 text-sm font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors"
+          >
             Print
           </button>
         </div>
@@ -283,11 +295,6 @@ function CreateInboundPage({ onBack }) {
     lines,
     removeLine,
     updateLineQty,
-    warehouseSearch,
-    setWarehouseSearch,
-    warehouses,
-    warehouseLoading,
-    isWarehouseError,
     skuSearch,
     setSkuSearch,
     pickerSkus,
@@ -306,8 +313,7 @@ function CreateInboundPage({ onBack }) {
     handleSave,
   } = useCreateInbound({ onSuccess: onBack });
 
-  const { warehouseOptions, warehouseLoading: ddLoading } =
-    useInboundDropdowns();
+  const { warehouseOptions } = useInboundDropdowns();
 
   const handleConfirmModal = () => {
     confirmSkuSelection();

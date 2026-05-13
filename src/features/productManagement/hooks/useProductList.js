@@ -46,6 +46,28 @@ const fileToBase64 = (file) =>
         reader.readAsDataURL(file);
     });
 
+const formatDetailsForEdit = (value) => {
+    if (value === null || value === undefined) return "";
+    if (typeof value === "object") return JSON.stringify(value, null, 2);
+    if (typeof value !== "string") return String(value);
+
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+
+    try {
+        return JSON.stringify(JSON.parse(trimmed), null, 2);
+    } catch {
+        return value;
+    }
+};
+
+const formatDetailsForSave = (value) => {
+    const trimmed = String(value || "").trim();
+    if (!trimmed) return "";
+    if (!["{", "["].includes(trimmed[0])) return trimmed;
+    return JSON.stringify(JSON.parse(trimmed));
+};
+
 /** Create a new merchant SKU */
 const createMerchantSku = async (payload) => {
     let image = undefined;
@@ -58,7 +80,7 @@ const createMerchantSku = async (payload) => {
     const body = {
         skuName: payload.skuName,
         skuTitle: payload.productName,  // ✅ make sure form.productName is set
-        productDetails: payload.productDetails || undefined,
+        productDetails: formatDetailsForSave(payload.productDetails) || undefined,
         gtin: payload.gtin || undefined,
         price: payload.productPrice || undefined,
         weight: payload.weight || undefined,
@@ -74,6 +96,31 @@ const createMerchantSku = async (payload) => {
     console.log("skuTitle value:", body.skuTitle); // ← check this is not undefined
 
     return api.post("/merchant-skus", body).then((r) => r.data);
+};
+
+/** Update merchant SKU */
+const updateMerchantSku = async ({ id, payload }) => {
+    let image = undefined;
+    if (payload.photoFile) {
+        const base64 = await fileToBase64(payload.photoFile);
+        image = base64.replace(/^data:image\/[a-z]+;base64,/, "");
+    }
+
+    const body = {
+        skuName: payload.skuName,
+        skuTitle: payload.productName,
+        productDetails: formatDetailsForSave(payload.productDetails) || undefined,
+        gtin: payload.gtin || undefined,
+        price: payload.productPrice || undefined,
+        weight: payload.weight || undefined,
+        length: payload.length || undefined,
+        width: payload.width || undefined,
+        height: payload.height || undefined,
+        warehouseId: payload.warehouseId || undefined,
+        status: "active",
+        ...(image !== undefined && { image }),
+    };
+    return api.put(`/merchant-skus/${id}`, body).then((r) => r.data);
 };
 
 /** Delete single SKU */
@@ -124,6 +171,7 @@ export function useProductList() {
 
     // ── Add modal state ───────────────────────────────────────────────────────
     const [showAddModal, setShowAddModal] = useState(false);
+    const [editingProduct, setEditingProduct] = useState(null);
     const [form, setForm] = useState(EMPTY_FORM);
     const [errors, setErrors] = useState({});
     const [warehouseSearch, setWarehouseSearch] = useState("");
@@ -293,6 +341,34 @@ export function useProductList() {
     });
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Mutation: update merchant SKU
+    // ─────────────────────────────────────────────────────────────────────────
+    const updateMutation = useMutation({
+        mutationFn: updateMerchantSku,
+        onSuccess: (data) => {
+            toast.success(`SKU "${data.sku_name}" updated successfully`);
+            queryClient.invalidateQueries({ queryKey: MERCHANT_SKU_KEYS.all() });
+            queryClient.invalidateQueries({ queryKey: MERCHANT_SKU_KEYS.dropdowns() });
+            setShowAddModal(false);
+            setEditingProduct(null);
+            setForm(EMPTY_FORM);
+            setErrors({});
+        },
+        onError: (err) => {
+            const fieldErrors = err?.response?.data?.errors;
+            if (fieldErrors?.length) {
+                const mapped = {};
+                fieldErrors.forEach(({ field, message }) => {
+                    const localField = field === "skuTitle" ? "productName" : field;
+                    mapped[localField] = message;
+                });
+                setErrors(mapped);
+            }
+            toast.error(err?.response?.data?.message ?? err.message ?? "Failed to update product");
+        },
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Mutation: delete single
     // ─────────────────────────────────────────────────────────────────────────
     const deleteMutation = useMutation({
@@ -366,7 +442,15 @@ export function useProductList() {
         const e = {};
         if (!form.productName.trim()) e.productName = "Product Name is required";
         if (!form.skuName.trim()) e.skuName = "SKU Name is required";
-        if (!form.productDetails.trim()) e.productDetails = "Product Details is required";
+        const details = form.productDetails.trim();
+        if (!details) e.productDetails = "Product Details is required";
+        if (details && ["{", "["].includes(details[0])) {
+            try {
+                JSON.parse(details);
+            } catch {
+                e.productDetails = "Details JSON is not valid";
+            }
+        }
         if (form.productPrice && isNaN(Number(form.productPrice))) e.productPrice = "Must be a valid number";
         if (form.weight && isNaN(Number(form.weight))) e.weight = "Must be a valid number";
         return e;
@@ -379,16 +463,42 @@ export function useProductList() {
             toast.error("Please fix the highlighted fields");
             return;
         }
-        createMutation.mutate(form);
-    }, [form, validate, createMutation]);
+        if (editingProduct) {
+            updateMutation.mutate({ id: editingProduct.id, payload: form });
+        } else {
+            createMutation.mutate(form);
+        }
+    }, [form, validate, createMutation, updateMutation, editingProduct]);
 
     const handleCloseModal = useCallback(() => {
         console.log("call this function");
 
         setShowAddModal(false);
+        setEditingProduct(null);
         setForm(EMPTY_FORM);
         setErrors({});
         setWarehouseSearch("");
+    }, []);
+
+    const openEditModal = useCallback((product) => {
+        setEditingProduct(product);
+        setForm({
+            productName: product.sku_title ?? product.product_name ?? "",
+            skuName: product.sku_name ?? "",
+            productDetails: formatDetailsForEdit(product.product_details ?? product.productDetails ?? ""),
+            gtin: product.gtin ?? "",
+            productPrice: product.price ?? "",
+            weight: product.weight ?? "",
+            length: product.length ?? "",
+            width: product.width ?? "",
+            height: product.height ?? "",
+            warehouseId: product.warehouse_id ? String(product.warehouse_id) : "",
+            warehouseName: product.warehouse?.name ?? product.warehouse_name ?? "Warehouse name",
+            photoFile: null,
+            photoPreview: product.image_url ?? null,
+        });
+        setErrors({});
+        setShowAddModal(true);
     }, []);
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -497,6 +607,7 @@ export function useProductList() {
 
         // ── add modal ────────────────────────────────────────────────────────
         showAddModal, setShowAddModal,
+        editingProduct, openEditModal,
         form, setForm,
         errors, setErrors,
         fileInputRef,
@@ -505,7 +616,7 @@ export function useProductList() {
         handleWarehouseSelect,
         handleSave,
         handleCloseModal,
-        saving: createMutation.isPending,
+        saving: createMutation.isPending || updateMutation.isPending,
 
         // ── warehouse search (inside modal) ──────────────────────────────────
         warehouseSearch, setWarehouseSearch,

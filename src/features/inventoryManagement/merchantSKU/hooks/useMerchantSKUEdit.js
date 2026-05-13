@@ -61,8 +61,6 @@ const updateMerchantSku = async ({ id, payload }) => {
         status: payload.status || "active",
         ...(image !== undefined && { image }),
     };
-    console.log(body);
-
 
     return api.put(`/merchant-skus/${id}`, body).then((r) => r.data);
 };
@@ -125,11 +123,14 @@ export function useEditSKU() {
     // ─────────────────────────────────────────────────────────────────────────
     const updateMutation = useMutation({
         mutationFn: updateMerchantSku,
-        onSuccess: (data) => {
-            toast.success(`SKU "${data.sku_name ?? data.skuName}" updated successfully`);
-            // Invalidate list + dropdowns so the table refreshes automatically
-            queryClient.invalidateQueries({ queryKey: MERCHANT_SKU_KEYS.all() });
-            queryClient.invalidateQueries({ queryKey: MERCHANT_SKU_KEYS.dropdowns() });
+        onSuccess: async (data) => {
+            const updatedSku = data?.data ?? data ?? {};
+            const updatedName = updatedSku.sku_name ?? updatedSku.skuName ?? "Merchant SKU";
+            toast.success(`SKU "${updatedName}" updated successfully`);
+            // Invalidate and refetch so the table updates immediately after the modal closes.
+            await queryClient.invalidateQueries({ queryKey: MERCHANT_SKU_KEYS.all() });
+            await queryClient.invalidateQueries({ queryKey: MERCHANT_SKU_KEYS.dropdowns() });
+            await queryClient.refetchQueries({ queryKey: MERCHANT_SKU_KEYS.all() });
             closeEditModal();
         },
         onError: (err) => {
@@ -168,7 +169,7 @@ export function useEditSKU() {
      */
     const handleUpdateSKU = useCallback(
         (id, payload) => {
-            updateMutation.mutate({ id, payload });
+            return updateMutation.mutateAsync({ id, payload });
         },
         [updateMutation]
     );

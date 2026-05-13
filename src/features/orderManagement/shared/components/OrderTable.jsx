@@ -1,4 +1,6 @@
 import { ChevronDown } from "lucide-react";
+import { useState } from "react";
+import RecordDetailModal from "../../../../components/shared/RecordDetailModal";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OrderTable — shared table component for all order list pages
@@ -25,6 +27,7 @@ export default function OrderTable({
 }) {
   const someSelected =
     orders.some((o) => selectedIds.includes(o.id)) && !allSelected;
+  const [detailOrder, setDetailOrder] = useState(null);
 
   return (
     <div className="overflow-x-auto font-body">
@@ -164,7 +167,7 @@ export default function OrderTable({
                   {/* Details */}
                   <td className="py-3 pr-4">
                     <button
-                      onClick={() => onDetails?.(order)}
+                      onClick={() => setDetailOrder(order)}
                       className="text-xs font-semibold text-[#004368] hover:underline transition-colors"
                     >
                       Details
@@ -188,6 +191,22 @@ export default function OrderTable({
           )}
         </tbody>
       </table>
+      <RecordDetailModal
+        open={!!detailOrder}
+        title="Order Details"
+        subtitle={detailOrder?.orderNo}
+        record={detailOrder}
+        onClose={() => setDetailOrder(null)}
+        fields={[
+          { label: "Package No.", key: "pkgNo" },
+          { label: "SKU", key: "sku" },
+          { label: "Order Number", key: "orderNo" },
+          { label: "Tracking Number", key: "trackingNo" },
+          { label: "Price", key: "price" },
+          { label: "Create Time", key: "createdAt" },
+          { label: "Status", key: "status" },
+        ]}
+      />
     </div>
   );
 }

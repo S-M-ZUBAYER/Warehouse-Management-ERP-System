@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "react-hot-toast";
+import { toast } from "sonner";
 import api from "../../../lib/api";
 import useDebounce from "../../../hooks/useDebounce";
 
@@ -31,7 +31,10 @@ const fetchCombineSkus = (params) => {
 };
 
 const deleteCombineSku = (id) => api.delete(`/combine-skus/${id}`).then((r) => r.data);
-const bulkDeleteCombineSkus = (ids) => api.delete("/combine-skus/bulk", { data: { ids } }).then((r) => r.data);
+const bulkDeleteCombineSkus = async (ids) => {
+    await Promise.all(ids.map((id) => deleteCombineSku(id)));
+    return { deleted: ids.length };
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Hook

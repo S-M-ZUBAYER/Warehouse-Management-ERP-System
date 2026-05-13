@@ -1,4 +1,4 @@
-import { Package, Boxes, AlertTriangle, XCircle } from "lucide-react";
+import { Package, Boxes, AlertTriangle, XCircle, ShoppingCart } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // KPICard — matches the 4 overview cards in the Figma design
@@ -7,6 +7,7 @@ import { Package, Boxes, AlertTriangle, XCircle } from "lucide-react";
 const ICONS = {
   package: Package,
   boxes: Boxes,
+  cart: ShoppingCart,
   alert: AlertTriangle,
   "x-circle": XCircle,
 };

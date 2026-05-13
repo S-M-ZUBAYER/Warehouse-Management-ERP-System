@@ -23,26 +23,31 @@ import {
   Crown,
 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
+import { getStoredWarehouseUser, filterNavByPermission } from "@/utils/permissions";
 import grozziielogo from "../../assets/Frame.jpg";
 
 // ── Nav config ────────────────────────────────────────────────────────────
 const navItems = [
   {
     label: "Dashboard",
+    permissionKey: "dashboard",
     to: "/warehouse_management",
     icon: LayoutDashboard,
   },
   {
     label: "Product Management",
+    permissionKey: "product_management",
     icon: Package,
     children: [
       {
         label: "Product List",
+        permissionKey: "product_list",
         to: "/warehouse_management/products/list",
         icon: List,
       },
       {
         label: "Combine SKU",
+        permissionKey: "combine_sku",
         to: "/warehouse_management/products/combine_sku",
         icon: GitMerge,
       },
@@ -50,24 +55,29 @@ const navItems = [
   },
   {
     label: "Inventory Management",
+    permissionKey: "inventory_management",
     icon: ClipboardList,
     children: [
       {
         label: "Merchant SKU",
+        permissionKey: "merchant_sku",
         to: "/warehouse_management/inventory/merchant_SKU",
         icon: Layers,
       },
       {
         label: "SKU Mapping",
+        permissionKey: "sku_mapping",
         icon: RotateCcw,
         children: [
           {
             label: "By Product",
+            permissionKey: "sku_mapping_by_product",
             to: "/warehouse_management/inventory/SKU_mapping/byProduct",
             icon: FileText,
           },
           {
             label: "By Merchant",
+            permissionKey: "sku_mapping_by_merchant",
             to: "/warehouse_management/inventory/SKU_mapping/byMerchant",
             icon: AlertCircle,
           },
@@ -75,124 +85,148 @@ const navItems = [
       },
       {
         label: "Inventory List",
+        permissionKey: "inventory_list",
         to: "/warehouse_management/inventory/list",
         icon: SlidersHorizontal,
       },
       {
         label: "Manual inbound",
+        permissionKey: "manual_inbound",
         to: "/warehouse_management/inventory/manual_inbound",
         icon: SlidersHorizontal,
       },
       {
         label: "Inbound",
+        permissionKey: "inbound",
         icon: RotateCcw,
         children: [
           {
             label: "Draft",
+            permissionKey: "inbound_draft",
             to: "/warehouse_management/inventory/inbound/draft",
             icon: FileText,
           },
           {
             label: "On The Way",
+            permissionKey: "inbound_on_the_way",
             to: "/warehouse_management/inventory/inbound/onTheWay",
             icon: AlertCircle,
           },
           {
             label: "Complete",
+            permissionKey: "inbound_complete",
             to: "/warehouse_management/inventory/inbound/completed",
             icon: AlertCircle,
           },
         ],
       },
-      {
-        label: "Outbound Order",
-        to: "/warehouse_management/inventory/outbound_order",
-        icon: SlidersHorizontal,
-      },
+      // {
+      //   label: "Outbound Order",
+      //   permissionKey: "outbound_order",
+      //   to: "/warehouse_management/inventory/outbound_order",
+      //   icon: SlidersHorizontal,
+      // },
       {
         label: "Inventory Log",
+        permissionKey: "inventory_log",
         to: "/warehouse_management/inventory/log",
         icon: SlidersHorizontal,
       },
     ],
   },
-  {
-    label: "Order Management",
-    icon: ShoppingBasket,
-    children: [
-      {
-        label: "Order Processing",
-        icon: RotateCcw,
-        children: [
-          {
-            label: "New Order",
-            to: "/warehouse_management/orders/processing/new_order",
-            icon: FileText,
-          },
-          {
-            label: "Processed Order",
-            to: "/warehouse_management/orders/processing/processed",
-            icon: AlertCircle,
-          },
-          {
-            label: "To Pickup Order",
-            to: "/warehouse_management/orders/processing/pick_up",
-            icon: AlertCircle,
-          },
-          {
-            label: "Shipped Order",
-            to: "/warehouse_management/orders/processing/shipped",
-            icon: AlertCircle,
-          },
-          {
-            label: "Completed",
-            to: "/warehouse_management/orders/processing/completed",
-            icon: AlertCircle,
-          },
-          {
-            label: "All Order",
-            to: "/warehouse_management/orders/processing/all_order",
-            icon: AlertCircle,
-          },
-          {
-            label: "Canceled Order",
-            to: "/warehouse_management/orders/processing/canceled",
-            icon: AlertCircle,
-          },
-        ],
-      },
-      {
-        label: "Manual Order",
-        to: "/warehouse_management/orders/manual_order",
-        icon: RotateCcw,
-      },
-    ],
-  },
+  // {
+  //   label: "Order Management",
+  //   permissionKey: "order_management",
+  //   icon: ShoppingBasket,
+  //   children: [
+  //     {
+  //       label: "Order Processing",
+  //       permissionKey: "order_processing",
+  //       icon: RotateCcw,
+  //       children: [
+  //         {
+  //           label: "New Order",
+  //           permissionKey: "new_order",
+  //           to: "/warehouse_management/orders/processing/new_order",
+  //           icon: FileText,
+  //         },
+  //         {
+  //           label: "Processed Order",
+  //           permissionKey: "processed_order",
+  //           to: "/warehouse_management/orders/processing/processed",
+  //           icon: AlertCircle,
+  //         },
+  //         {
+  //           label: "To Pickup Order",
+  //           permissionKey: "to_pickup_order",
+  //           to: "/warehouse_management/orders/processing/pick_up",
+  //           icon: AlertCircle,
+  //         },
+  //         {
+  //           label: "Shipped Order",
+  //           permissionKey: "shipped_order",
+  //           to: "/warehouse_management/orders/processing/shipped",
+  //           icon: AlertCircle,
+  //         },
+  //         {
+  //           label: "Completed",
+  //           permissionKey: "completed_order",
+  //           to: "/warehouse_management/orders/processing/completed",
+  //           icon: AlertCircle,
+  //         },
+  //         {
+  //           label: "All Order",
+  //           permissionKey: "all_order",
+  //           to: "/warehouse_management/orders/processing/all_order",
+  //           icon: AlertCircle,
+  //         },
+  //         {
+  //           label: "Canceled Order",
+  //           permissionKey: "canceled_order",
+  //           to: "/warehouse_management/orders/processing/canceled",
+  //           icon: AlertCircle,
+  //         },
+  //       ],
+  //     },
+  //     {
+  //       label: "Manual Order",
+  //       permissionKey: "manual_order",
+  //       to: "/warehouse_management/orders/manual_order",
+  //       icon: RotateCcw,
+  //     },
+  //   ],
+  // },
   {
     label: "Warehouse Management",
+    permissionKey: "warehouse_management",
     to: "/warehouse_management/warehouse",
     icon: Warehouse,
   },
   {
     label: "System Configuration",
+    permissionKey: "system_configuration",
     icon: Bolt,
     children: [
       {
         label: "Store Authorization",
+        permissionKey: "store_authorization",
         to: "/warehouse_management/config/store_authorization",
         icon: MapPin,
       },
       {
         label: "Account Management",
+        permissionKey: "account_management",
         icon: RotateCcw,
         children: [
           {
             label: "Sub Account",
+            permissionKey: "sub_account",
             to: "/warehouse_management/config/account_management/sub_account",
             icon: FileText,
           },
           {
             label: "Role Management",
+            permissionKey: "role_management",
             to: "/warehouse_management/config/account_management/role_management",
             icon: AlertCircle,
           },
@@ -224,40 +258,43 @@ function AccordionProvider({ children }) {
   /**
    * @param {string} parentPath  — unique key for this group of siblings, e.g. "root" or "root>Inventory Management"
    * @param {string} label       — the child item being toggled
+   * @param {boolean} currentlyOpen — true when the item is already visually open, including active-route fallback
    */
-  const toggle = (parentPath, label) => {
+  const toggle = (parentPath, label, currentlyOpen = false) => {
     setOpenMap((prev) => {
       const next = { ...prev };
+      const childPrefix = `${parentPath}>${label}`;
 
-      if (next[parentPath] === label) {
-        // Same item clicked → close it
-        delete next[parentPath];
-        // Also close all descendant groups whose key starts with this item's path
-        const childPrefix = `${parentPath}>${label}`;
-        Object.keys(next).forEach((key) => {
-          if (key.startsWith(childPrefix)) delete next[key];
-        });
-      } else {
-        // Close previous open item's descendants at this group
-        const prevLabel = next[parentPath];
-        if (prevLabel) {
-          const prevChildPrefix = `${parentPath}>${prevLabel}`;
-          Object.keys(next).forEach((key) => {
-            if (key.startsWith(prevChildPrefix)) delete next[key];
-          });
-        }
-        // Open the new item
-        next[parentPath] = label;
+      Object.keys(next).forEach((key) => {
+        if (key.startsWith(childPrefix)) delete next[key];
+      });
+
+      if (currentlyOpen || next[parentPath] === label) {
+        // Explicit closed marker keeps active route from immediately reopening
+        // the same dropdown after the user closes it.
+        next[parentPath] = "__closed__";
+        return next;
       }
 
+      const prevLabel = next[parentPath];
+      if (prevLabel && prevLabel !== "__closed__") {
+        const prevChildPrefix = `${parentPath}>${prevLabel}`;
+        Object.keys(next).forEach((key) => {
+          if (key.startsWith(prevChildPrefix)) delete next[key];
+        });
+      }
+
+      next[parentPath] = label;
       return next;
     });
   };
 
   const isOpen = (parentPath, label) => openMap[parentPath] === label;
+  const getOpenLabel = (parentPath) => openMap[parentPath];
+  const hasManualOpen = (parentPath) => Object.prototype.hasOwnProperty.call(openMap, parentPath);
 
   return (
-    <AccordionContext.Provider value={{ toggle, isOpen }}>
+    <AccordionContext.Provider value={{ toggle, isOpen, getOpenLabel, hasManualOpen }}>
       {children}
     </AccordionContext.Provider>
   );
@@ -276,10 +313,15 @@ function NavItem({ item, collapsed, depth = 0, parentPath = "root" }) {
   // This item's group key (used when THIS item is a parent rendering its children)
   const selfPath = `${parentPath}>${item.label}`;
 
-  // Open if accordion says so OR a child route is currently active
-  const open = accordion
-    ? accordion.isOpen(parentPath, item.label) || isAnyChildActive
-    : isAnyChildActive;
+  // Open rules:
+  // 1) User click always wins inside the same sibling group.
+  // 2) If user has not manually opened a sibling group, keep the active route path open.
+  // This fixes: Order Management stays open only while it is the selected/open
+  // root group; clicking Inventory/Product/System closes the previous root group.
+  const manualOpen = accordion ? accordion.isOpen(parentPath, item.label) : false;
+  const groupHasManualOpen = accordion ? accordion.hasManualOpen(parentPath) : false;
+  const open = manualOpen || (!groupHasManualOpen && isAnyChildActive);
+  const visuallyActive = open || (!groupHasManualOpen && isAnyChildActive);
 
   const indentPx = 12 + depth * 12;
 
@@ -327,7 +369,7 @@ function NavItem({ item, collapsed, depth = 0, parentPath = "root" }) {
   // ── Parent item (has children) ─────────────────────────────────────────
   const handleToggle = () => {
     if (!collapsed && accordion) {
-      accordion.toggle(parentPath, item.label);
+      accordion.toggle(parentPath, item.label, open);
     }
   };
 
@@ -340,7 +382,7 @@ function NavItem({ item, collapsed, depth = 0, parentPath = "root" }) {
         className={`w-full flex items-center gap-3 pr-3 py-2.5 rounded-lg transition-all duration-150
           ${collapsed ? "px-3 justify-center" : ""}
           ${
-            isAnyChildActive
+            visuallyActive
               ? "bg-[#004368] text-white font-semibold"
               : "text-[#4A6380] hover:bg-[#EAF1F8] hover:text-[#004368]"
           }`}
@@ -348,7 +390,7 @@ function NavItem({ item, collapsed, depth = 0, parentPath = "root" }) {
         {depth > 0 && !collapsed ? (
           <span
             className={`w-1.5 h-1.5 rounded-full flex-shrink-0
-              ${isAnyChildActive ? "bg-white" : "bg-[#94A3B8]"}`}
+              ${visuallyActive ? "bg-white" : "bg-[#94A3B8]"}`}
           />
         ) : (
           <item.icon size={18} className="flex-shrink-0" />
@@ -421,6 +463,8 @@ function UpgradePlan({ collapsed }) {
 // ── Sidebar ────────────────────────────────────────────────────────────────
 export default function Sidebar() {
   const { sidebarCollapsed, toggleSidebar } = useUIStore();
+  const currentUser = getStoredWarehouseUser();
+  const visibleNavItems = filterNavByPermission(navItems, currentUser);
 
   return (
     <aside
@@ -447,7 +491,7 @@ export default function Sidebar() {
       {/* Nav — scrollable */}
       <AccordionProvider>
         <nav className="flex-1 min-h-0 px-2 py-4 space-y-0.5 overflow-y-auto scrollbar-thin">
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <NavItem
               key={item.to ?? item.label}
               item={item}

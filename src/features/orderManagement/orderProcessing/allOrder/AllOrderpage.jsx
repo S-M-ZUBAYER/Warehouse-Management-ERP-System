@@ -55,7 +55,7 @@ export default function AllOrderPage() {
           }
         />
 
-        <OrderFooter />
+        <OrderFooter selectedRows={list.orders.filter((order) => list.selectedIds.includes(order.id))} />
       </div>
     </div>
   );

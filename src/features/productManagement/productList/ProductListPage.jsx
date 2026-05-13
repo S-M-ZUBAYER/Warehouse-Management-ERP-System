@@ -1,6 +1,5 @@
 // import { Search, ChevronDown, Plus, X, UploadCloud } from "lucide-react";
-// import { useNavigate } from "react-router-dom";
-// import { useProductList } from "../hooks/useProductList";
+// // import { useProductList } from "../hooks/useProductList";
 // import SelectDropdown from "../../../components/shared/SelectDropdown";
 // import Topbar from "../../../components/layout/Topbar";
 // import { useState } from "react";
@@ -508,7 +507,6 @@
 //   );
 // }
 
-import { useNavigate } from "react-router-dom";
 import { useProductList } from "../hooks/useProductList";
 import Topbar from "../../../components/layout/Topbar";
 import ProductFilterBar from "./component/ProductFilterBar";
@@ -516,7 +514,6 @@ import ProductTable from "./component/ProductTable";
 import { AddSkuModal, ConfirmModal } from "./component/ProductModals";
 
 export default function ProductListPage() {
-  const navigate = useNavigate();
   const {
     search,
     setSearch,
@@ -552,6 +549,8 @@ export default function ProductListPage() {
     dropdownsLoading,
     showAddModal,
     setShowAddModal,
+    editingProduct,
+    openEditModal,
     form,
     errors,
     fileInputRef,
@@ -622,10 +621,13 @@ export default function ProductListPage() {
         resetFilters={resetFilters}
         setShowAddModal={setShowAddModal}
         openDeleteModal={openDeleteModal}
+        openEditModal={openEditModal}
       />
 
       {showAddModal && (
         <AddSkuModal
+          title={editingProduct ? "Edit Merchant SKU" : "Add Single Merchant SKU"}
+          subtitle={editingProduct ? "Update this Merchant SKU without leaving the page." : "Add a new Merchant SKU to your inventory."}
           form={form}
           errors={errors}
           fileInputRef={fileInputRef}

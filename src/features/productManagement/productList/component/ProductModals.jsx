@@ -8,6 +8,21 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
+const formatDetailsForEdit = (value) => {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "object") return JSON.stringify(value, null, 2);
+  if (typeof value !== "string") return String(value);
+
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  try {
+    return JSON.stringify(JSON.parse(trimmed), null, 2);
+  } catch {
+    return value;
+  }
+};
+
 // ── Confirm Modal (shared) ────────────────────────────────────────────────────
 export function ConfirmModal({
   title,
@@ -68,6 +83,8 @@ export function ConfirmModal({
 
 // ── Add SKU Modal ─────────────────────────────────────────────────────────────
 export function AddSkuModal({
+  title = "Add Single Merchant SKU",
+  subtitle = "Add a new Merchant SKU to your inventory.",
   form,
   errors,
   fileInputRef,
@@ -99,7 +116,7 @@ export function AddSkuModal({
       <div
         className="bg-white rounded-2xl shadow-xl w-full font-body overflow-hidden"
         style={{
-          maxWidth: "500px",
+          maxWidth: "560px",
           maxHeight: "90vh",
           overflowY: "auto",
           animation: "popIn 0.18s ease both",
@@ -109,10 +126,10 @@ export function AddSkuModal({
         <div className="flex items-start justify-between px-7 pt-7 pb-2">
           <div>
             <h2 className="text-lg font-bold text-slate-800 font-display">
-              Add Single Merchant SKU
+              {title}
             </h2>
             <p className="text-xs text-slate-500 mt-1">
-              Add a new Merchant SKU to your inventory.
+              {subtitle}
             </p>
           </div>
           <button
@@ -194,11 +211,6 @@ export function AddSkuModal({
                 name: "skuName",
                 placeholder: "Write SKU here",
               },
-              {
-                label: "*Product Details",
-                name: "productDetails",
-                placeholder: "Product details here",
-              },
               { label: "GTIN", name: "gtin", placeholder: "GTIN here" },
               {
                 label: "Product Price",
@@ -232,6 +244,27 @@ export function AddSkuModal({
                 )}
               </div>
             ))}
+
+            <div className="col-span-2">
+              <label className="block text-xs text-slate-600 mb-1">
+                *Product Details
+              </label>
+              <textarea
+                name="productDetails"
+                value={formatDetailsForEdit(form.productDetails)}
+                onChange={handleFormChange}
+                placeholder='Product details or JSON, e.g. {"platform":"tiktok","seller_sku":"Aface01N"}'
+                rows={7}
+                disabled={saving}
+                className={`w-full px-3 py-2 text-sm border rounded-lg bg-white text-slate-700 placeholder-slate-400 outline-none transition-all resize-y font-mono leading-5 disabled:opacity-60
+                  ${errors.productDetails ? "border-red-300 focus:border-red-400 bg-red-50/30" : "border-surface-border focus:border-primary focus:ring-2 focus:ring-primary/10"}`}
+              />
+              {errors.productDetails && (
+                <p className="text-xs text-red-500 mt-0.5 flex items-center gap-1">
+                  <AlertCircle size={10} /> {errors.productDetails}
+                </p>
+              )}
+            </div>
 
             {/* Size */}
             <div>

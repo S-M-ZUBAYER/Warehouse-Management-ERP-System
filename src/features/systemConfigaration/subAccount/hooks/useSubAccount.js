@@ -1,5 +1,6 @@
 // import { useState, useMemo, useRef } from "react";
 // import api from "../../../../lib/api";
+// import authApi from "../../../../lib/authApi";
 // import useDebounce from "../../../../hooks/useDebounce";
 // import { useQuery, useQueryClient } from "@tanstack/react-query";
 // import { toast } from "sonner";
@@ -380,6 +381,7 @@
 
 import { useState, useMemo, useRef, useCallback } from "react";
 import api from "../../../../lib/api";
+import authApi from "../../../../lib/authApi";
 import useDebounce from "../../../../hooks/useDebounce";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -391,16 +393,6 @@ import { toast } from "sonner";
 // NOTE: Replace this with a real API call (/connections or /stores) once
 // the back-end endpoint is available. Hardcoded data should never ship to
 // production — it drifts from reality and can't be invalidated/re-fetched.
-const MARKETPLACE_STORES = [
-    { id: 1, marketplace: "Shopee", storeName: "Shopee1" },
-    { id: 2, marketplace: "Shopee", storeName: "Shopee2" },
-    { id: 3, marketplace: "Lazada", storeName: "Lazada1" },
-    { id: 4, marketplace: "Lazada", storeName: "Lazada2" },
-    { id: 5, marketplace: "TikTok", storeName: "TikTok1" },
-    { id: 6, marketplace: "TikTok", storeName: "TikTok2" },
-    { id: 7, marketplace: "TikTok", storeName: "TikTok3" },
-];
-
 const EMPTY_FORM = Object.freeze({
     photo: null,
     photoPreview: null,
@@ -419,6 +411,7 @@ const EMPTY_FORM = Object.freeze({
 // ── Query Keys ────────────────────────────────────────────────────────────────
 export const SUB_ACCOUNT_QUERY_KEY = ["sub-accounts"];
 export const ROLES_ALL_QUERY_KEY = ["roles-all"];
+export const PLATFORM_STORES_QUERY_KEY = ["platform-stores", "sub-account-permissions"];
 const warehouseQueryKey = (search) => ["warehouses-all", search];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -464,6 +457,27 @@ const fetchAllWarehouses = (search = "") => {
 
 const fetchAllRoles = () => fetchPaginated("/roles");
 const fetchAllUsers = () => fetchPaginated("/users");
+const fetchPlatformStores = () =>
+    api.get("/platform-stores", { params: { page: 1, limit: 1000 } }).then((res) => {
+        if (Array.isArray(res?.data)) return res.data;
+        return [];
+    });
+
+const platformLabel = (value) => {
+    const normalized = String(value || "").toLowerCase();
+    if (normalized === "shopee") return "Shopee";
+    if (normalized === "lazada") return "Lazada";
+    if (normalized === "tiktok") return "TikTok";
+    return value || "-";
+};
+
+const normalizeStorePermission = (store) => ({
+    id: store.id,
+    marketplace: platformLabel(store.platform),
+    storeName: store.store_name || store.external_store_name || `Store #${store.id}`,
+    storeId: store.external_store_id || store.store_shop_id || store.id,
+    raw: store,
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Validation — pure, outside the hook
@@ -472,9 +486,78 @@ const validateSubAccountForm = (form, isEdit) => {
     const e = {};
     if (!form.name.trim()) e.name = "Name is required";
     if (!form.accountId.trim()) e.accountId = "Account ID is required";
+    if (!form.email.trim()) e.email = "Email is required";
     if (!isEdit && !form.password.trim()) e.password = "Password is required";
     if (!form.roleId) e.roleId = "Role is required";
     return e;
+};
+
+const getExternalAuthMessage = (errOrRes) => {
+    const raw = errOrRes?.response?.data || errOrRes?.data || errOrRes || {};
+    return raw?.message || raw?.error || errOrRes?.message || "External auth sync failed.";
+};
+
+const syncExternalAuthForSubAccount = async ({ name, email, password, photo }) => {
+    const userName = String(name || "").trim();
+    const userEmail = String(email || "").trim();
+    const userPassword = String(password || "").trim();
+
+    if (!userEmail || !userPassword) {
+        throw new Error("Sub-account email and password are required for auth sync.");
+    }
+
+    let signupSucceededOrAlreadyExists = false;
+   
+    try {
+        const signupRes = await authApi.post("/dev/user/signUp2", {
+            userId: 0,
+            userName: userName || userEmail,
+            userEmail,
+            userPassword,
+            role: "user",
+            photo: photo || "string",
+            emailVerified: true,
+        });
+
+        const signupMessage = getExternalAuthMessage(signupRes);
+        const isSignupSuccess =
+            signupRes?.status === "success" ||
+            signupRes?.code === 200 ||
+            signupRes?.data?.code === 200 ||
+            signupRes?.success === true;
+
+        if (isSignupSuccess || signupMessage.toLowerCase().includes("already")) {
+            signupSucceededOrAlreadyExists = true;
+        } else {
+            throw new Error(signupMessage || "External signup failed.");
+        }
+    } catch (err) {
+        const signupMessage = getExternalAuthMessage(err);
+        if (signupMessage.toLowerCase().includes("already")) {
+            signupSucceededOrAlreadyExists = true;
+        } else {
+            throw new Error(signupMessage || "External signup failed.");
+        }
+    }
+
+    if (!signupSucceededOrAlreadyExists) return;
+
+    try {
+        const signInRes = await authApi.post("/dev/user/signIn2", {
+            userEmail,
+            userPassword,
+        });
+
+        if (signInRes?.status && signInRes.status !== "success") {
+            throw new Error(signInRes?.message || "External auth login check failed.");
+        }
+    } catch (err) {
+        const signInMessage = getExternalAuthMessage(err);
+        throw new Error(
+            signInMessage ||
+            "External auth login check failed. Please use the same password as the existing auth account."
+        );
+    }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -549,6 +632,17 @@ export function useSubAccount() {
         gcTime: 1000 * 60 * 5,
     });
 
+    const {
+        data: rawStores = [],
+        isLoading: storeLoading,
+        isError: storeError,
+    } = useQuery({
+        queryKey: PLATFORM_STORES_QUERY_KEY,
+        queryFn: fetchPlatformStores,
+        staleTime: 1000 * 60 * 2,
+        gcTime: 1000 * 60 * 5,
+    });
+
     // Client-side search filter — only re-runs when search or rawAccounts change
     const filteredAccounts = useMemo(() => {
         if (!search.trim()) return rawAccounts;
@@ -562,22 +656,41 @@ export function useSubAccount() {
     }, [search, rawAccounts]);
 
     // Store filter — stable useMemo
+    const stores = useMemo(
+        () => rawStores.map(normalizeStorePermission),
+        [rawStores]
+    );
+
+    const storeMarketplaceOptions = useMemo(
+        () => ["All", ...Array.from(new Set(stores.map((store) => store.marketplace).filter(Boolean)))],
+        [stores]
+    );
+
     const filteredStores = useMemo(() => {
-        if (!storeSearch.trim()) return MARKETPLACE_STORES;
-        const q = storeSearch.toLowerCase();
-        return MARKETPLACE_STORES.filter(
+        let list = stores;
+        if (storeMarketplace !== "All") {
+            list = list.filter((s) => s.marketplace === storeMarketplace);
+        }
+        if (!storeSearch.trim()) return list;
+        const q = storeSearch.trim().toLowerCase();
+        return list.filter(
             (s) =>
                 s.marketplace.toLowerCase().includes(q) ||
-                s.storeName.toLowerCase().includes(q)
+                s.storeName.toLowerCase().includes(q) ||
+                String(s.storeId || "").toLowerCase().includes(q)
         );
-    }, [storeSearch]);
+    }, [storeMarketplace, storeSearch, stores]);
 
     // ── Save mutation ─────────────────────────────────────────────────────────
     const saveMutation = useMutation({
-        mutationFn: ({ payload, editAccount }) =>
-            editAccount
-                ? api.put(`/users/${editAccount.id}`, payload)
-                : api.post("/users/upsert", payload),
+        mutationFn: async ({ payload, editAccount, externalAuthPayload }) => {
+            if (editAccount) {
+                return api.put(`/users/${editAccount.id}`, payload);
+            }
+
+            await syncExternalAuthForSubAccount(externalAuthPayload);
+            return api.post("/users/upsert", payload);
+        },
         onSuccess: (_, { editAccount }) => {
             toast.success(editAccount ? "Account updated successfully" : "Account created successfully");
             queryClient.invalidateQueries({ queryKey: SUB_ACCOUNT_QUERY_KEY });
@@ -729,7 +842,16 @@ export function useSubAccount() {
             ...(form.password.trim() && { password: form.password }),
         };
 
-        saveMutation.mutate({ payload, editAccount });
+        saveMutation.mutate({
+            payload,
+            editAccount,
+            externalAuthPayload: {
+                name: form.name,
+                email: form.email,
+                password: form.password,
+                photo: form.photoPreview,
+            },
+        });
     }, [form, editAccount, selectedStores, selectedWarehouses, saveMutation]);
 
     // ── Delete ────────────────────────────────────────────────────────────────
@@ -774,7 +896,10 @@ export function useSubAccount() {
         storeSearch, setStoreSearch,
         warehouseSearch, setWarehouseSearch,
         storeMarketplace, setStoreMarketplace,
+        storeMarketplaceOptions,
         filteredStores,
+        storeLoading,
+        storeError,
         filteredWarehouses: warehouses,
 
         // permission selection

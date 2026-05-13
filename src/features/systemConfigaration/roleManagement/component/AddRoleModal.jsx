@@ -14,6 +14,8 @@ export default function AddRoleModal({
   form,
   onChange,
   togglePermission,
+  toggleAllPermissions,
+  isAllSelected,
   errors,
   saving,
   onAdd,
@@ -32,7 +34,7 @@ export default function AddRoleModal({
     >
       <div
         className="bg-white rounded-2xl shadow-xl w-full font-body"
-        style={{ maxWidth: "440px", animation: "popIn 0.18s ease both" }}
+        style={{ maxWidth: "720px", animation: "popIn 0.18s ease both" }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-7 pt-7 pb-5">
@@ -48,7 +50,7 @@ export default function AddRoleModal({
           </button>
         </div>
 
-        <div className="px-7 pb-7 space-y-5">
+        <div className="px-7 pb-7 space-y-5 max-h-[82vh] overflow-y-auto">
           {/* Basic Information */}
           <div>
             <p className="text-sm font-bold text-slate-800 mb-3">
@@ -96,8 +98,8 @@ export default function AddRoleModal({
             <p className="text-sm font-bold text-slate-800 mb-3">
               Set Permissions
             </p>
-            <div className="border border-surface-border rounded-xl overflow-hidden">
-              <div className="max-h-96 overflow-y-auto">
+            <div className="border border-surface-border rounded-xl overflow-hidden bg-white">
+              <div className="max-h-[430px] overflow-y-auto">
                 {" "}
                 {/* 👈 scroll wrapper */}
                 <table className="w-full text-sm">
@@ -105,8 +107,16 @@ export default function AddRoleModal({
                     {" "}
                     {/* 👈 sticky header */}
                     <tr className="border-b border-surface-border">
-                      <th className="py-2.5 text-center text-xs font-semibold text-slate-600 w-16">
-                        Select
+                      <th className="py-2.5 text-center text-xs font-semibold text-slate-600 w-24">
+                        <label className="inline-flex items-center justify-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={isAllSelected}
+                            onChange={(e) => toggleAllPermissions(e.target.checked)}
+                            className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
+                          />
+                          <span>Select All</span>
+                        </label>
                       </th>
                       <th className="py-2.5 text-center text-xs font-semibold text-slate-600">
                         Webpage name

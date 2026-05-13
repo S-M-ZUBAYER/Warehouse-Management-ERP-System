@@ -1,108 +1,196 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import api from "../../../lib/api";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// useDashboardData — provides all data for the dashboard page
-// Replace mock data with real API calls when backend is ready
-// ─────────────────────────────────────────────────────────────────────────────
+const now = new Date();
+const currentYear = now.getFullYear();
+const currentMonth = now.getMonth() + 1;
+
+const formatNumber = (value) => Number(value || 0).toLocaleString();
+
+const emptyDailyRows = (year = currentYear, month = currentMonth, defaults = {}) => {
+  const days = new Date(year, month, 0).getDate();
+  return Array.from({ length: days }, (_, index) => {
+    const day = index + 1;
+    return {
+      date: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+      day,
+      label: String(day).padStart(2, "0"),
+      ...defaults,
+    };
+  });
+};
+
+const defaultSummary = {
+  totalProducts: 0,
+  todayOrders: 0,
+  totalStockUnits: 0,
+  lowStock: 0,
+  outOfStock: 0,
+  platforms: [],
+};
+
+const defaultOrderStatus = [
+  { name: "Pending Orders", value: 220, color: "#F59E0B" },
+  { name: "Processing Orders", value: 180, color: "#3B82F6" },
+  { name: "Shipped Orders", value: 310, color: "#8B5CF6" },
+  { name: "Completed Orders", value: 420, color: "#22C55E" },
+  { name: "Cancelled Orders", value: 80, color: "#EF4444" },
+];
 
 export function useDashboardData() {
-    const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState(defaultSummary);
+  const [inventoryData, setInventoryData] = useState(
+    emptyDailyRows(currentYear, currentMonth, { stockIn: 0, stockOut: 0 })
+  );
+  const [salesTrendsData, setSalesTrendsData] = useState(
+    emptyDailyRows(currentYear, currentMonth, { sales: 0, quantity: 0, orders: 0 })
+  );
 
-    useEffect(() => {
-        const timer = setTimeout(() => setLoading(false), 600);
-        return () => clearTimeout(timer);
-    }, []);
+  const [inventoryYear, setInventoryYear] = useState(currentYear);
+  const [inventoryMonth, setInventoryMonth] = useState(currentMonth);
+  const [salesYear, setSalesYear] = useState(currentYear);
+  const [salesMonth, setSalesMonth] = useState(currentMonth);
+  const [salesPlatform, setSalesPlatform] = useState("all");
 
-    // ── Overview KPI cards ────────────────────────────────────────────────────
-    const kpiCards = [
-        {
-            id: "total_products",
-            label: "Total Products",
-            value: "14,525",
-            icon: "package",
-            color: "#3B82F6",
-            bg: "#EFF6FF",
+  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [inventoryLoading, setInventoryLoading] = useState(true);
+  const [salesLoading, setSalesLoading] = useState(true);
+
+  const fetchSummary = useCallback(async () => {
+    setSummaryLoading(true);
+    try {
+      const res = await api.get("/dashboard/summary");
+      setSummary({ ...defaultSummary, ...(res?.data || {}) });
+    } catch (err) {
+      console.error("Dashboard summary failed", err);
+      setSummary(defaultSummary);
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, []);
+
+  const fetchInventoryStatus = useCallback(async () => {
+    setInventoryLoading(true);
+    try {
+      const res = await api.get("/dashboard/inventory-status", {
+        params: { year: inventoryYear, month: inventoryMonth },
+      });
+      setInventoryData(
+        res?.data?.data?.length
+          ? res.data.data
+          : emptyDailyRows(inventoryYear, inventoryMonth, { stockIn: 0, stockOut: 0 })
+      );
+    } catch (err) {
+      console.error("Dashboard inventory status failed", err);
+      setInventoryData(emptyDailyRows(inventoryYear, inventoryMonth, { stockIn: 0, stockOut: 0 }));
+    } finally {
+      setInventoryLoading(false);
+    }
+  }, [inventoryYear, inventoryMonth]);
+
+  const fetchSalesTrends = useCallback(async () => {
+    setSalesLoading(true);
+    try {
+      const res = await api.get("/dashboard/sales-trends", {
+        params: {
+          year: salesYear,
+          month: salesMonth,
+          platform: salesPlatform === "all" ? "" : salesPlatform,
         },
-        {
-            id: "total_stock",
-            label: "Total Stock Unit",
-            value: "154,536",
-            icon: "boxes",
-            color: "#22C55E",
-            bg: "#F0FDF4",
-        },
-        {
-            id: "low_stock",
-            label: "Low Stock",
-            value: "500",
-            icon: "alert",
-            color: "#F59E0B",
-            bg: "#FFFBEB",
-        },
-        {
-            id: "out_of_stock",
-            label: "Out of Stock",
-            value: "100",
-            icon: "x-circle",
-            color: "#EF4444",
-            bg: "#FEF2F2",
-        },
-    ];
+      });
+      setSalesTrendsData(
+        res?.data?.data?.length
+          ? res.data.data
+          : emptyDailyRows(salesYear, salesMonth, { sales: 0, quantity: 0, orders: 0 })
+      );
+    } catch (err) {
+      console.error("Dashboard sales trends failed", err);
+      setSalesTrendsData(emptyDailyRows(salesYear, salesMonth, { sales: 0, quantity: 0, orders: 0 }));
+    } finally {
+      setSalesLoading(false);
+    }
+  }, [salesYear, salesMonth, salesPlatform]);
 
-    // ── Inventory Status chart data (line chart) ──────────────────────────────
-    const inventoryData = [
-        { month: "Oct 23", stockIn: 80000, stockOut: 60000 },
-        { month: "Jan 24", stockIn: 100000, stockOut: 75000 },
-        { month: "Feb 24", stockIn: 120000, stockOut: 95000 },
-        { month: "Mar 24", stockIn: 115000, stockOut: 110000 },
-        { month: "Apr 24", stockIn: 130000, stockOut: 105000 },
-        { month: "May 24", stockIn: 145000, stockOut: 115000 },
-        { month: "Jun 24", stockIn: 160000, stockOut: 125000 },
-        { month: "Jul 24", stockIn: 175000, stockOut: 140000 },
-    ];
+  useEffect(() => {
+    fetchSummary();
+  }, [fetchSummary]);
 
-    // ── Order Status chart data (donut chart) ─────────────────────────────────
-    const orderStatusData = [
-        { name: "Pending Orders", value: 220, color: "#F59E0B" },
-        { name: "Processing Orders", value: 180, color: "#3B82F6" },
-        { name: "Shipped Orders", value: 310, color: "#8B5CF6" },
-        { name: "Completed Orders", value: 420, color: "#22C55E" },
-        { name: "Cancelled Orders", value: 80, color: "#EF4444" },
-    ];
+  useEffect(() => {
+    fetchInventoryStatus();
+  }, [fetchInventoryStatus]);
 
-    // ── Sales Trends chart data (area chart) ──────────────────────────────────
-    const salesTrendsData = [
-        { date: "Feb 23", sales: 120 },
-        { date: "Mar 23", sales: 140 },
-        { date: "Apr 23", sales: 110 },
-        { date: "May 23", sales: 160 },
-        { date: "Jun 23", sales: 130 },
-        { date: "Jul 23", sales: 175 },
-        { date: "Aug 23", sales: 145 },
-        { date: "Sep 23", sales: 190 },
-        { date: "Oct 23", sales: 220 },
-        { date: "Nov 23", sales: 210 },
-        { date: "Dec 23", sales: 280 },
-        { date: "Jan 24", sales: 310 }, // peak
-        { date: "Feb 24", sales: 240 },
-        { date: "Mar 24", sales: 195 },
-        { date: "Apr 24", sales: 230 },
-        { date: "May 24", sales: 260 },
-        { date: "Jun 24", sales: 245 },
-        { date: "Jul 24", sales: 280 },
-        { date: "Aug 24", sales: 300 },
-        { date: "Sep 24", sales: 270 },
-        { date: "Oct 24", sales: 290 },
-    ];
+  useEffect(() => {
+    fetchSalesTrends();
+  }, [fetchSalesTrends]);
 
-    const platforms = ["All", "Amazon", "Shopify", "eBay", "WooCommerce"];
+  const kpiCards = useMemo(
+    () => [
+      {
+        id: "total_products",
+        label: "Total Products",
+        value: formatNumber(summary.totalProducts),
+        icon: "package",
+        color: "#3B82F6",
+        bg: "#EFF6FF",
+      },
+      {
+        id: "today_orders",
+        label: "Today Orders",
+        value: formatNumber(summary.todayOrders),
+        icon: "cart",
+        color: "#22C55E",
+        bg: "#F0FDF4",
+      },
+      {
+        id: "low_stock",
+        label: "Low Stock",
+        value: formatNumber(summary.lowStock),
+        icon: "alert",
+        color: "#F59E0B",
+        bg: "#FFFBEB",
+      },
+      {
+        id: "out_of_stock",
+        label: "Out of Stock",
+        value: formatNumber(summary.outOfStock),
+        icon: "x-circle",
+        color: "#EF4444",
+        bg: "#FEF2F2",
+      },
+    ],
+    [summary]
+  );
 
-    return {
-        loading,
-        kpiCards,
-        inventoryData,
-        orderStatusData,
-        salesTrendsData,
-        platforms,
-    };
+  const platforms = useMemo(() => {
+    const apiPlatforms = (summary.platforms || []).filter(Boolean);
+    return ["all", ...apiPlatforms.filter((p, i) => apiPlatforms.indexOf(p) === i)];
+  }, [summary.platforms]);
+
+  const years = useMemo(() => {
+    const start = currentYear - 3;
+    const end = currentYear + 1;
+    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+  }, []);
+
+  return {
+    loading: summaryLoading,
+    kpiCards,
+    inventoryData,
+    orderStatusData: defaultOrderStatus,
+    salesTrendsData,
+    platforms,
+    years,
+    inventoryLoading,
+    salesLoading,
+    inventoryYear,
+    inventoryMonth,
+    setInventoryYear,
+    setInventoryMonth,
+    salesYear,
+    salesMonth,
+    salesPlatform,
+    setSalesYear,
+    setSalesMonth,
+    setSalesPlatform,
+  };
 }

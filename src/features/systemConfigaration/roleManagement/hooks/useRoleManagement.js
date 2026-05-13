@@ -1,7 +1,6 @@
-// import { useState, useMemo } from "react";
 // import { useQuery, useQueryClient } from "@tanstack/react-query";
 // import api from "../../../../lib/api";
-// import { toast } from "react-hot-toast";
+// import { toast } from "sonner";
 
 // const PAGE_LIMIT_ROLES = 10;
 
@@ -396,7 +395,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import api from "../../../../lib/api";
-import { toast } from "sonner"; // ✅ unified: was react-hot-toast in original
+import { toast } from "sonner"; // ✅ unified: was sonner in original
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants & query keys
@@ -407,7 +406,136 @@ const PAGE_LIMIT_ROLES = 10;
 export const ROLES_QUERY_KEY = ["roles-all"];
 export const PAGES_QUERY_KEY = ["pages-hierarchy"];
 
-const EMPTY_FORM = Object.freeze({ role: "", description: "", permissions: {} });
+const EMPTY_FORM = Object.freeze({ role: "", description: "", permissions: { dashboard: true } });
+
+
+// Full permission tree must match the real sidebar navItems. The backend /pages
+// table is currently missing some newer pages (Merchant SKU, SKU Mapping,
+// Manual Inbound, Outbound Order, Inventory Log, To Pickup Order), so the role
+// modal uses this complete tree and the backend stores the same JSON keys.
+const SIDEBAR_PERMISSION_TREE = [
+  { key: "dashboard", display: "Dashboard", level: 1, sub: [] },
+  {
+    key: "product_management", display: "Product Management", level: 1, sub: [
+      { key: "product_list", display: "Product List", level: 2, sub: [] },
+      { key: "combine_sku", display: "Combine SKU", level: 2, sub: [] },
+    ],
+  },
+  {
+    key: "inventory_management", display: "Inventory Management", level: 1, sub: [
+      { key: "merchant_sku", display: "Merchant SKU", level: 2, sub: [] },
+      { key: "sku_mapping", display: "SKU Mapping", level: 2, sub: [
+        { key: "sku_mapping_by_product", display: "By Product", level: 3, sub: [] },
+        { key: "sku_mapping_by_merchant", display: "By Merchant", level: 3, sub: [] },
+      ]},
+      { key: "inventory_list", display: "Inventory List", level: 2, sub: [] },
+      { key: "manual_inbound", display: "Manual Inbound", level: 2, sub: [] },
+      { key: "inbound", display: "Inbound", level: 2, sub: [
+        { key: "inbound_draft", display: "Draft", level: 3, sub: [] },
+        { key: "inbound_on_the_way", display: "On The Way", level: 3, sub: [] },
+        { key: "inbound_complete", display: "Complete", level: 3, sub: [] },
+      ]},
+      { key: "outbound_order", display: "Outbound Order", level: 2, sub: [] },
+      { key: "inventory_log", display: "Inventory Log", level: 2, sub: [] },
+    ],
+  },
+  {
+    key: "order_management", display: "Order Management", level: 1, sub: [
+      { key: "order_processing", display: "Order Processing", level: 2, sub: [
+        { key: "new_order", display: "New Order", level: 3, sub: [] },
+        { key: "processed_order", display: "Processed Order", level: 3, sub: [] },
+        { key: "to_pickup_order", display: "To Pickup Order", level: 3, sub: [] },
+        { key: "shipped_order", display: "Shipped Order", level: 3, sub: [] },
+        { key: "completed_order", display: "Completed", level: 3, sub: [] },
+        { key: "all_order", display: "All Order", level: 3, sub: [] },
+        { key: "canceled_order", display: "Canceled Order", level: 3, sub: [] },
+      ]},
+      { key: "manual_order", display: "Manual Order", level: 2, sub: [] },
+    ],
+  },
+  { key: "warehouse_management", display: "Warehouse Management", level: 1, sub: [] },
+  {
+    key: "system_configuration", display: "System Configuration", level: 1, sub: [
+      { key: "store_authorization", display: "Store Authorization", level: 2, sub: [] },
+      { key: "account_management", display: "Account Management", level: 2, sub: [
+        { key: "sub_account", display: "Sub Account", level: 3, sub: [] },
+        { key: "role_management", display: "Role Management", level: 3, sub: [] },
+      ]},
+    ],
+  },
+];
+
+const withIds = (nodes, prefix = "p") => nodes.map((node, idx) => ({
+  ...node,
+  id: node.id ?? `${prefix}-${node.key}-${idx}`,
+  sub: node.sub?.length ? withIds(node.sub, `${prefix}-${idx}`) : [],
+}));
+
+const pagesForUi = () => withIds(SIDEBAR_PERMISSION_TREE);
+
+const collectPermissionKeys = (nodes) => {
+  const keys = [];
+  for (const node of nodes || []) {
+    keys.push(node.key);
+    if (node.sub?.length) keys.push(...collectPermissionKeys(node.sub));
+  }
+  return keys;
+};
+
+const ALL_PERMISSION_KEYS = collectPermissionKeys(SIDEBAR_PERMISSION_TREE);
+
+const normalizePermissionsForSave = (permissions = {}) => ({
+  ...permissions,
+  dashboard: true, // Dashboard is always available for every role.
+});
+
+const buildPayloadFromTree = (nodes, permissions, depth = 0) => {
+  const normalized = normalizePermissionsForSave(permissions);
+  const payload = {};
+  for (const node of nodes) {
+    if (node.sub?.length) {
+      payload[node.key] = {
+        access: !!normalized[node.key],
+        sub: buildPayloadFromTree(node.sub, normalized, depth + 1),
+      };
+    } else if (depth === 0) {
+      // Top-level leaf permissions must be objects because the backend validator
+      // expects permissions.dashboard / permissions.warehouse_management as objects.
+      payload[node.key] = { access: !!normalized[node.key] };
+    } else {
+      payload[node.key] = !!normalized[node.key];
+    }
+  }
+  return payload;
+};
+
+const buildPermissionsPayload = (permissions) => buildPayloadFromTree(SIDEBAR_PERMISSION_TREE, permissions);
+
+const findNode = (nodes, key) => {
+  for (const node of nodes || []) {
+    if (node.key === key) return node;
+    const found = findNode(node.sub, key);
+    if (found) return found;
+  }
+  return null;
+};
+
+const setDescendants = (node, permissions, value) => {
+  for (const child of node?.sub || []) {
+    permissions[child.key] = value;
+    setDescendants(child, permissions, value);
+  }
+};
+
+const markAncestors = (nodes, childKey, permissions) => {
+  for (const node of nodes || []) {
+    if (node.sub?.some((child) => child.key === childKey) || markAncestors(node.sub, childKey, permissions)) {
+      permissions[node.key] = true;
+      return true;
+    }
+  }
+  return false;
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pure helpers — outside the hook so references are stable across renders.
@@ -425,87 +553,41 @@ const formatPages = (nodes) =>
         sub: node.sub?.length ? formatPages(node.sub) : [],
     }));
 
-/** Converts a raw API role into the UI shape used by the table. */
-const normalizeRole = (r) => ({
-    id: r.id,
-    name: r.name,
-    linkStatus:
-        r.sub_account_linking_status === "not_linked" ? "Not Linked" : "Linked",
-    createdAt: new Date(r.createdAt).toLocaleString("en-GB", {
-        day: "2-digit", month: "short", year: "numeric",
-        hour: "2-digit", minute: "2-digit",
-    }),
-    updatedAt: new Date(r.updatedAt).toLocaleString("en-GB", {
-        day: "2-digit", month: "short", year: "numeric",
-        hour: "2-digit", minute: "2-digit",
-    }),
-    userCount: r.user_count,
-    description: r.description,
-    // Keep the raw permissions so openEditModal can pre-populate correctly.
-    rawPermissions: r.permissions ?? null,
-});
+const formatRoleDate = (value) => {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "—";
+    return new Intl.DateTimeFormat("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+    }).format(date);
+};
 
-/**
- * Builds the nested permissions payload the API expects from the flat
- * { [pageKey]: boolean } object that the form stores.
- *
- * If you add new pages in the future, extend this map accordingly.
- */
-const buildPermissionsPayload = (p) => ({
-    dashboard: { access: !!p.dashboard },
-    product_management: {
-        access: !!p.product_management,
-        sub: {
-            product_list: !!p.product_list,
-            combine_sku: !!p.combine_sku,
-        },
-    },
-    inventory_management: {
-        access: !!p.inventory_management,
-        sub: {
-            inventory_list: !!p.inventory_list,
-            inbound: {
-                access: !!p.inbound,
-                sub: {
-                    inbound_draft: !!p.inbound_draft,
-                    inbound_on_the_way: !!p.inbound_on_the_way,
-                    inbound_complete: !!p.inbound_complete,
-                },
-            },
-        },
-    },
-    order_management: {
-        access: !!p.order_management,
-        sub: {
-            order_processing: {
-                access: !!p.order_processing,
-                sub: {
-                    new_order: !!p.new_order,
-                    processed_order: !!p.processed_order,
-                    shipped_order: !!p.shipped_order,
-                    completed_order: !!p.completed_order,
-                    all_order: !!p.all_order,
-                    canceled_order: !!p.canceled_order,
-                },
-            },
-            manual_order: !!p.manual_order,
-        },
-    },
-    warehouse_management: { access: !!p.warehouse_management },
-    system_configuration: {
-        access: !!p.system_configuration,
-        sub: {
-            store_authorization: !!p.store_authorization,
-            account_management: {
-                access: !!p.account_management,
-                sub: {
-                    sub_account: !!p.sub_account,
-                    role_management: !!p.role_management,
-                },
-            },
-        },
-    },
-});
+/** Converts a raw API role into the UI shape used by the table. */
+const normalizeRole = (r) => {
+    const linkedCount = Number(r.user_count ?? r.userCount ?? 0);
+    const savedStatus = String(r.sub_account_linking_status || "").toLowerCase();
+
+    return {
+        id: r.id,
+        name: r.name,
+        linkStatus: linkedCount > 0
+            ? `Linked (${linkedCount})`
+            : savedStatus === "linked"
+                ? "Linked"
+                : "Not Linked",
+        createdAt: formatRoleDate(r.createdAt ?? r.created_at),
+        updatedAt: formatRoleDate(r.updatedAt ?? r.updated_at),
+        userCount: linkedCount,
+        description: r.description,
+        // Keep the raw permissions so openEditModal can pre-populate correctly.
+        rawPermissions: r.permissions ?? null,
+    };
+};
 
 /**
  * Flattens a nested permissions object (as returned by the API) back into
@@ -549,8 +631,10 @@ const fetchAllRoles = async () => {
 };
 
 const fetchPages = async () => {
-    const response = await api.get("/pages");
-    return formatPages(response.data);
+    // Still call /pages so the request remains warm/compatible, but render the
+    // complete sidebar permission tree because the DB page list may be older.
+    try { await api.get("/pages"); } catch (_) {}
+    return pagesForUi();
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -559,33 +643,24 @@ const fetchPages = async () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const applyPermissionToggle = (prevForm, pageKey, parentKey, nestedPages) => {
-    const isCurrentlyChecked = !!prevForm.permissions[pageKey];
-
-    // Block child selection if parent is unchecked
-    if (!isCurrentlyChecked && parentKey && !prevForm.permissions[parentKey]) {
-        toast.error("Please select the parent category first.");
-        return prevForm; // return same reference — no re-render
+    // Dashboard is required for every role and cannot be turned off.
+    if (pageKey === "dashboard") {
+        return { ...prevForm, permissions: { ...prevForm.permissions, dashboard: true } };
     }
 
-    const newPermissions = {
-        ...prevForm.permissions,
-        [pageKey]: !isCurrentlyChecked,
-    };
+    const isCurrentlyChecked = !!prevForm.permissions[pageKey];
+    const nextValue = !isCurrentlyChecked;
+    const newPermissions = { ...prevForm.permissions, [pageKey]: nextValue, dashboard: true };
+    const node = findNode(nestedPages, pageKey);
 
-    // Unchecking a parent → also uncheck all direct children
-    if (isCurrentlyChecked && nestedPages) {
-        const parent = nestedPages.find((pg) => pg.key === pageKey);
-        if (parent?.sub?.length) {
-            for (const child of parent.sub) {
-                newPermissions[child.key] = false;
-                // Recursively clear grandchildren if needed
-                if (child.sub?.length) {
-                    for (const grandchild of child.sub) {
-                        newPermissions[grandchild.key] = false;
-                    }
-                }
-            }
-        }
+    if (nextValue) {
+        // Selecting a child also selects every parent above it.
+        if (parentKey) newPermissions[parentKey] = true;
+        markAncestors(nestedPages, pageKey, newPermissions);
+    } else {
+        // Unchecking a parent unchecks all nested children recursively.
+        setDescendants(node, newPermissions, false);
+        newPermissions.dashboard = true;
     }
 
     return { ...prevForm, permissions: newPermissions };
@@ -629,9 +704,11 @@ export function useRoleManagement() {
     } = useQuery({
         queryKey: ROLES_QUERY_KEY,
         queryFn: fetchAllRoles,
-        staleTime: 1000 * 60 * 5,
-        gcTime: 1000 * 60 * 10,
-        placeholderData: (prev) => prev,
+        // Roles page must reflect linked sub-accounts and updated timestamps immediately.
+        staleTime: 0,
+        gcTime: 1000 * 60 * 5,
+        refetchOnMount: true,
+        refetchOnWindowFocus: true,
     });
 
     // Client-side search filter
@@ -646,6 +723,7 @@ export function useRoleManagement() {
         mutationFn: (payload) => api.post("/roles", payload),
         onSuccess: async () => {
             await queryClient.invalidateQueries({ queryKey: ROLES_QUERY_KEY });
+            await queryClient.refetchQueries({ queryKey: ROLES_QUERY_KEY });
             toast.success("Role added successfully!");
             closeModal();
         },
@@ -659,6 +737,7 @@ export function useRoleManagement() {
         mutationFn: ({ id, payload }) => api.put(`/roles/${id}`, payload),
         onSuccess: async () => {
             await queryClient.invalidateQueries({ queryKey: ROLES_QUERY_KEY });
+            await queryClient.refetchQueries({ queryKey: ROLES_QUERY_KEY });
             toast.success("Role updated successfully!");
             closeEditModal();
         },
@@ -672,6 +751,7 @@ export function useRoleManagement() {
         mutationFn: (id) => api.delete(`/roles/${id}`),
         onSuccess: async () => {
             await queryClient.invalidateQueries({ queryKey: ROLES_QUERY_KEY });
+            await queryClient.refetchQueries({ queryKey: ROLES_QUERY_KEY });
             toast.success("Role deleted successfully!");
             closeDeleteModal();
         },
@@ -722,6 +802,33 @@ export function useRoleManagement() {
         [nestedPages]
     );
 
+    const buildAllPermissions = useCallback((checked) => {
+        const permissions = {};
+        for (const key of ALL_PERMISSION_KEYS) {
+            permissions[key] = !!checked;
+        }
+        permissions.dashboard = true;
+        return permissions;
+    }, []);
+
+    const toggleAllPermissions = useCallback((checked) => {
+        setForm((prev) => ({ ...prev, permissions: buildAllPermissions(checked) }));
+    }, [buildAllPermissions]);
+
+    const toggleAllEditPermissions = useCallback((checked) => {
+        setEditForm((prev) => ({ ...prev, permissions: buildAllPermissions(checked) }));
+    }, [buildAllPermissions]);
+
+    const isAllSelected = useMemo(
+        () => ALL_PERMISSION_KEYS.every((key) => key === "dashboard" || !!form.permissions[key]),
+        [form.permissions]
+    );
+
+    const isEditAllSelected = useMemo(
+        () => ALL_PERMISSION_KEYS.every((key) => key === "dashboard" || !!editForm.permissions[key]),
+        [editForm.permissions]
+    );
+
     // ── Submit — Add ──────────────────────────────────────────────────────────
     const handleAdd = useCallback(() => {
         const e = validate(form);
@@ -752,8 +859,8 @@ export function useRoleManagement() {
         // This means the edit modal actually reflects the server state — the
         // original code always opened with empty permissions ({}).
         const prePopulatedPermissions = role.rawPermissions
-            ? flattenPermissions(role.rawPermissions)
-            : {};
+            ? normalizePermissionsForSave(flattenPermissions(role.rawPermissions))
+            : { dashboard: true };
 
         setEditForm({
             role: role.name,
@@ -781,7 +888,7 @@ export function useRoleManagement() {
                 name: editForm.role,
                 description: editForm.description || "No description provided",
                 subAccountLinkingStatus:
-                    editModal.role.linkStatus === "Linked" ? "linked" : "not_linked",
+                    String(editModal.role.linkStatus || "").toLowerCase().startsWith("linked") ? "linked" : "not_linked",
                 permissions: buildPermissionsPayload(editForm.permissions),
             },
         });
@@ -803,6 +910,8 @@ export function useRoleManagement() {
         showModal, openModal, closeModal,
         form, handleFormChange,
         togglePermission,
+        toggleAllPermissions,
+        isAllSelected,
         errors,
         saving: addMutation.isPending,
         handleAdd,
@@ -822,6 +931,8 @@ export function useRoleManagement() {
         editSaving: editMutation.isPending,
         editForm, handleEditFormChange,
         toggleEditPermission,
+        toggleAllEditPermissions,
+        isEditAllSelected,
         editErrors,
     };
 }

@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   AreaChart,
   Area,
@@ -9,43 +8,102 @@ import {
   ResponsiveContainer,
   ReferenceDot,
 } from "recharts";
-import { Calendar, ChevronDown } from "lucide-react";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SalesTrendsChart — Area chart matching Figma "Sales Trends" section
-// ─────────────────────────────────────────────────────────────────────────────
+const MONTHS = [
+  { value: 1, label: "January" },
+  { value: 2, label: "February" },
+  { value: 3, label: "March" },
+  { value: 4, label: "April" },
+  { value: 5, label: "May" },
+  { value: 6, label: "June" },
+  { value: 7, label: "July" },
+  { value: 8, label: "August" },
+  { value: 9, label: "September" },
+  { value: 10, label: "October" },
+  { value: 11, label: "November" },
+  { value: 12, label: "December" },
+];
+
+const labelForPlatform = (value) => {
+  if (!value || value === "all") return "All";
+  return value.charAt(0).toUpperCase() + value.slice(1);
+};
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
+  const row = payload[0]?.payload || {};
   return (
     <div
       className="rounded-xl px-4 py-3 text-sm font-body"
-      style={{
-        background: "#1E293B",
-        boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
-      }}
+      style={{ background: "#1E293B", boxShadow: "0 8px 24px rgba(0,0,0,0.2)" }}
     >
-      <p className="font-semibold text-white mb-1">{label}</p>
+      <p className="font-semibold text-white mb-1">Day {label}</p>
       <div className="flex items-center gap-2">
         <div className="w-2 h-2 rounded-full bg-indigo-400" />
         <span style={{ color: "#94A3B8" }}>Sales:</span>
-        <span className="text-white font-medium">
-          {payload[0].value.toLocaleString()}
-        </span>
+        <span className="text-white font-medium">{Number(row.sales || 0).toLocaleString()}</span>
       </div>
+      <p className="text-xs mt-1" style={{ color: "#94A3B8" }}>
+        Orders: {Number(row.orders || 0).toLocaleString()} · Qty: {Number(row.quantity || 0).toLocaleString()}
+      </p>
+      {Number(row.sales || 0) <= 0 && Number(row.chartValue || 0) > 0 && (
+        <p className="text-xs mt-1" style={{ color: "#CBD5E1" }}>
+          Graph: {row.chartMetric} {Number(row.chartValue || 0).toLocaleString()}
+        </p>
+      )}
     </div>
   );
 };
 
-export default function SalesTrendsChart({ data, platforms, loading }) {
-  const [selectedPlatform, setSelectedPlatform] = useState("All");
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [dateRange] = useState("03 Oct 2025 - 31 Oct 2025");
+function SelectBox({ value, onChange, children, minWidth = 110, numeric = false }) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(numeric ? Number(e.target.value) : e.target.value)}
+      className="text-xs border border-surface-border rounded-lg bg-white px-3 py-1.5 text-slate-600 outline-none focus:border-primary cursor-pointer font-medium capitalize"
+      style={{ minWidth }}
+    >
+      {children}
+    </select>
+  );
+}
 
-  // Find peak value for reference dot
-  const peak = data?.reduce(
-    (max, d) => (d.sales > max.sales ? d : max),
-    data?.[0] || {},
+export default function SalesTrendsChart({
+  data,
+  platforms = ["all"],
+  loading,
+  years = [],
+  selectedYear,
+  selectedMonth,
+  selectedPlatform,
+  onYearChange,
+  onMonthChange,
+  onPlatformChange,
+}) {
+  const chartData = (data || []).map((row) => {
+    const sales = Number(row.sales || 0);
+    const quantity = Number(row.quantity || 0);
+    const orders = Number(row.orders || 0);
+
+    // Some marketplace/order rows may not have sale_price yet. In that case
+    // sales is 0 while quantity/orders are present, so draw the graph with
+    // quantity/orders instead of leaving the line flat at zero.
+    const chartValue = sales > 0 ? sales : quantity > 0 ? quantity : orders;
+    const chartMetric = sales > 0 ? "Sales" : quantity > 0 ? "Qty" : orders > 0 ? "Orders" : "Sales";
+
+    return {
+      ...row,
+      sales,
+      quantity,
+      orders,
+      chartValue,
+      chartMetric,
+    };
+  });
+
+  const peak = chartData.reduce(
+    (max, d) => (Number(d.chartValue || 0) > Number(max?.chartValue || 0) ? d : max),
+    chartData[0] || null
   );
 
   if (loading) {
@@ -63,150 +121,68 @@ export default function SalesTrendsChart({ data, platforms, loading }) {
   return (
     <div
       className="bg-white rounded-2xl p-6"
-      style={{
-        border: "1px solid #F1F5F9",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-      }}
+      style={{ border: "1px solid #F1F5F9", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-lg text-primary-text font-semibold font-display">
-          Sales Trends
-        </h3>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div>
+          <h3 className="text-lg text-primary-text font-semibold font-display">Sales Trends</h3>
+          <p className="text-xs text-slate-400 mt-1">Daily sales for selected month</p>
+        </div>
 
-        <div className="flex items-center gap-3">
-          {/* Platform selector */}
-          <div className="relative">
-            <div className="flex items-center gap-2 text-xs text-primary-text font-body">
-              <span>Select Platform</span>
-              <button
-                onClick={() => setShowDropdown((p) => !p)}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-body"
-                style={{
-                  background: "#F8FAFC",
-                  border: "1px solid #E2E8F0",
-                  cursor: "pointer",
-                  fontSize: "12px",
-                  color: "#374151",
-                  minWidth: "80px",
-                }}
-              >
-                {selectedPlatform}
-                <ChevronDown size={12} />
-              </button>
-            </div>
-
-            {showDropdown && (
-              <div
-                className="absolute right-0 top-full mt-1 rounded-xl py-1 z-20"
-                style={{
-                  background: "#fff",
-                  boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-                  border: "1px solid #E2E8F0",
-                  minWidth: "120px",
-                }}
-              >
-                {platforms.map((p) => (
-                  <button
-                    key={p}
-                    onClick={() => {
-                      setSelectedPlatform(p);
-                      setShowDropdown(false);
-                    }}
-                    className="w-full text-left px-4 py-2 text-xs transition-colors font-body"
-                    style={{
-                      background: selectedPlatform === p ? "#F8FAFC" : "none",
-                      border: "none",
-                      cursor: "pointer",
-                      color: selectedPlatform === p ? "#6366F1" : "#374151",
-                      fontWeight: selectedPlatform === p ? 600 : 400,
-                    }}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.background = "#F8FAFC")
-                    }
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.background =
-                        selectedPlatform === p ? "#F8FAFC" : "none")
-                    }
-                  >
-                    {p}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Date range */}
-          <div
-            className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-body"
-            style={{
-              background: "#F8FAFC",
-              border: "1px solid #E2E8F0",
-              color: "#64748B",
-            }}
-          >
-            <Calendar size={12} color="#94A3B8" />
-            {dateRange}
-          </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-primary-text font-body">Select Platform</span>
+          <SelectBox value={selectedPlatform} onChange={onPlatformChange} minWidth={105}>
+            {platforms.map((platform) => (
+              <option key={platform} value={platform}>{labelForPlatform(platform)}</option>
+            ))}
+          </SelectBox>
+          <SelectBox value={selectedYear} onChange={onYearChange} minWidth={90} numeric>
+            {years.map((year) => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </SelectBox>
+          <SelectBox value={selectedMonth} onChange={onMonthChange} minWidth={125} numeric>
+            {MONTHS.map((month) => (
+              <option key={month.value} value={month.value}>{month.label}</option>
+            ))}
+          </SelectBox>
         </div>
       </div>
 
-      {/* Chart */}
-      <ResponsiveContainer width="100%" height={200}>
-        <AreaChart
-          data={data}
-          margin={{ top: 10, right: 10, left: -10, bottom: 5 }}
-        >
+      <ResponsiveContainer width="100%" height={220}>
+        <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
           <defs>
             <linearGradient id="salesGradient" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="#818CF8" stopOpacity={0.25} />
               <stop offset="95%" stopColor="#818CF8" stopOpacity={0.02} />
             </linearGradient>
           </defs>
-          <CartesianGrid
-            strokeDasharray="3 3"
-            stroke="#F1F5F9"
-            vertical={false}
-          />
+          <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
           <XAxis
-            dataKey="date"
-            tick={{
-              fontSize: 10,
-              fill: "#94A3B8",
-              fontFamily: "'DM Sans', sans-serif",
-            }}
+            dataKey="label"
+            tick={{ fontSize: 10, fill: "#94A3B8", fontFamily: "'DM Sans', sans-serif" }}
             axisLine={false}
             tickLine={false}
-            interval={2}
+            interval="preserveStartEnd"
           />
           <YAxis
-            tick={{
-              fontSize: 10,
-              fill: "#94A3B8",
-              fontFamily: "'DM Sans', sans-serif",
-            }}
+            tick={{ fontSize: 10, fill: "#94A3B8", fontFamily: "'DM Sans', sans-serif" }}
             axisLine={false}
             tickLine={false}
+            allowDecimals={false}
+            domain={[0, "dataMax"]}
           />
           <Tooltip content={<CustomTooltip />} />
           <Area
             type="monotone"
-            dataKey="sales"
+            dataKey="chartValue"
             stroke="#6366F1"
             strokeWidth={2}
             fill="url(#salesGradient)"
             activeDot={{ r: 5, fill: "#6366F1" }}
           />
-          {/* Peak dot */}
-          {peak && (
-            <ReferenceDot
-              x={peak.date}
-              y={peak.sales}
-              r={5}
-              fill="#EF4444"
-              stroke="#fff"
-              strokeWidth={2}
-            />
+          {peak && Number(peak.chartValue || 0) > 0 && (
+            <ReferenceDot x={peak.label} y={peak.chartValue} r={5} fill="#EF4444" stroke="#fff" strokeWidth={2} />
           )}
         </AreaChart>
       </ResponsiveContainer>

@@ -1,9 +1,11 @@
-import { Plus, ChevronDown } from "lucide-react";
-import { useState } from "react";
+import { Plus, Search } from "lucide-react";
+import { useMemo, useState } from "react";
 import { useWarehouse } from "./hooks/useWarehouse";
 import WarehouseTable from "./components/WarehouseTable";
 import AddWarehouseModal from "./components/AddWarehouseModal";
 import Topbar from "../../components/layout/Topbar";
+import RecordDetailModal from "../../components/shared/RecordDetailModal";
+import ConfirmActionModal from "../../components/shared/ConfirmActionModal";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WarehousePage — matches Figma image 1 exactly:
@@ -19,13 +21,15 @@ import Topbar from "../../components/layout/Topbar";
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function WarehousePage() {
-  const [platformOpen, setPlatformOpen] = useState(false);
+  // const [platformOpen, setPlatformOpen] = useState(false);
+  const [detailWarehouse, setDetailWarehouse] = useState(null);
+  const [warehouseSearch, setWarehouseSearch] = useState("");
 
   const {
     warehouses,
-    platform,
-    setPlatform,
-    platforms,
+    // platform,
+    // setPlatform,
+    // platforms,
     showModal,
     openModal,
     closeModal,
@@ -36,7 +40,25 @@ export default function WarehousePage() {
     saving,
     handleAdd,
     toggleDefault,
+    editingWarehouse,
+    openEditModal,
+    deleteModal,
+    openDeleteModal,
+    closeDeleteModal,
+    confirmDelete,
+    deleting,
   } = useWarehouse();
+
+  const visibleWarehouses = useMemo(() => {
+    const term = warehouseSearch.trim().toLowerCase();
+    if (!term) return warehouses;
+
+    return warehouses.filter((warehouse) =>
+      [warehouse.name, warehouse.attribute, warehouse.location]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(term)),
+    );
+  }, [warehouses, warehouseSearch]);
 
   return (
     <div className="space-y-5 font-body">
@@ -44,8 +66,7 @@ export default function WarehousePage() {
       <Topbar PageTitle="Warehouse Management"></Topbar>
       {/* ── Top filter bar — dashed blue border matching Figma ── */}
       <div className="bg-white rounded-xl px-5 py-4 flex items-end justify-between gap-4">
-        {/* Select Platform dropdown */}
-        <div className="w-64">
+        {/* <div className="w-64">
           <p className="text-xs font-semibold text-slate-600 mb-1.5">
             Select Platform
           </p>
@@ -99,6 +120,27 @@ export default function WarehousePage() {
               </div>
             )}
           </div>
+        </div> */}
+
+        <div className="w-64">
+          <p className="text-xs font-semibold text-slate-600 mb-1.5">
+            Search Warehouse
+          </p>
+          <div className="relative">
+            <Search
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+            <input
+              type="text"
+              value={warehouseSearch}
+              onChange={(e) => setWarehouseSearch(e.target.value)}
+              placeholder="Name, attribute, location"
+              className="w-full pl-8 pr-3 py-2 bg-white border border-surface-border rounded-lg
+                         text-sm text-slate-700 placeholder-slate-400 outline-none
+                         hover:border-primary/40 focus:border-primary transition-colors"
+            />
+          </div>
         </div>
 
         {/* Add New Warehouse button */}
@@ -125,8 +167,11 @@ export default function WarehousePage() {
         {/* Table */}
         <div className="px-5">
           <WarehouseTable
-            warehouses={warehouses}
+            warehouses={visibleWarehouses}
             onToggleDefault={toggleDefault}
+            onDetails={setDetailWarehouse}
+            onEdit={openEditModal}
+            onDelete={openDeleteModal}
           />
         </div>
       </div>
@@ -141,6 +186,39 @@ export default function WarehousePage() {
         onAttributeChange={handleAttributeChange}
         onAdd={handleAdd}
         onClose={closeModal}
+        title={editingWarehouse ? "Edit Warehouse" : "Add Warehouse"}
+        submitLabel={editingWarehouse ? "Save" : "Add"}
+      />
+
+      <RecordDetailModal
+        open={!!detailWarehouse}
+        title="Warehouse Details"
+        subtitle={detailWarehouse?.name}
+        record={detailWarehouse}
+        onClose={() => setDetailWarehouse(null)}
+        fields={[
+          { label: "Warehouse Name", key: "name" },
+          { label: "Code", key: "code" },
+          { label: "Attribute", key: "attribute" },
+          { label: "Manager", key: "manager" },
+          { label: "Phone", key: "phoneNumber" },
+          { label: "Location", key: "location" },
+          { label: "Country", key: "country" },
+          { label: "Total SKU", key: "totalSku" },
+          { label: "Default", key: "isDefault" },
+          { label: "Status", key: "status" },
+        ]}
+      />
+
+      <ConfirmActionModal
+        open={deleteModal?.open}
+        danger
+        title="Delete Warehouse"
+        loading={deleting}
+        message={<>Delete <span className="font-semibold text-slate-800">{deleteModal?.warehouse?.name}</span>? This action cannot be undone.</>}
+        confirmLabel="Delete"
+        onCancel={closeDeleteModal}
+        onConfirm={confirmDelete}
       />
     </div>
   );

@@ -117,6 +117,15 @@ export function useRegister() {
                 console.warn("Secondary registration failed:", err);
             });
         };
+console.log({
+                userId: 0,
+                userName: formData.userName,
+                userEmail: formData.userEmail,
+                userPassword: formData.userPassword,
+                role: "user",
+                photo: formData.photo || "string",
+                emailVerified: true,
+            });
 
         try {
             const mainApiResponse = await authApi.post("/v1/user/signup", {

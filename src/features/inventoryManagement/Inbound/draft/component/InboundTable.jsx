@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Loader2 } from 'lucide-react';
+import PortalActionMenu from '../../../../../components/shared/PortalActionMenu';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // InboundTable — shared by Draft, OnTheWay, Completed
@@ -181,21 +182,24 @@ export default function InboundTable({
                                                     {[1, 2, 3].map((d) => <span key={d} className="w-1 h-1 rounded-full bg-current mx-px" />)}
                                                 </button>
 
-                                                {openActionId === item.id && actionItems && (
-                                                    <div className="absolute right-0 top-full mt-1 z-30 bg-white rounded-xl border border-surface-border shadow-lg py-1.5 w-36">
-                                                        {actionItems.map(({ label, onClick, danger, icon: Icon }) => (
-                                                            <button
-                                                                key={label}
-                                                                onClick={() => { onClick?.(item); setOpenActionId(null); }}
-                                                                className={`flex items-center gap-2.5 w-full text-left px-4 py-2 text-xs transition-colors
-                                                                    ${danger ? 'text-red-500 hover:bg-red-50' : 'text-slate-700 hover:bg-surface-card'}`}
-                                                            >
-                                                                {Icon && <Icon size={13} className="text-slate-400" />}
-                                                                {label}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                )}
+                                                <PortalActionMenu
+                                                    open={openActionId === item.id && Boolean(actionItems)}
+                                                    anchorRef={{ current: actionRefs.current[item.id] }}
+                                                    onClose={() => setOpenActionId(null)}
+                                                    width={144}
+                                                    className="py-1.5"
+                                                >
+                                                    {actionItems?.map(({ label, onClick, danger, icon: Icon }) => (
+                                                        <button
+                                                            key={label}
+                                                            onClick={() => { onClick?.(item); setOpenActionId(null); }}
+                                                            className={`flex items-center gap-2.5 w-full text-left px-4 py-2 text-xs transition-colors ${danger ? 'text-red-500 hover:bg-red-50' : 'text-slate-700 hover:bg-surface-card'}`}
+                                                        >
+                                                            {Icon && <Icon size={13} className="text-slate-400" />}
+                                                            {label}
+                                                        </button>
+                                                    ))}
+                                                </PortalActionMenu>
                                             </div>
                                         </td>
                                     </tr>

@@ -6,22 +6,29 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export default function Pagination({
   currentPage,
+  page,
   totalPages,
   onPageChange,
   totalItems,
+  total,
   pageSize,
+  limit,
 }) {
+  const activePage = currentPage ?? page ?? 1;
+  const totalCount = totalItems ?? total ?? 0;
+  const limitCount = pageSize ?? limit ?? 10;
+
   if (totalPages <= 1) return null;
 
   const pages = [];
   const delta = 2;
-  const left = Math.max(1, currentPage - delta);
-  const right = Math.min(totalPages, currentPage + delta);
+  const left = Math.max(1, activePage - delta);
+  const right = Math.min(totalPages, activePage + delta);
 
   for (let i = left; i <= right; i++) pages.push(i);
 
-  const start = (currentPage - 1) * pageSize + 1;
-  const end = Math.min(currentPage * pageSize, totalItems);
+  const start = totalCount === 0 ? 0 : (activePage - 1) * limitCount + 1;
+  const end = Math.min(activePage * limitCount, totalCount);
 
   return (
     <div className="flex items-center justify-between px-1 mt-4">
@@ -31,7 +38,7 @@ export default function Pagination({
         <span className="font-semibold text-slate-700">
           {start}–{end}
         </span>{" "}
-        of <span className="font-semibold text-slate-700">{totalItems}</span>{" "}
+        of <span className="font-semibold text-slate-700">{totalCount}</span>{" "}
         results
       </p>
 
@@ -39,8 +46,8 @@ export default function Pagination({
       <div className="flex items-center gap-1">
         {/* Prev */}
         <button
-          onClick={() => onPageChange(currentPage - 1)}
-          disabled={currentPage === 1}
+          onClick={() => onPageChange(activePage - 1)}
+          disabled={activePage === 1}
           className="w-8 h-8 rounded-lg flex items-center justify-center border border-surface-border
                      text-slate-500 hover:bg-surface-card disabled:opacity-40 disabled:cursor-not-allowed
                      transition-colors"
@@ -50,7 +57,7 @@ export default function Pagination({
 
         {left > 1 && (
           <>
-            <PageBtn page={1} current={currentPage} onClick={onPageChange} />
+            <PageBtn page={1} current={activePage} onClick={onPageChange} />
             {left > 2 && <span className="text-xs text-slate-400 px-1">…</span>}
           </>
         )}
@@ -59,7 +66,7 @@ export default function Pagination({
           <PageBtn
             key={p}
             page={p}
-            current={currentPage}
+            current={activePage}
             onClick={onPageChange}
           />
         ))}
@@ -71,7 +78,7 @@ export default function Pagination({
             )}
             <PageBtn
               page={totalPages}
-              current={currentPage}
+              current={activePage}
               onClick={onPageChange}
             />
           </>
@@ -79,8 +86,8 @@ export default function Pagination({
 
         {/* Next */}
         <button
-          onClick={() => onPageChange(currentPage + 1)}
-          disabled={currentPage === totalPages}
+          onClick={() => onPageChange(activePage + 1)}
+          disabled={activePage === totalPages}
           className="w-8 h-8 rounded-lg flex items-center justify-center border border-surface-border
                      text-slate-500 hover:bg-surface-card disabled:opacity-40 disabled:cursor-not-allowed
                      transition-colors"

@@ -1,15 +1,22 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
+import { canAccessRoute, getStoredWarehouseUser } from "@/utils/permissions";
 
 export default function ProtectedRoute({ children }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  return isAuthenticated ? (
-    children
-  ) : (
-    <Navigate to="/warehouse_management/login" replace />
-  );
-}
+  const location = useLocation();
 
-// export default function ProtectedRoute({ children }) {
-//   return children; // remove auth check until login page is built
-// }
+  const token = localStorage.getItem("whmAccessToken");
+  const user = getStoredWarehouseUser();
+  const loggedIn = isAuthenticated || Boolean(token);
+
+  if (!loggedIn) {
+    return <Navigate to="/warehouse_management/login" replace />;
+  }
+
+  if (!canAccessRoute(user, location.pathname)) {
+    return <Navigate to="/warehouse_management" replace />;
+  }
+
+  return children;
+}

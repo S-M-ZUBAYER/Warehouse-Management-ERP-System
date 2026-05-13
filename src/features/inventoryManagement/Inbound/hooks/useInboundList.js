@@ -1,8 +1,13 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'react-hot-toast';
+import { toast } from 'sonner';
 import api from '../../../../lib/api';
 import useDebounce from '../../../../hooks/useDebounce';
+import {
+    filterInboundItems,
+    getInboundDateField,
+    getInboundSearchField,
+} from '../../shared/inboundFilterUtils';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Query keys
@@ -17,14 +22,18 @@ export const INBOUND_KEYS = {
 // API helpers
 // ─────────────────────────────────────────────────────────────────────────────
 const fetchInboundList = (params) => {
+    console.log(params);
+
     const qs = new URLSearchParams();
     qs.set('page', params.page ?? 1);
     qs.set('limit', params.limit ?? 20);
     if (params.status) qs.set('status', params.status);
     if (params.warehouseId) qs.set('warehouseId', params.warehouseId);
     if (params.search?.trim()) qs.set('search', params.search.trim());
+    if (params.searchField) qs.set('searchField', params.searchField);
     if (params.dateFrom) qs.set('dateFrom', params.dateFrom);
     if (params.dateTo) qs.set('dateTo', params.dateTo);
+    if (params.dateField) qs.set('dateField', params.dateField);
     if (params.sortBy) qs.set('sortBy', params.sortBy);
     if (params.sortOrder) qs.set('sortOrder', params.sortOrder);
     return api.get(`/inbound?${qs.toString()}`).then((r) => r);
@@ -43,7 +52,6 @@ export function useInboundList({ status }) {
     // ── Filter state ──────────────────────────────────────────────────────────
     const [warehouseId, setWarehouseId] = useState('');
     const [timeType, setTimeType] = useState('Created Time');
-    const [timeFilter, setTimeFilter] = useState('All');
     const [inboundType, setInboundType] = useState('Inbound No.');
     const [search, setSearch] = useState('');
     const [dateFrom, setDateFrom] = useState('');
@@ -57,16 +65,55 @@ export function useInboundList({ status }) {
     const [showDeleteModal, setShowDeleteModal] = useState(false);
 
     const debouncedSearch = useDebounce(search, 350);
+    const serverSearch = inboundType === 'Inbound No.' ? debouncedSearch : '';
+    const limit = debouncedSearch && inboundType !== 'Inbound No.' ? 1000 : 20;
+
+    const resetList = useCallback(() => {
+        setPage(1);
+        setSelectedIds([]);
+    }, []);
+
+    const updateWarehouseId = useCallback((value) => {
+        setWarehouseId(value);
+        resetList();
+    }, [resetList]);
+
+    const updateTimeType = useCallback((value) => {
+        setTimeType(value);
+        resetList();
+    }, [resetList]);
+
+    const updateDateFrom = useCallback((value) => {
+        setDateFrom(value);
+        resetList();
+    }, [resetList]);
+
+    const updateDateTo = useCallback((value) => {
+        setDateTo(value);
+        resetList();
+    }, [resetList]);
+
+    const updateInboundType = useCallback((value) => {
+        setInboundType(value);
+        resetList();
+    }, [resetList]);
+
+    const updateSearch = useCallback((value) => {
+        setSearch(value);
+        setPage(1);
+    }, []);
 
     const listParams = {
         status,
         page,
-        limit: 20,
+        limit,
         warehouseId: warehouseId || undefined,
-        search: debouncedSearch,
+        search: serverSearch,
+        searchField: getInboundSearchField(inboundType),
         dateFrom: dateFrom || undefined,
         dateTo: dateTo || undefined,
-        sortBy: 'created_at',
+        dateField: getInboundDateField(timeType),
+        sortBy: getInboundDateField(timeType),
         sortOrder: 'DESC',
     };
 
@@ -85,8 +132,24 @@ export function useInboundList({ status }) {
         placeholderData: (prev) => prev,
     });
 
-    const items = listData?.data ?? [];
-    const pagination = listData?.pagination ?? { total: 0, totalPages: 1, page: 1, limit: 20 };
+    const rawItems = useMemo(() => listData?.data ?? [], [listData]);
+    const items = useMemo(
+        () => filterInboundItems(rawItems, {
+            warehouseId,
+            search: debouncedSearch,
+            inboundType,
+            timeType,
+            dateFrom,
+            dateTo,
+        }),
+        [rawItems, warehouseId, debouncedSearch, inboundType, timeType, dateFrom, dateTo],
+    );
+    console.log(listData);
+
+    const apiPagination = listData?.pagination ?? { total: 0, totalPages: 1, page: 1, limit: 20 };
+    const pagination = items.length === rawItems.length
+        ? apiPagination
+        : { ...apiPagination, total: items.length, totalPages: 1, page: 1 };
 
     // ── Cancel mutation ───────────────────────────────────────────────────────
     const cancelMutation = useMutation({
@@ -151,13 +214,12 @@ export function useInboundList({ status }) {
 
     return {
         // filter state
-        warehouseId, setWarehouseId,
-        timeType, setTimeType,
-        timeFilter, setTimeFilter,
-        inboundType, setInboundType,
-        search, setSearch,
-        dateFrom, setDateFrom,
-        dateTo, setDateTo,
+        warehouseId, setWarehouseId: updateWarehouseId,
+        timeType, setTimeType: updateTimeType,
+        inboundType, setInboundType: updateInboundType,
+        search, setSearch: updateSearch,
+        dateFrom, setDateFrom: updateDateFrom,
+        dateTo, setDateTo: updateDateTo,
         page, setPage,
 
         // data

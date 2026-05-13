@@ -20,6 +20,11 @@ const CONFIG = {
     bg: "bg-slate-100",
     border: "border-slate-200",
   },
+  Disabled: {
+    text: "text-red-700",
+    bg: "bg-red-50",
+    border: "border-red-200",
+  },
 };
 
 export default function AuthStatusBadge({ status }) {

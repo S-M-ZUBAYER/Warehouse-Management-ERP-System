@@ -29,6 +29,19 @@ export default function DashboardPage() {
     orderStatusData,
     salesTrendsData,
     platforms,
+    years,
+    inventoryLoading,
+    salesLoading,
+    inventoryYear,
+    inventoryMonth,
+    setInventoryYear,
+    setInventoryMonth,
+    salesYear,
+    salesMonth,
+    salesPlatform,
+    setSalesYear,
+    setSalesMonth,
+    setSalesPlatform,
   } = useDashboardData();
 
   return (
@@ -55,7 +68,15 @@ export default function DashboardPage() {
 
       {/* ── Charts Row: Inventory + Order Status ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <InventoryChart data={inventoryData} loading={loading} />
+        <InventoryChart
+          data={inventoryData}
+          loading={inventoryLoading}
+          years={years}
+          selectedYear={inventoryYear}
+          selectedMonth={inventoryMonth}
+          onYearChange={setInventoryYear}
+          onMonthChange={setInventoryMonth}
+        />
         <OrderStatusChart data={orderStatusData} loading={loading} />
       </div>
 
@@ -63,7 +84,14 @@ export default function DashboardPage() {
       <SalesTrendsChart
         data={salesTrendsData}
         platforms={platforms}
-        loading={loading}
+        loading={salesLoading}
+        years={years}
+        selectedYear={salesYear}
+        selectedMonth={salesMonth}
+        selectedPlatform={salesPlatform}
+        onYearChange={setSalesYear}
+        onMonthChange={setSalesMonth}
+        onPlatformChange={setSalesPlatform}
       />
     </div>
   );
