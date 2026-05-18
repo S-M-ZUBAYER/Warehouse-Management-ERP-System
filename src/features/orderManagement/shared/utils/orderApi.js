@@ -57,30 +57,32 @@ export const ORDER_PAGE_CONFIG = {
 
 const SHOOPEE_TAB_STATUS = {
   "To Pack": "READY_TO_SHIP",
-  Packing: "READY_TO_SHIP",
+  "Packed Successful": "PROCESSED",
+  "Packed Successfully": "PROCESSED",
   "Pack Failed": "READY_TO_SHIP",
   "Out Of Stock": "READY_TO_SHIP",
-  "Platform Processing": "READY_TO_SHIP",
-  Pushing: "PROCESSED",
-  "Push Successful": "PROCESSED",
-  Withdraw: "PROCESSED",
-  All: "",
+  "Platform Processing": "INVOICE_PENDING",
+  "Pushing": "PROCESSED",
+  "Pushed Successful": "PROCESSED",
+  "Withdraw": "PROCESSED",
+  "All": "",
   "Cancelation Request": "IN_CANCEL",
-  Cancelled: "CANCELLED",
+  "Cancelled": "CANCELLED",
 };
 
 const TIKTOK_TAB_STATUS = {
   "To Pack": "AWAITING_SHIPMENT",
-  Packing: "AWAITING_SHIPMENT",
+  "Packed Successful": "AWAITING_COLLECTION",
+  "Packed Successfully": "AWAITING_COLLECTION",
   "Pack Failed": "AWAITING_SHIPMENT",
   "Out Of Stock": "AWAITING_SHIPMENT",
-  "Platform Processing": "AWAITING_SHIPMENT",
-  Pushing: "AWAITING_COLLECTION",
-  "Push Successful": "AWAITING_COLLECTION",
-  Withdraw: "AWAITING_COLLECTION",
-  All: "",
+  "Platform Processing": "ON_HOLD",
+  "Pushing": "AWAITING_COLLECTION",
+  "Pushed Successful": "AWAITING_COLLECTION",
+  "Withdraw": "AWAITING_COLLECTION",
+  "All": "",
   "Cancelation Request": "CANCELLED",
-  Cancelled: "CANCELLED",
+  "Cancelled": "CANCELLED",
 };
 
 export const SEARCH_FIELD_MAP = {
@@ -150,7 +152,6 @@ const getPlatformApiBase = () => {
   const envBase =
     import.meta.env.VITE_ORDER_PLATFORM_BASE_URL ||
     import.meta.env.VITE_PLATFORM_API_BASE_URL ||
-    import.meta.env.VITE_AUTH_BASE_LOGIN_URL ||
     DEFAULT_PLATFORM_HOST;
 
   return String(envBase)
@@ -173,7 +174,7 @@ const buildUrl = (path, params) => {
 const fetchJson = async (path, { method = "GET", params, body } = {}) => {
   const response = await fetch(buildUrl(path, params), {
     method,
-    headers: { "Content-Type": "application/json" },
+    headers: body ? { "Content-Type": "application/json" } : undefined,
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
 
@@ -193,6 +194,17 @@ const fetchJson = async (path, { method = "GET", params, body } = {}) => {
 
 const SECONDS_IN_DAY = 24 * 60 * 60;
 const SHOPEE_MAX_RANGE_SECONDS = 15 * SECONDS_IN_DAY - 60;
+const TIKTOK_ORDER_STATUSES = [
+  "UNPAID",
+  "AWAITING_SHIPMENT",
+  "AWAITING_COLLECTION",
+  "IN_TRANSIT",
+  "DELIVERED",
+  "COMPLETED",
+  "CANCELLED",
+  "ON_HOLD",
+  "PARTIALLY_SHIPPING",
+];
 
 const toUnixSeconds = (value) => {
   if (value === undefined || value === null || value === "") return null;
@@ -276,7 +288,8 @@ const maskString = (value, keepStart = 1, keepEnd = 1) => {
 
 const normalizeShopeeStatus = (status) => {
   const value = String(status || "").toUpperCase();
-  if (["READY_TO_SHIP", "RETRY_SHIP", "INVOICE_PENDING"].includes(value)) return "To Ship";
+  if (["INVOICE_PENDING"].includes(value)) return "Platform Processing";
+  if (["READY_TO_SHIP", "RETRY_SHIP"].includes(value)) return "To Ship";
   if (["PROCESSED"].includes(value)) return "Processed";
   if (["SHIPPED", "TO_CONFIRM_RECEIVE"].includes(value)) return "Shipping";
   if (["COMPLETED"].includes(value)) return "Completed";
@@ -286,6 +299,7 @@ const normalizeShopeeStatus = (status) => {
 
 const normalizeTikTokStatus = (status) => {
   const value = String(status || "").toUpperCase();
+  if (["ON_HOLD"].includes(value)) return "Platform Processing";
   if (["AWAITING_PAYMENT", "AWAITING_SHIPMENT", "UNPAID"].includes(value)) return "To Ship";
   if (["AWAITING_COLLECTION"].includes(value)) return "Processed";
   if (["IN_TRANSIT", "DELIVERED"].includes(value)) return "Shipping";
@@ -379,7 +393,7 @@ export const normalizeShopeeOrder = (order, context = {}) => {
     pkgNo: order?.package_list?.[0]?.package_number || firstItem.packageId || order?.order_sn || "-",
     sku: firstItem.sku || "-",
     orderNo: order?.order_sn || "-",
-    trackingNo: order?.tracking_number || order?.trackingNo || "Automatic",
+    trackingNo: order?.tracking_number || order?.trackingNo || "--",
     price: formatMoney(totalAmount, order?.currency),
     createdAt: formatDateTime(order?.create_time),
     orderTime: formatDateTime(order?.create_time),
@@ -390,7 +404,7 @@ export const normalizeShopeeOrder = (order, context = {}) => {
     logistics: {
       buyerLogistic: order?.shipping_carrier || "-",
       logisticsName: order?.shipping_carrier || "Shopee Logistic",
-      trackingNo: order?.tracking_number || "Automatic",
+      trackingNo: order?.tracking_number || "--",
     },
     payment: {
       type: order?.cod ? "COD" : "Prepaid",
@@ -433,7 +447,7 @@ export const normalizeTikTokOrder = (order, context = {}) => {
     pkgNo: firstItem.packageId || order?.packageId || order?.id || "-",
     sku: firstItem.sku || "-",
     orderNo: order?.id || "-",
-    trackingNo: order?.trackingNumber || order?.tracking_number || "Automatic",
+    trackingNo: order?.trackingNumber || order?.tracking_number || "--",
     price: formatMoney(totalAmount || items.reduce((sum, item) => sum + item.subtotal, 0), payment?.currency),
     createdAt: formatDateTime(order?.createTime || order?.create_time),
     orderTime: formatDateTime(order?.createTime || order?.create_time),
@@ -444,7 +458,7 @@ export const normalizeTikTokOrder = (order, context = {}) => {
     logistics: {
       buyerLogistic: order?.deliveryType || order?.delivery_type || "-",
       logisticsName: order?.shippingProvider || order?.shipping_provider || "TikTok Logistic",
-      trackingNo: order?.trackingNumber || order?.tracking_number || "Automatic",
+      trackingNo: order?.trackingNumber || order?.tracking_number || "--",
     },
     payment: {
       type: order?.paymentMethodName || order?.payment_method_name || "Prepaid",
@@ -472,6 +486,48 @@ export const normalizeTikTokOrder = (order, context = {}) => {
 const getContextValue = (context, keys) =>
   keys.map((key) => context?.[key]).find((value) => value !== undefined && value !== null && value !== "");
 
+const getRawDateRange = (dateRange, fallbackDays = 7) => {
+  const fallback = getUnixDateRange(fallbackDays);
+  const rawStart = toUnixSeconds(dateRange?.start ?? dateRange?.timeFrom ?? dateRange?.createTimeGe ?? dateRange?.startTime);
+  const rawEnd = toUnixSeconds(dateRange?.end ?? dateRange?.timeTo ?? dateRange?.createTimeLt ?? dateRange?.endTime);
+  const start = rawStart ?? fallback.start;
+  const end = rawEnd ?? fallback.end;
+
+  if (start >= end) return fallback;
+  return { start, end };
+};
+
+const getShopeeDateWindows = (dateRange) => {
+  const range = getRawDateRange(dateRange, 7);
+  const windows = [];
+  let windowEnd = range.end;
+
+  while (windowEnd > range.start) {
+    const windowStart = Math.max(range.start, windowEnd - SHOPEE_MAX_RANGE_SECONDS);
+    windows.push({ start: windowStart, end: windowEnd });
+    windowEnd = windowStart - 1;
+  }
+
+  return windows.length ? windows : [range];
+};
+
+const parseShopeeCursor = (cursor) => {
+  if (!cursor) return { statusIndex: 0, windowIndex: 0, cursor: "" };
+  try {
+    const parsed = JSON.parse(cursor);
+    return {
+      statusIndex: Number(parsed?.statusIndex) || 0,
+      windowIndex: Number(parsed?.windowIndex) || 0,
+      cursor: parsed?.cursor || "",
+    };
+  } catch {
+    return { statusIndex: 0, windowIndex: 0, cursor: String(cursor || "") };
+  }
+};
+
+const stringifyShopeeCursor = ({ statusIndex, windowIndex, cursor }) =>
+  JSON.stringify({ statusIndex, windowIndex, cursor: cursor || "" });
+
 export const getPlatformStatus = ({ platform, pageType = "all", tab }) => {
   const normalized = normalizePlatform(platform);
   if (normalized === "shopee" && tab && SHOOPEE_TAB_STATUS[tab] !== undefined) {
@@ -484,24 +540,52 @@ export const getPlatformStatus = ({ platform, pageType = "all", tab }) => {
   return normalized === "tiktok" ? config.tiktokStatus : config.shopeeStatus;
 };
 
-export const fetchShopeeOrders = async ({ context, pageType, tab, dateRange }) => {
-  const shopId = getContextValue(context, ["shop_id", "external_store_id", "store_shop_id"]);
-  if (!shopId) return [];
+const getPlatformStatuses = ({ platform, pageType = "all", tab }) => {
+  const normalized = normalizePlatform(platform);
+  const status = getPlatformStatus({ platform: normalized, pageType, tab });
 
-  const status = getPlatformStatus({ platform: "shopee", pageType, tab });
-  const range = getShopeeDateRange(dateRange);
-  const pageSize = 50;
-  let cursor = "";
+  if (pageType === "canceled" && (!status || tab === "All")) {
+    return normalized === "tiktok" ? ["CANCELLED"] : ["IN_CANCEL", "CANCELLED"];
+  }
+
+  if (normalized === "tiktok") {
+    if (!status) return TIKTOK_ORDER_STATUSES;
+    if (status === "IN_TRANSIT") return ["IN_TRANSIT", "DELIVERED"];
+  }
+
+  return [status];
+};
+
+export const fetchShopeeOrders = async ({ context, pageType, tab, dateRange, pagination }) => {
+  const shopId = getContextValue(context, ["shop_id", "external_store_id", "store_shop_id"]);
+  if (!shopId) return pagination?.serverPaginated ? { orders: [], hasMore: false, nextCursor: "" } : [];
+
+  const statuses = getPlatformStatuses({ platform: "shopee", pageType, tab });
+  const serverPaginated = pagination?.serverPaginated === true;
+  const pageSize = serverPaginated ? pagination?.pageSize || 10 : 50;
+  const windows = serverPaginated ? getShopeeDateWindows(dateRange) : [getShopeeDateRange(dateRange)];
+  let { statusIndex, windowIndex, cursor } = serverPaginated
+    ? parseShopeeCursor(pagination?.cursor)
+    : { statusIndex: 0, windowIndex: 0, cursor: "" };
   let hasMore = true;
   let orders = [];
+  let nextCursor = "";
 
-  while (hasMore) {
+  while (
+    hasMore &&
+    statusIndex < statuses.length &&
+    windowIndex < windows.length &&
+    (!serverPaginated || orders.length < pageSize)
+  ) {
+    const status = statuses[statusIndex];
+    const range = windows[windowIndex];
+    const requestPageSize = serverPaginated ? pageSize - orders.length : pageSize;
     const res = await fetchJson("/shopee-open-shop/api/dev/order/get-order-list", {
       params: {
         shopId,
         timeFrom: range.start,
         timeTo: range.end,
-        pageSize,
+        pageSize: requestPageSize,
         response_optional_fields: "order_status",
         orderStatus: status,
         cursor,
@@ -511,8 +595,37 @@ export const fetchShopeeOrders = async ({ context, pageType, tab, dateRange }) =
     const list = res?.response?.order_list || [];
     orders = [...orders, ...list];
     hasMore = res?.response?.more === true;
-    cursor = res?.response?.next_cursor || "";
-    if (!cursor) hasMore = false;
+    const responseCursor = res?.response?.next_cursor || "";
+
+    if (!serverPaginated) {
+      cursor = responseCursor;
+      if (!cursor) hasMore = false;
+      continue;
+    }
+
+    if (hasMore && responseCursor) {
+      cursor = responseCursor;
+      nextCursor = stringifyShopeeCursor({ statusIndex, windowIndex, cursor });
+      if (orders.length >= pageSize) break;
+      continue;
+    }
+
+    cursor = "";
+    windowIndex += 1;
+    if (windowIndex >= windows.length) {
+      statusIndex += 1;
+      windowIndex = 0;
+    }
+
+    if (serverPaginated) {
+      nextCursor = statusIndex < statuses.length
+        ? stringifyShopeeCursor({ statusIndex, windowIndex, cursor: "" })
+        : "";
+      hasMore = statusIndex < statuses.length;
+      continue;
+    }
+
+    if (!responseCursor) hasMore = false;
   }
 
   const orderSnList = orders.map((order) => order.order_sn).filter(Boolean);
@@ -526,7 +639,17 @@ export const fetchShopeeOrders = async ({ context, pageType, tab, dateRange }) =
 
   const detailMap = new Map(details.map((order) => [order.order_sn, order]));
 
-  return orders.map((order) => normalizeShopeeOrder(detailMap.get(order.order_sn) || order, context));
+  const normalizedOrders = orders.map((order) => normalizeShopeeOrder(detailMap.get(order.order_sn) || order, context));
+
+  if (serverPaginated) {
+    return {
+      orders: normalizedOrders,
+      hasMore: Boolean(nextCursor),
+      nextCursor,
+    };
+  }
+
+  return normalizedOrders;
 };
 
 export const fetchShopeeOrderDetails = async ({ context, orderSnList = [] }) => {
@@ -581,41 +704,146 @@ export const fetchShopeeOrderDetails = async ({ context, orderSnList = [] }) => 
   return withTracking;
 };
 
-export const fetchTikTokOrders = async ({ context, pageType, tab, dateRange }) => {
+const parseTikTokCursor = (cursor) => {
+  if (!cursor) return { statusIndex: 0, pageToken: "" };
+  try {
+    const parsed = JSON.parse(cursor);
+    return {
+      statusIndex: Number(parsed?.statusIndex) || 0,
+      pageToken: parsed?.pageToken || "",
+    };
+  } catch {
+    return { statusIndex: 0, pageToken: String(cursor || "") };
+  }
+};
+
+const stringifyTikTokCursor = ({ statusIndex, pageToken }) =>
+  JSON.stringify({ statusIndex, pageToken: pageToken || "" });
+
+export const fetchTikTokOrders = async ({ context, pageType, tab, dateRange, pagination }) => {
   const cipher = getContextValue(context, ["cipher", "store_cipher", "platform_cipher"]);
   const openId = getContextValue(context, ["platform_open_id", "open_id", "store_open_id"]);
-  if (!cipher || !openId) return [];
+  const serverPaginated = pagination?.serverPaginated === true;
+  if (!cipher || !openId) return serverPaginated ? { orders: [], hasMore: false, nextCursor: "" } : [];
 
-  const status = getPlatformStatus({ platform: "tiktok", pageType, tab });
   const range = getTikTokDateRange(dateRange);
-  let pageToken = "";
   let orders = [];
+  const statuses = getPlatformStatuses({ platform: "tiktok", pageType, tab });
 
-  do {
-    const res = await fetchJson("/tiktokshop-partner-country/api/dev/order/list/filter", {
-      method: "POST",
-      params: {
-        pageSize: 50,
-        cipher,
-        openId,
-        createTimeGe: range.start,
-        createTimeLt: range.end,
-        updateTimeGe: range.start,
-        updateTimeLt: range.end,
-        orderStatus: status,
-        isBuyerRequestCancel: false,
-        shippingType: "TIKTOK",
-        sortField: "create_time",
-        sortOrder: "DESC",
-        pageToken,
-      },
-    });
+  if (serverPaginated) {
+    const pageSize = pagination?.pageSize || 10;
+    let remaining = pageSize;
+    let { statusIndex, pageToken } = parseTikTokCursor(pagination?.cursor);
+    let nextCursor = "";
+    const countedStatuses = new Set();
+    let totalCount = 0;
 
-    const payload = res?.data || res?.body?.data || res;
-    const pageOrders = payload?.orders || [];
-    orders = [...orders, ...pageOrders];
-    pageToken = payload?.nextPageToken || payload?.next_page_token || "";
-  } while (pageToken);
+    while (statusIndex < statuses.length && remaining > 0) {
+      const orderStatus = statuses[statusIndex];
+      const res = await fetchJson("/tiktokshop-partner/api/dev/order/list/filter", {
+        method: "POST",
+        params: {
+          pageSize: remaining,
+          cipher,
+          openId,
+          createTimeGe: range.start,
+          createTimeLt: range.end,
+          updateTimeGe: range.start,
+          updateTimeLt: range.end,
+          orderStatus,
+          isBuyerRequestCancel: false,
+          shippingType: "TIKTOK",
+          sortField: "create_time",
+          sortOrder: "DESC",
+          pageToken,
+        },
+      });
+
+      const payload = res?.data || res?.body?.data || res;
+      const pageOrders = payload?.orders || [];
+      const nextPageToken = payload?.nextPageToken || payload?.next_page_token || "";
+      if (!countedStatuses.has(orderStatus)) {
+        totalCount += Number(payload?.totalCount ?? payload?.total_count ?? pageOrders.length ?? 0);
+        countedStatuses.add(orderStatus);
+      }
+      orders = [...orders, ...pageOrders];
+      remaining = pageSize - orders.length;
+
+      if (nextPageToken) {
+        pageToken = nextPageToken;
+        nextCursor = stringifyTikTokCursor({ statusIndex, pageToken });
+        if (remaining <= 0) break;
+        continue;
+      }
+
+      statusIndex += 1;
+      pageToken = "";
+      nextCursor = statusIndex < statuses.length ? stringifyTikTokCursor({ statusIndex, pageToken }) : "";
+    }
+
+    for (const orderStatus of statuses) {
+      if (countedStatuses.has(orderStatus)) continue;
+
+      const res = await fetchJson("/tiktokshop-partner/api/dev/order/list/filter", {
+        method: "POST",
+        params: {
+          pageSize: 1,
+          cipher,
+          openId,
+          createTimeGe: range.start,
+          createTimeLt: range.end,
+          updateTimeGe: range.start,
+          updateTimeLt: range.end,
+          orderStatus,
+          isBuyerRequestCancel: false,
+          shippingType: "TIKTOK",
+          sortField: "create_time",
+          sortOrder: "DESC",
+        },
+      });
+
+      const payload = res?.data || res?.body?.data || res;
+      totalCount += Number(payload?.totalCount ?? payload?.total_count ?? payload?.orders?.length ?? 0);
+    }
+
+    return {
+      orders: orders.map((order) => normalizeTikTokOrder(order, context)),
+      hasMore: Boolean(nextCursor),
+      nextCursor,
+      totalCount,
+      hasKnownTotal: true,
+    };
+  }
+
+  for (const orderStatus of statuses) {
+    let pageToken = "";
+
+    do {
+      const res = await fetchJson("/tiktokshop-partner/api/dev/order/list/filter", {
+        method: "POST",
+        params: {
+          pageSize: 50,
+          cipher,
+          openId,
+          createTimeGe: range.start,
+          createTimeLt: range.end,
+          updateTimeGe: range.start,
+          updateTimeLt: range.end,
+          orderStatus,
+          isBuyerRequestCancel: false,
+          shippingType: "TIKTOK",
+          sortField: "create_time",
+          sortOrder: "DESC",
+          pageToken,
+        },
+      });
+
+      const payload = res?.data || res?.body?.data || res;
+      const pageOrders = payload?.orders || [];
+      orders = [...orders, ...pageOrders];
+      pageToken = payload?.nextPageToken || payload?.next_page_token || "";
+    } while (pageToken);
+  }
 
   return orders.map((order) => normalizeTikTokOrder(order, context));
 };
@@ -662,7 +890,7 @@ export const fetchManualOrders = async ({ search, skuType }) => {
   return filterOrders(normalized, { search, skuType });
 };
 
-export const fetchOrders = async ({ context, pageType = "all", tab, search, skuType, dateRange }) => {
+export const fetchOrders = async ({ context, pageType = "all", tab, search, skuType, dateRange, pagination }) => {
   if (pageType === "manual") {
     return fetchManualOrders({ search, skuType });
   }
@@ -671,11 +899,18 @@ export const fetchOrders = async ({ context, pageType = "all", tab, search, skuT
   let rows = [];
 
   if (platform === "shopee") {
-    rows = await fetchShopeeOrders({ context, pageType, tab, dateRange });
+    rows = await fetchShopeeOrders({ context, pageType, tab, dateRange, pagination });
   } else if (platform === "tiktok") {
-    rows = await fetchTikTokOrders({ context, pageType, tab, dateRange });
+    rows = await fetchTikTokOrders({ context, pageType, tab, dateRange, pagination });
   } else {
     return [];
+  }
+
+  if (rows && !Array.isArray(rows) && Array.isArray(rows.orders)) {
+    return {
+      ...rows,
+      orders: filterOrders(rows.orders, { search, skuType }),
+    };
   }
 
   return filterOrders(rows, { search, skuType });
