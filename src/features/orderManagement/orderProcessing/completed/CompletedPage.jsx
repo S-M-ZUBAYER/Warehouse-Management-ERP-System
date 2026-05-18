@@ -28,10 +28,16 @@ export default function Completed() {
 
         <OrderTable
           orders={list.orders}
+          loading={list.isLoading || list.isFetching}
+          isError={list.isError}
+          errorMessage={list.error?.message || "Failed to load orders"}
           selectedIds={list.selectedIds}
           onToggleSelect={list.toggleSelect}
           onToggleAll={list.toggleAll}
           allSelected={list.allSelected}
+          pagination={list.pagination}
+          page={list.page}
+          setPage={list.setPage}
           showActionsCol={false}
           compact
           onDetails={handleDetails}
@@ -45,6 +51,5 @@ export default function Completed() {
 
 function OrderStateMessage({ list }) {
   if (list.isError) return <div className="px-5 py-2 text-xs text-red-500">{list.error?.message || "Failed to load orders"}</div>;
-  if (list.isFetching) return <div className="px-5 py-2 text-xs text-slate-500">Loading latest orders...</div>;
   return null;
 }

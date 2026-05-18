@@ -20,12 +20,13 @@ const DEFAULT_PLATFORMS = ["Shopee", "TikTok"];
 const DEFAULT_STORES = ["Store Name Here"];
 const SEARCH_TYPES = ["Single Search", "Batch Search"];
 const SKU_TYPES = ["SKU", "Order Number", "Tracking Number"];
+const ORDER_PAGE_SIZE = 10;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // useOrderList — shared hook used by all order list pages.
 // It keeps the old UI contract, but replaces mock arrays with Shopee/TikTok APIs.
 // ─────────────────────────────────────────────────────────────────────────────
-export function useOrderList({ pageType = "all", activeTab = "" } = {}) {
+export function useOrderList({ pageType = "all", activeTab = "", dateRange } = {}) {
   const queryClient = useQueryClient();
   const storedSearch = getStoredSearchContext();
   const [platform, setPlatform] = useState(storedSearch?.platform || "Shopee");
@@ -36,11 +37,20 @@ export function useOrderList({ pageType = "all", activeTab = "" } = {}) {
   const [appliedSearch, setAppliedSearch] = useState(storedSearch?.search || "");
   const [storeContext, setStoreContext] = useState(getStoredOrderContext());
   const [selectedIds, setSelectedIds] = useState([]);
+  const [page, setPage] = useState(1);
+  const [pageCursors, setPageCursors] = useState({ 1: "" });
   const [showSearchTypeDropdown, setShowSearchTypeDropdown] = useState(false);
+  const platformValue = String(storeContext?.platform || "").toLowerCase();
+  const serverPaginatedPageTypes = ["all", "completed", "canceled"];
+  const serverPaginated =
+    serverPaginatedPageTypes.includes(pageType) &&
+    (platformValue.includes("shopee") || platformValue.includes("tik"));
 
   useEffect(() => {
     setSelectedIds([]);
-  }, [pageType, activeTab, appliedSearch, skuType, storeContext?.platform_store_id]);
+    setPage(1);
+    setPageCursors({ 1: "" });
+  }, [pageType, activeTab, appliedSearch, skuType, storeContext?.platform_store_id, storeContext?.platform, dateRange?.start, dateRange?.end]);
 
   const queryParams = useMemo(
     () => ({
@@ -49,13 +59,22 @@ export function useOrderList({ pageType = "all", activeTab = "" } = {}) {
       tab: activeTab,
       search: appliedSearch,
       skuType,
+      dateRange,
+      pagination: serverPaginated
+        ? {
+            serverPaginated: true,
+            page,
+            pageSize: ORDER_PAGE_SIZE,
+            cursor: pageCursors[page] || "",
+          }
+        : undefined,
     }),
-    [activeTab, appliedSearch, pageType, skuType, storeContext]
+    [activeTab, appliedSearch, dateRange, page, pageCursors, pageType, serverPaginated, skuType, storeContext]
   );
 
   const hasStore = pageType === "manual" || Boolean(storeContext?.platform && storeContext?.platform_store_id);
   const {
-    data: orders = [],
+    data: orderResult = [],
     isLoading,
     isFetching,
     isError,
@@ -67,6 +86,64 @@ export function useOrderList({ pageType = "all", activeTab = "" } = {}) {
     staleTime: 1000 * 45,
     placeholderData: (previous) => previous,
   });
+
+  const serverPageResult =
+    serverPaginated && orderResult && !Array.isArray(orderResult) ? orderResult : null;
+  const allOrders = Array.isArray(orderResult) ? orderResult : orderResult?.orders || [];
+
+  useEffect(() => {
+    if (!serverPaginated || !serverPageResult?.nextCursor) return;
+    setPageCursors((current) => {
+      const nextPage = page + 1;
+      if (current[nextPage] === serverPageResult.nextCursor) return current;
+      return {
+        ...current,
+        [nextPage]: serverPageResult.nextCursor,
+      };
+    });
+  }, [page, serverPageResult?.nextCursor, serverPaginated]);
+
+  const pagination = useMemo(() => {
+    if (serverPaginated) {
+      const visibleEnd = (page - 1) * ORDER_PAGE_SIZE + allOrders.length;
+      const hasKnownTotal = serverPageResult?.hasKnownTotal === true;
+      const total = hasKnownTotal
+        ? Number(serverPageResult?.totalCount || 0)
+        : visibleEnd;
+      return {
+        page,
+        limit: ORDER_PAGE_SIZE,
+        total,
+        totalPages: hasKnownTotal
+          ? Math.max(1, Math.ceil(total / ORDER_PAGE_SIZE))
+          : serverPageResult?.hasMore && serverPageResult?.nextCursor ? page + 1 : page,
+        hasMore: Boolean(serverPageResult?.hasMore && serverPageResult?.nextCursor),
+        serverPaginated: true,
+        hasKnownTotal,
+      };
+    }
+
+    const total = allOrders.length;
+    const totalPages = Math.max(1, Math.ceil(total / ORDER_PAGE_SIZE));
+    return {
+      page,
+      limit: ORDER_PAGE_SIZE,
+      total,
+      totalPages,
+      hasKnownTotal: true,
+    };
+  }, [allOrders.length, page, serverPageResult?.hasKnownTotal, serverPageResult?.hasMore, serverPageResult?.totalCount, serverPaginated]);
+
+  useEffect(() => {
+    setPage((currentPage) => Math.min(currentPage, pagination.totalPages));
+  }, [pagination.totalPages]);
+
+  const orders = useMemo(() => {
+    if (serverPaginated) return allOrders;
+
+    const start = (page - 1) * ORDER_PAGE_SIZE;
+    return allOrders.slice(start, start + ORDER_PAGE_SIZE);
+  }, [allOrders, page, serverPaginated]);
 
   const actionMutation = useMutation({
     mutationFn: runOrderAction,
@@ -114,8 +191,8 @@ export function useOrderList({ pageType = "all", activeTab = "" } = {}) {
   };
 
   const selectedRows = useMemo(
-    () => orders.filter((order) => selectedIds.includes(order.id)),
-    [orders, selectedIds]
+    () => allOrders.filter((order) => selectedIds.includes(order.id)),
+    [allOrders, selectedIds]
   );
 
   const cacheOrderForDetail = (order) => setCachedOrderDetail(order);
@@ -149,6 +226,10 @@ export function useOrderList({ pageType = "all", activeTab = "" } = {}) {
 
     // data
     orders,
+    allOrders,
+    pagination,
+    page,
+    setPage,
     selectedRows,
     isLoading,
     isFetching,
