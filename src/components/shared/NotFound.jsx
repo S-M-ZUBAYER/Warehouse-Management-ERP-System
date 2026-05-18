@@ -430,8 +430,6 @@ export default function NotFound() {
 
       {/* ── Keyframe styles ── */}
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@700;900&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono&display=swap');
-
         @keyframes floatBox {
           0%, 100% { transform: translateY(0px) rotate(0deg); }
           33%       { transform: translateY(-12px) rotate(3deg); }

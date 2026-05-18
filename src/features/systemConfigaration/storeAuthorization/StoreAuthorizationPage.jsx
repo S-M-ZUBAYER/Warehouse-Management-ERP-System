@@ -1,7 +1,6 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import {
   Search,
-  Plus,
   ChevronDown,
   Pencil,
   RefreshCw,
@@ -13,6 +12,11 @@ import { useStoreAuthorization } from "./hooks/useStoreAuthorization";
 import AuthStatusBadge from "./component/AuthStatusBadge";
 import NicknameModal from "./component/NicknameModal";
 import SetPermissionModal from "./component/SetPermissionModal";
+import PortalActionMenu from "../../../components/shared/PortalActionMenu";
+import RecordDetailModal from "../../../components/shared/RecordDetailModal";
+import ConfirmActionModal from "../../../components/shared/ConfirmActionModal";
+import { exportRowsToCsv, exportRowsToXlsx, printRows } from "../../../utils/tableOutput";
+import ExportMenu from "../../../components/shared/ExportMenu";
 import shopeeLogo from "../../../assets/ShopPlatform/shopee.svg";
 import lazadaLogo from "../../../assets/ShopPlatform/lazada.svg";
 import tiktokLogo from "../../../assets/ShopPlatform/tiktok.svg";
@@ -22,11 +26,6 @@ import allCategoryLogo from "../../../assets/ShopPlatform/allCategories.svg";
 // StoreAuthorizationPage — Images 1, 2, 3, 4, 5
 // ─────────────────────────────────────────────────────────────────────────────
 
-const PLATFORM_ICONS = {
-  Shopee: { bg: "bg-orange-500", letter: "S" },
-  Lazada: { bg: "bg-purple-600", letter: "L" },
-  TikTok: { bg: "bg-black", letter: "T" },
-};
 
 export default function StoreAuthorizationPage() {
   const {
@@ -41,6 +40,9 @@ export default function StoreAuthorizationPage() {
     platforms,
     statuses,
     stores,
+    loading,
+    error,
+    reloadStores,
     selectedIds,
     toggleSelect,
     toggleAll,
@@ -48,7 +50,6 @@ export default function StoreAuthorizationPage() {
     openActionId,
     setOpenActionId,
     nicknameModal,
-    openAddStore,
     openEditStore,
     closeNickname,
     setNickname,
@@ -56,27 +57,39 @@ export default function StoreAuthorizationPage() {
     permModal,
     permSearch,
     setPermSearch,
+    permRole,
+    setPermRole,
+    permRoles,
     permSelected,
+    permEditIds,
     togglePermSub,
+    togglePermEdit,
     confirmPerm,
     filteredSubAccounts,
     closePermModal,
     openPermModal,
+    unlinkStore,
+    unlinkModal,
+    closeUnlinkModal,
+    confirmUnlinkStore,
   } = useStoreAuthorization();
 
-  const actionRefs = useRef({});
+  const [actionAnchor, setActionAnchor] = useState(null);
+  const [detailStore, setDetailStore] = useState(null);
+  const selectedRows = stores.filter((store) => selectedIds.includes(store.id));
+  const outputColumns = [
+    { label: "Marketplace", key: "marketplace" },
+    { label: "Store Nickname", key: "nickname" },
+    { label: "Store ID", key: "storeId" },
+    { label: "Shop ID", key: "shopId" },
+    { label: "Open ID", key: "openId" },
+    { label: "Country", key: "country" },
+    { label: "Status", key: "authStatus" },
+    { label: "Create Time", key: "createdAt" },
+  ];
 
-  // close action menu on outside click
-  useEffect(() => {
-    const handler = (e) => {
-      if (openActionId !== null) {
-        const ref = actionRefs.current[openActionId];
-        if (ref && !ref.contains(e.target)) setOpenActionId(null);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [openActionId]);
+console.log(stores,"Stores");
+
 
   return (
     <div className="space-y-4 font-body">
@@ -98,9 +111,9 @@ export default function StoreAuthorizationPage() {
                            rounded-lg text-sm text-slate-500 outline-none focus:border-primary
                            cursor-pointer pr-8"
               >
-                <option>Platform Name Here</option>
+                <option value="All">All Platforms</option>
                 {["Shopee", "Lazada", "TikTok"].map((p) => (
-                  <option key={p}>{p}</option>
+                  <option key={p} value={p}>{p}</option>
                 ))}
               </select>
               <ChevronDown
@@ -200,26 +213,36 @@ export default function StoreAuthorizationPage() {
             </div>
 
             {/* Search button */}
-            <button className="mt-4 px-5 py-2 text-sm font-semibold bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors">
+            <button
+              type="button"
+              onClick={reloadStores}
+              className="mt-4 px-5 py-2 text-sm font-semibold bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors"
+            >
               Search
             </button>
 
             {/* Add Store button */}
-            <button
+            {/* <button
               onClick={openAddStore}
               className="mt-4 ml-auto flex items-center gap-2 px-4 py-2 text-sm font-semibold
                          bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors"
             >
               <Plus size={14} />
               Add Store
-            </button>
+            </button> */}
           </div>
         </div>
+
+        {error && (
+          <div className="mx-5 mb-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
 
         {/* Table */}
         <div className="overflow-x-auto z-50">
           <table className="w-full text-sm font-body">
-            <thead>
+            <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
               <tr className="border-b border-surface-border">
                 {[
                   "Select All",
@@ -243,7 +266,7 @@ export default function StoreAuthorizationPage() {
                           checked={allSelected}
                           ref={(el) => {
                             if (el) {
-                              el.indeterminate = !allSelected; // ✅ Fix: only indeterminate when SOME (not all) are selected
+                              el.indeterminate = selectedIds.length > 0 && !allSelected;
                             }
                           }}
                           onChange={toggleAll}
@@ -259,7 +282,21 @@ export default function StoreAuthorizationPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-border">
-              {stores.map((store) => (
+              {loading && (
+                <tr>
+                  <td colSpan={8} className="py-10 text-center text-sm text-slate-500">
+                    Loading platform stores...
+                  </td>
+                </tr>
+              )}
+              {!loading && stores.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="py-10 text-center text-sm text-slate-500">
+                    No authorized stores found
+                  </td>
+                </tr>
+              )}
+              {!loading && stores.map((store) => (
                 <tr
                   key={store.id}
                   className="hover:bg-surface/50 transition-colors"
@@ -289,16 +326,17 @@ export default function StoreAuthorizationPage() {
 
                   {/* Actions — 3-dot with dropdown */}
                   <td className="py-3 pr-5">
-                    <div
-                      className="relative"
-                      ref={(el) => (actionRefs.current[store.id] = el)}
-                    >
+                    <div className="relative">
                       <button
-                        onClick={() =>
-                          setOpenActionId(
-                            openActionId === store.id ? null : store.id,
-                          )
-                        }
+                        onClick={(e) => {
+                          if (openActionId === store.id) {
+                            setOpenActionId(null);
+                            setActionAnchor(null);
+                            return;
+                          }
+                          setOpenActionId(store.id);
+                          setActionAnchor(e.currentTarget);
+                        }}
                         className="flex items-center gap-0.5 p-1.5 rounded-lg text-slate-400
                                    hover:text-primary-text hover:bg-surface-card transition-colors"
                       >
@@ -310,62 +348,80 @@ export default function StoreAuthorizationPage() {
                         ))}
                       </button>
 
-                      {openActionId === store.id && (
-                        <div
-                          className="absolute right-0 top-full mt-1 z-30 bg-white rounded-xl
-                border border-surface-border shadow-lg py-1 w-44"
-                        >
-                          {[
-                            {
-                              label: "Edit",
-                              icon: Pencil,
-                              action: () => {
-                                openEditStore(store);
-                                setOpenActionId(null);
-                              },
+                      <PortalActionMenu
+                        open={openActionId === store.id}
+                        anchorRef={{ current: actionAnchor }}
+                        onClose={() => {
+                          setOpenActionId(null);
+                          setActionAnchor(null);
+                        }}
+                        width={176}
+                      >
+                        {[
+                          {
+                            label: "Details",
+                            icon: Search,
+                            action: () => {
+                              setDetailStore(store);
+                              setOpenActionId(null);
                             },
-                            {
-                              label: "Reauthorization",
-                              icon: RefreshCw,
-                              action: () => setOpenActionId(null),
+                          },
+                          {
+                            label: "Edit",
+                            icon: Pencil,
+                            action: () => {
+                              openEditStore(store);
+                              setOpenActionId(null);
                             },
-                            {
-                              label: "Set Permission",
-                              icon: ShieldCheck,
-                              action: () => {
-                                openPermModal(store);
-                                setOpenActionId(null);
-                              },
+                          },
+                          // {
+                          //   label: "Reauthorization",
+                          //   icon: RefreshCw,
+                          //   action: () => {
+                          //     reloadStores();
+                          //     setOpenActionId(null);
+                          //   },
+                          // },
+                          {
+                            label: "Set Permission",
+                            icon: ShieldCheck,
+                            action: () => {
+                              openPermModal(store);
+                              setOpenActionId(null);
                             },
-                            {
-                              label: "Unlink",
-                              icon: Link,
-                              action: () => setOpenActionId(null),
-                              danger: true,
+                          },
+                          {
+                            label: "Unlink",
+                            icon: Link,
+                            action: () => {
+                              unlinkStore(store);
+                              setOpenActionId(null);
                             },
-                          ].map(({ label, icon: Icon, action, danger }) => (
+                            danger: true,
+                          },
+                        ].map(({ label, icon, action, danger }) => {
+                          const ActionIcon = icon;
+                          return (
                             <button
                               key={label}
+                              type="button"
                               onClick={action}
-                              className={`w-full flex items-center  gap-2.5 px-4 py-2 text-xs transition-colors
-          ${
-            danger
-              ? "text-red-500 hover:bg-red-50"
-              : "text-slate-700 border-b hover:bg-surface-card"
-          }`}
+                              className={`w-full flex items-center gap-2.5 px-4 py-2 text-xs transition-colors ${
+                                danger
+                                  ? "text-red-500 hover:bg-red-50"
+                                  : "text-slate-700 border-b hover:bg-surface-card"
+                              }`}
                             >
-                              <Icon
+                              <ActionIcon
                                 size={13}
-                                className={
-                                  danger ? "text-red-400" : "text-slate-400"
-                                }
+                                className={danger ? "text-red-400" : "text-slate-400"}
                                 strokeWidth={1.8}
                               />
                               {label}
                             </button>
-                          ))}
-                        </div>
-                      )}
+                          );
+                        })}
+                      </PortalActionMenu>
                     </div>
                   </td>
                 </tr>
@@ -373,7 +429,46 @@ export default function StoreAuthorizationPage() {
             </tbody>
           </table>
         </div>
+        <div className="flex justify-end gap-3 px-5 py-4 border-t border-surface-border">
+          <ExportMenu
+            onExportCsv={() => exportRowsToCsv(selectedRows, outputColumns, "authorized-stores.csv", "store")}
+            onExportXlsx={() => exportRowsToXlsx(selectedRows, outputColumns, "authorized-stores.xlsx", "store")}
+          />
+          <button onClick={() => printRows(selectedRows, outputColumns, "Selected Authorized Stores", "store")} className="px-16 py-2.5 text-base font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors">
+            Print
+          </button>
+        </div>
       </div>
+
+      <RecordDetailModal
+        open={!!detailStore}
+        title="Store Details"
+        subtitle={detailStore?.nickname}
+        record={detailStore}
+        onClose={() => setDetailStore(null)}
+        fields={[
+          { label: "Marketplace", key: "marketplace" },
+          { label: "Store Nickname", key: "nickname" },
+          { label: "Store ID", key: "storeId" },
+          { label: "Shop ID", key: "shopId" },
+          { label: "Open ID", key: "openId" },
+          { label: "Country", key: "country" },
+          { label: "Authorization Status", key: "authStatus" },
+          { label: "Default Warehouse", key: "defaultWarehouse" },
+          { label: "Create Time", key: "createdAt" },
+        ]}
+      />
+
+      <ConfirmActionModal
+        open={unlinkModal?.open}
+        title="Unlink Store"
+        danger
+        loading={unlinkModal?.loading}
+        message={<>Are you sure you want to unlink <span className="font-semibold text-slate-800">{unlinkModal?.store?.nickname}</span>? This action cannot be undone.</>}
+        confirmLabel="Unlink"
+        onCancel={closeUnlinkModal}
+        onConfirm={confirmUnlinkStore}
+      />
 
       {/* ── Modals ── */}
       <NicknameModal
@@ -384,12 +479,20 @@ export default function StoreAuthorizationPage() {
       />
       <SetPermissionModal
         open={permModal.open}
+        store={permModal.store}
+        loading={permModal.loading}
+        saving={permModal.saving}
         onClose={closePermModal}
         search={permSearch}
         onSearch={setPermSearch}
+        roleValue={permRole}
+        onRoleChange={setPermRole}
+        roles={permRoles}
         accounts={filteredSubAccounts}
         selected={permSelected}
+        editSelected={permEditIds}
         onToggle={togglePermSub}
+        onToggleEdit={togglePermEdit}
         onConfirm={confirmPerm}
       />
     </div>

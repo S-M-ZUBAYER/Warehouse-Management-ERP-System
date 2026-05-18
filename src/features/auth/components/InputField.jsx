@@ -31,9 +31,9 @@ export default function InputField({
             border: `1.5px solid ${error ? "#EF4444" : "#CBD5E1"}`,
             color: "#1E293B",
           }}
-          onFocus={(e) => {
-            e.target.style.borderColor = "#F59E0B";
-            e.target.style.boxShadow = "0 0 0 3px rgba(245,158,11,0.12)";
+         onFocus={(e) => {
+            e.target.style.borderColor = "#004368";
+            e.target.style.boxShadow = "0 0 0 3px rgba(0,67,104,0.12)";
           }}
           onBlur={(e) => {
             e.target.style.borderColor = error ? "#EF4444" : "#CBD5E1";

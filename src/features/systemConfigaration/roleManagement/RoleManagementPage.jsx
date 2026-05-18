@@ -1,10 +1,12 @@
-import { Search, Plus } from "lucide-react";
-import { useRef, useEffect } from "react";
+import { Search, Plus, Eye, Pencil, Trash2 } from "lucide-react";
+import { useRef, useEffect, useState } from "react";
 import Topbar from "../../../components/layout/Topbar";
 import { useRoleManagement } from "./hooks/useRoleManagement";
 import AddRoleModal from "./component/AddRoleModal";
 import EditRoleModal from "./component/EditRoleModal";
 import DeleteRoleModal from "./component/DeleteRoleModal";
+import PortalActionMenu from "../../../components/shared/PortalActionMenu";
+import RecordDetailModal from "../../../components/shared/RecordDetailModal";
 
 export default function RoleManagementPage() {
   const {
@@ -22,6 +24,8 @@ export default function RoleManagementPage() {
     form,
     handleFormChange,
     togglePermission,
+    toggleAllPermissions,
+    isAllSelected,
     errors,
     saving,
     handleAdd,
@@ -35,6 +39,8 @@ export default function RoleManagementPage() {
     editForm,
     handleEditFormChange,
     toggleEditPermission,
+    toggleAllEditPermissions,
+    isEditAllSelected,
     editErrors,
     // ── Delete ──
     deleteModal,
@@ -45,6 +51,7 @@ export default function RoleManagementPage() {
   } = useRoleManagement();
 
   const actionRefs = useRef({});
+  const [detailRole, setDetailRole] = useState(null);
 
   useEffect(() => {
     const handler = (e) => {
@@ -123,7 +130,7 @@ export default function RoleManagementPage() {
           {/* ── Table ── */}
           {!rolesLoading && !isRolesError && roles.length > 0 && (
             <table className="w-full text-sm font-body">
-              <thead>
+              <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                 <tr className="border-b border-surface-border">
                   {[
                     { label: "Role Name", cls: "pl-5 w-[22%]" },
@@ -152,7 +159,7 @@ export default function RoleManagementPage() {
                     </td>
                     <td className="py-3.5 pr-4">
                       <span
-                        className={`text-sm ${role.linkStatus === "Linked" ? "text-emerald-600" : "text-slate-500"}`}
+                        className={`text-sm ${String(role.linkStatus || "").toLowerCase().startsWith("linked") ? "text-emerald-600" : "text-slate-500"}`}
                       >
                         {role.linkStatus ?? "—"}
                       </span>
@@ -187,27 +194,46 @@ export default function RoleManagementPage() {
                           ))}
                         </button>
 
-                        {openActionId === role.id && (
-                          <div
-                            className="absolute right-0 top-full mt-1 z-30 bg-white rounded-xl
-                                                       border border-surface-border shadow-lg py-1 w-32"
+                        <PortalActionMenu
+                          open={openActionId === role.id}
+                          anchorRef={{ current: actionRefs.current[role.id] }}
+                          onClose={() => setOpenActionId(null)}
+                          width={128}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenActionId(null);
+                              setDetailRole(role);
+                            }}
+                            className="w-full flex items-center gap-2 px-4 py-2 text-xs transition-colors text-slate-700 hover:bg-surface-card"
                           >
-                            <button
-                              onClick={() => openEditModal(role)}
-                              className="w-full text-left px-4 py-2 text-xs transition-colors
-                                                           text-slate-700 hover:bg-surface-card"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => openDeleteModal(role)}
-                              className="w-full text-left px-4 py-2 text-xs transition-colors
-                                                           text-red-500 hover:bg-red-50"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        )}
+                            <Eye size={13} className="text-slate-400" />
+                            Details
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenActionId(null);
+                              openEditModal(role);
+                            }}
+                            className="w-full flex items-center gap-2 px-4 py-2 text-xs transition-colors text-slate-700 hover:bg-surface-card"
+                          >
+                            <Pencil size={13} className="text-slate-400" />
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenActionId(null);
+                              openDeleteModal(role);
+                            }}
+                            className="w-full flex items-center gap-2 px-4 py-2 text-xs transition-colors text-red-500 hover:bg-red-50"
+                          >
+                            <Trash2 size={13} />
+                            Delete
+                          </button>
+                        </PortalActionMenu>
                       </div>
                     </td>
                   </tr>
@@ -220,12 +246,29 @@ export default function RoleManagementPage() {
       </div>{" "}
       {/* ✅ closes Roles List card */}
       {/* ── Modals ── */}
+      <RecordDetailModal
+        open={!!detailRole}
+        title="Role Details"
+        subtitle={detailRole?.name}
+        record={detailRole}
+        onClose={() => setDetailRole(null)}
+        fields={[
+          { label: "Role Name", key: "name" },
+          { label: "Sub Account Link", key: "linkStatus" },
+          { label: "Description", key: "description" },
+          { label: "User Count", key: "userCount" },
+          { label: "Create Time", key: "createdAt" },
+          { label: "Updated Time", key: "updatedAt" },
+        ]}
+      />
       <AddRoleModal
         open={showModal}
         onClose={closeModal}
         form={form}
         onChange={handleFormChange}
         togglePermission={togglePermission}
+        toggleAllPermissions={toggleAllPermissions}
+        isAllSelected={isAllSelected}
         errors={errors}
         saving={saving}
         onAdd={handleAdd}
@@ -237,6 +280,8 @@ export default function RoleManagementPage() {
         form={editForm}
         onChange={handleEditFormChange}
         togglePermission={toggleEditPermission}
+        toggleAllPermissions={toggleAllEditPermissions}
+        isAllSelected={isEditAllSelected}
         errors={editErrors}
         saving={editSaving}
         onSave={handleEdit}

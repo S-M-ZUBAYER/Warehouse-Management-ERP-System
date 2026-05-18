@@ -43,6 +43,8 @@ export default function AddWarehouseModal({
   onAttributeChange,
   onAdd,
   onClose,
+  title = "Add Warehouse",
+  submitLabel = "Add",
 }) {
   if (!isOpen) return null;
 
@@ -65,7 +67,7 @@ export default function AddWarehouseModal({
         {/* ── Modal Header ── */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4">
           <h2 className="text-2xl font-bold text-primary-text font-display">
-            Add Warehouse
+            {title}
           </h2>
           <button
             onClick={onClose}
@@ -183,7 +185,7 @@ export default function AddWarehouseModal({
                                 rounded-full animate-spin"
                 />
               )}
-              Add
+              {submitLabel}
             </button>
           </div>
         </div>

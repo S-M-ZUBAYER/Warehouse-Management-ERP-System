@@ -6,7 +6,22 @@ import {
   AlertCircle,
   Loader2,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
+
+const formatDetailsForEdit = (value) => {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "object") return JSON.stringify(value, null, 2);
+  if (typeof value !== "string") return String(value);
+
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  try {
+    return JSON.stringify(JSON.parse(trimmed), null, 2);
+  } catch {
+    return value;
+  }
+};
 
 // ── Confirm Modal (shared) ────────────────────────────────────────────────────
 export function ConfirmModal({
@@ -68,6 +83,8 @@ export function ConfirmModal({
 
 // ── Add SKU Modal ─────────────────────────────────────────────────────────────
 export function AddSkuModal({
+  title = "Add Single Merchant SKU",
+  subtitle = "Add a new Merchant SKU to your inventory.",
   form,
   errors,
   fileInputRef,
@@ -84,6 +101,7 @@ export function AddSkuModal({
   isWarehouseError,
 }) {
   const [warehouseDropdownOpen, setWarehouseDropdownOpen] = useState(false);
+  const modalScrollRef = useRef(null);
 
   return (
     <div
@@ -97,9 +115,10 @@ export function AddSkuModal({
       }
     >
       <div
+        ref={modalScrollRef}
         className="bg-white rounded-2xl shadow-xl w-full font-body overflow-hidden"
         style={{
-          maxWidth: "500px",
+          maxWidth: "560px",
           maxHeight: "90vh",
           overflowY: "auto",
           animation: "popIn 0.18s ease both",
@@ -109,10 +128,10 @@ export function AddSkuModal({
         <div className="flex items-start justify-between px-7 pt-7 pb-2">
           <div>
             <h2 className="text-lg font-bold text-slate-800 font-display">
-              Add Single Merchant SKU
+              {title}
             </h2>
             <p className="text-xs text-slate-500 mt-1">
-              Add a new Merchant SKU to your inventory.
+              {subtitle}
             </p>
           </div>
           <button
@@ -124,7 +143,11 @@ export function AddSkuModal({
           </button>
         </div>
 
-        <div className="px-7 pb-7 space-y-4">
+        <div
+          className={`px-7 space-y-4 ${
+            warehouseDropdownOpen ? "pb-44" : "pb-7"
+          }`}
+        >
           {/* Photo upload */}
           <label className="flex flex-col items-center justify-center border-2 border-dashed border-surface-border rounded-xl py-6 cursor-pointer hover:border-primary/40 transition-colors bg-surface">
             <input
@@ -194,11 +217,6 @@ export function AddSkuModal({
                 name: "skuName",
                 placeholder: "Write SKU here",
               },
-              {
-                label: "*Product Details",
-                name: "productDetails",
-                placeholder: "Product details here",
-              },
               { label: "GTIN", name: "gtin", placeholder: "GTIN here" },
               {
                 label: "Product Price",
@@ -232,6 +250,27 @@ export function AddSkuModal({
                 )}
               </div>
             ))}
+
+            <div className="col-span-2">
+              <label className="block text-xs text-slate-600 mb-1">
+                *Product Details
+              </label>
+              <textarea
+                name="productDetails"
+                value={formatDetailsForEdit(form.productDetails)}
+                onChange={handleFormChange}
+                placeholder='Product details or JSON, e.g. {"platform":"tiktok","seller_sku":"Aface01N"}'
+                rows={7}
+                disabled={saving}
+                className={`w-full px-3 py-2 text-sm border rounded-lg bg-white text-slate-700 placeholder-slate-400 outline-none transition-all resize-y font-mono leading-5 disabled:opacity-60
+                  ${errors.productDetails ? "border-red-300 focus:border-red-400 bg-red-50/30" : "border-surface-border focus:border-primary focus:ring-2 focus:ring-primary/10"}`}
+              />
+              {errors.productDetails && (
+                <p className="text-xs text-red-500 mt-0.5 flex items-center gap-1">
+                  <AlertCircle size={10} /> {errors.productDetails}
+                </p>
+              )}
+            </div>
 
             {/* Size */}
             <div>
@@ -267,7 +306,20 @@ export function AddSkuModal({
                 <button
                   type="button"
                   disabled={saving}
-                  onClick={() => setWarehouseDropdownOpen((p) => !p)}
+                  onClick={() => {
+                    setWarehouseDropdownOpen((p) => {
+                      const next = !p;
+                      if (next) {
+                        setTimeout(() => {
+                          modalScrollRef.current?.scrollTo({
+                            top: modalScrollRef.current.scrollHeight,
+                            behavior: "smooth",
+                          });
+                        }, 0);
+                      }
+                      return next;
+                    });
+                  }}
                   className="w-full flex items-center justify-between px-3 py-2 text-xs border border-surface-border rounded-lg bg-white text-slate-700 outline-none focus:border-primary disabled:opacity-60"
                 >
                   <span
@@ -284,7 +336,7 @@ export function AddSkuModal({
                 </button>
 
                 {warehouseDropdownOpen && (
-                  <div className="absolute z-50 mt-1 w-full bg-white border border-surface-border rounded-lg shadow-lg overflow-hidden">
+                  <div className="mt-2 w-full bg-white border border-surface-border rounded-lg shadow-lg overflow-hidden">
                     <div className="p-2 border-b border-surface-border">
                       <div className="relative">
                         <Search

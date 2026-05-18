@@ -315,7 +315,7 @@ export default function AddCombineSKUPage() {
               </div>
             ) : (
               <table className="w-full text-xs font-body">
-                <thead className="sticky top-0 bg-white z-10">
+                <thead className="sticky top-0 bg-white z-10 [&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                   <tr className="border-y-2 border-surface-border">
                     <th className="w-10 pl-4 pr-4 py-2.5 text-left">
                       <div className="flex items-center gap-2">
@@ -460,7 +460,7 @@ export default function AddCombineSKUPage() {
               </div>
             ) : (
               <table className="w-full text-xs font-body">
-                <thead className="sticky top-0 bg-white z-10">
+                <thead className="sticky top-0 bg-white z-10 [&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                   <tr className="border-y-2 border-surface-border">
                     <th className="w-12 pl-4 py-2.5 pr-4 text-left">
                       <span className="font-semibold text-primary-text text-base">
@@ -519,11 +519,15 @@ export default function AddCombineSKUPage() {
                         <input
                           type="number"
                           min={1}
+                          max={sku.available_in_inventory ?? 1}
                           value={quantities[sku.id] ?? 1}
                           onChange={(e) => updateQty(sku.id, e.target.value)}
+                          onBlur={(e) => {
+                            if (e.target.value === "") updateQty(sku.id, "1");
+                          }}
                           onClick={(e) => e.stopPropagation()}
                           disabled={saving}
-                          className="w-14 px-2 py-1 text-xs border border-surface-border rounded-lg text-slate-700 outline-none text-center focus:border-primary focus:ring-1 focus:ring-primary/10 disabled:opacity-60"
+                          className="w-20 px-2 py-1 text-xs border border-surface-border rounded-lg text-slate-700 outline-none text-center focus:border-primary focus:ring-1 focus:ring-primary/10 disabled:opacity-60"
                         />
                       </td>
                       <td className="py-2.5 pr-3">

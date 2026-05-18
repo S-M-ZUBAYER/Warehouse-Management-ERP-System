@@ -1,7 +1,9 @@
-import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Search, Calendar, ChevronDown, Trash2 } from "lucide-react";
 import Topbar from "../../../../components/layout/Topbar";
+import { createManualOrder, searchWarehouseProducts } from "../../shared/utils/orderApi";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AddManualOrderPage — Images 10, 11, 12
@@ -9,54 +11,6 @@ import Topbar from "../../../../components/layout/Topbar";
 // Image 11: Add Gift mode — Buyer Information section has dashed blue border
 // Image 12: After search — product search results showing Select/Image/SKU/Available
 // ─────────────────────────────────────────────────────────────────────────────
-
-const MOCK_SEARCH_PRODUCTS = [
-  {
-    id: 1,
-    sku: "WM-012",
-    available: 15,
-    image: "https://placehold.co/36x36/1a1a2e/fff?text=M",
-  },
-  {
-    id: 2,
-    sku: "KB-045",
-    available: 20,
-    image: "https://placehold.co/36x36/16213e/fff?text=K",
-  },
-  {
-    id: 3,
-    sku: "SSD-123",
-    available: 25,
-    image: "https://placehold.co/36x36/0f3460/fff?text=S",
-  },
-];
-
-const ALL_PRODUCTS = [
-  {
-    id: 1,
-    name: "Ergonomic wireless mouse with 3k...",
-    sku: "WM-012",
-    weight: 1800,
-    unitPrice: 12,
-    image: "https://placehold.co/36x36/1a1a2e/fff?text=M",
-  },
-  {
-    id: 2,
-    name: "Compact mechanical keyboard with...",
-    sku: "KB-045",
-    weight: 1800,
-    unitPrice: 12,
-    image: "https://placehold.co/36x36/16213e/fff?text=K",
-  },
-  {
-    id: 3,
-    name: "Portable external SSD 1TB",
-    sku: "SSD-123",
-    weight: 900,
-    unitPrice: 12,
-    image: "https://placehold.co/36x36/0f3460/fff?text=S",
-  },
-];
 
 function FormInput({
   label,
@@ -136,11 +90,8 @@ export default function AddManualOrderPage({ mode = "order", onBack }) {
   });
   const [productSearch, setProductSearch] = useState("");
   const [searchResults, setSearchResults] = useState(null);
-  const [addedProducts, setAddedProducts] = useState(
-    isGift
-      ? [{ ...ALL_PRODUCTS[0], qty: 1 }]
-      : ALL_PRODUCTS.map((p) => ({ ...p, qty: p.id === 3 ? 1 : 2 })),
-  );
+  const [productSearchLoading, setProductSearchLoading] = useState(false);
+  const [addedProducts, setAddedProducts] = useState([]);
   const [paymentType, setPaymentType] = useState("COD");
   const [discounts, setDiscounts] = useState("$0");
   const [shippingFee, setShippingFee] = useState("$0");
@@ -148,15 +99,33 @@ export default function AddManualOrderPage({ mode = "order", onBack }) {
   const handleBuyerChange = (e) =>
     setBuyerForm((p) => ({ ...p, [e.target.name]: e.target.value }));
 
-  const handleSearch = () => {
-    setSearchResults(MOCK_SEARCH_PRODUCTS);
+  const saveMutation = useMutation({
+    mutationFn: createManualOrder,
+    onSuccess: (data) => {
+      toast.success(data?.message || "Manual order saved");
+      onBack?.();
+    },
+    onError: (err) => {
+      toast.error(err?.response?.data?.message || err?.message || "Failed to save manual order");
+    },
+  });
+
+  const handleSearch = async () => {
+    setProductSearchLoading(true);
+    try {
+      const results = await searchWarehouseProducts({ search: productSearch });
+      setSearchResults(results);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || err?.message || "Failed to search products");
+      setSearchResults([]);
+    } finally {
+      setProductSearchLoading(false);
+    }
   };
 
   const addProductFromSearch = (product) => {
-    const full = ALL_PRODUCTS.find((p) => p.sku === product.sku);
-    if (!full) return;
-    if (addedProducts.find((p) => p.id === full.id)) return;
-    setAddedProducts((p) => [...p, { ...full, qty: 1 }]);
+    if (addedProducts.find((p) => String(p.id) === String(product.id))) return;
+    setAddedProducts((p) => [...p, { ...product, qty: 1 }]);
     setSearchResults(null);
     setProductSearch("");
   };
@@ -176,6 +145,43 @@ export default function AddManualOrderPage({ mode = "order", onBack }) {
     0,
   );
   const subtotal = orderIncome;
+
+  const parseCurrencyNumber = (value) => Number(String(value || "0").replace(/[^0-9.-]/g, "")) || 0;
+  const handleSave = () => {
+    if (!orderForm.orderNumber.trim() && !isGift) {
+      toast.error("Order number is required");
+      return;
+    }
+    if (addedProducts.length === 0) {
+      toast.error("Please add at least one product");
+      return;
+    }
+
+    saveMutation.mutate({
+      type: isGift ? "gift" : "manual_order",
+      orderNumber: orderForm.orderNumber,
+      orderTime: `${orderForm.selectDate || ""} ${orderForm.selectTime || ""}`.trim(),
+      logistic: orderForm.logistic,
+      currency: orderForm.currency || "USD",
+      buyer: buyerForm,
+      items: addedProducts.map((product) => ({
+        skuId: product.id,
+        sku: product.sku,
+        productName: product.name,
+        quantity: product.qty,
+        unitPrice: product.unitPrice,
+        weight: product.weight,
+      })),
+      payment: {
+        paymentType,
+        orderIncome,
+        subtotal,
+        discounts: parseCurrencyNumber(discounts),
+        shippingFee: parseCurrencyNumber(shippingFee),
+        orderValue: orderIncome - parseCurrencyNumber(discounts) + parseCurrencyNumber(shippingFee),
+      },
+    });
+  };
 
   return (
     <div className="space-y-4 font-body">
@@ -312,9 +318,10 @@ export default function AddManualOrderPage({ mode = "order", onBack }) {
               </div>
               <button
                 onClick={handleSearch}
-                className="px-5 py-2 text-sm font-semibold bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors"
+                disabled={productSearchLoading}
+                className="px-5 py-2 text-sm font-semibold bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors disabled:opacity-60"
               >
-                Search
+                {productSearchLoading ? "Searching..." : "Search"}
               </button>
             </div>
 
@@ -322,7 +329,7 @@ export default function AddManualOrderPage({ mode = "order", onBack }) {
             {searchResults && (
               <div className="border border-surface-border rounded-xl overflow-hidden mb-4">
                 <table className="w-full text-sm">
-                  <thead>
+                  <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                     <tr className="border-b border-surface-border bg-surface/50">
                       {[
                         "Select",
@@ -382,7 +389,7 @@ export default function AddManualOrderPage({ mode = "order", onBack }) {
             {/* Added products table */}
             {addedProducts.length > 0 && (
               <table className="w-full text-sm">
-                <thead>
+                <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                   <tr className="border-b border-surface-border">
                     {[
                       "Image",
@@ -607,10 +614,12 @@ export default function AddManualOrderPage({ mode = "order", onBack }) {
           Cancel
         </button>
         <button
+          onClick={handleSave}
+          disabled={saveMutation.isPending}
           className="px-7 py-2.5 text-sm font-semibold bg-primary hover:bg-primary-dark
-                           text-white rounded-xl transition-colors"
+                           text-white rounded-xl transition-colors disabled:opacity-60"
         >
-          Save
+          {saveMutation.isPending ? "Saving..." : "Save"}
         </button>
       </div>
     </div>
