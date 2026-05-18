@@ -103,7 +103,7 @@ export default function AddRoleModal({
                 {" "}
                 {/* 👈 scroll wrapper */}
                 <table className="w-full text-sm">
-                  <thead className="sticky top-0 z-10 bg-white">
+                  <thead className="sticky top-0 z-10 bg-white [&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                     {" "}
                     {/* 👈 sticky header */}
                     <tr className="border-b border-surface-border">

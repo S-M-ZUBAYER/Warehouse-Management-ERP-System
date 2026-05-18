@@ -4,7 +4,8 @@ import {
 } from 'lucide-react';
 import Topbar from '../../../components/layout/Topbar';
 import StockAlertBadge from './component/StockAlertBadge';
-import { exportRowsToCsv, printRows } from '../../../utils/tableOutput';
+import { exportRowsToCsv, exportRowsToXlsx, printRows } from '../../../utils/tableOutput';
+import ExportMenu from '../../../components/shared/ExportMenu';
 import {
     useInventoryList,
     SKU_TYPE_OPTIONS,
@@ -259,7 +260,7 @@ export default function InventoryListPage() {
                         />
                     ) : (
                         <table className="w-full text-sm font-body">
-                            <thead>
+                            <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                                 <tr className="border-b border-surface-border">
                                     <th className="py-3 pl-5 w-36 text-left">
                                         <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -270,7 +271,7 @@ export default function InventoryListPage() {
                                                 onChange={toggleAll}
                                                 className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
                                             />
-                                            <span className="pl-2 text-base font-semibold text-primary-text">Select All</span>
+                                            <span className="pl-2 text-sm font-bold text-slate-800">Select All</span>
                                         </label>
                                     </th>
                                     {[
@@ -281,7 +282,7 @@ export default function InventoryListPage() {
                                         { label: 'Stock Alert',    cls: 'w-36' },
                                         { label: 'Action',         cls: 'w-16 pr-5' },
                                     ].map(({ label, cls }) => (
-                                        <th key={label} className={`py-3 pr-4 text-left text-xs font-semibold text-slate-600 ${cls}`}>
+                                        <th key={label} className={`py-3 pr-4 text-left text-sm font-bold text-slate-800 ${cls}`}>
                                             {label}
                                         </th>
                                     ))}
@@ -416,20 +417,26 @@ export default function InventoryListPage() {
 
                 {/* Footer */}
                 <div className="flex justify-end gap-3 px-5 py-4 border-t border-surface-border">
-                    <button onClick={() => exportRowsToCsv(items.filter((item) => selectedIds.includes(item.id)), [
-                        { label: 'Seller SKU', render: (row) => row.merchantSku?.sku_name || row.sku_name || '' },
-                        { label: 'Warehouse', render: (row) => row.warehouse?.name || '' },
-                        { label: 'Quantity', key: 'qty_on_hand' },
-                        { label: 'Stock Alert', key: 'alert_status' },
-                    ], 'inventory-list.csv', 'inventory item')} className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold border border-surface-border rounded-lg text-slate-700 bg-white hover:bg-surface-card transition-colors">
-                        Export <ChevronDown size={13} className="text-slate-400" />
-                    </button>
+                    <ExportMenu
+                        onExportCsv={() => exportRowsToCsv(items.filter((item) => selectedIds.includes(item.id)), [
+                            { label: 'Seller SKU', render: (row) => row.merchantSku?.sku_name || row.sku_name || '' },
+                            { label: 'Warehouse', render: (row) => row.warehouse?.name || '' },
+                            { label: 'Quantity', key: 'qty_on_hand' },
+                            { label: 'Stock Alert', key: 'alert_status' },
+                        ], 'inventory-list.csv', 'inventory item')}
+                        onExportXlsx={() => exportRowsToXlsx(items.filter((item) => selectedIds.includes(item.id)), [
+                            { label: 'Seller SKU', render: (row) => row.merchantSku?.sku_name || row.sku_name || '' },
+                            { label: 'Warehouse', render: (row) => row.warehouse?.name || '' },
+                            { label: 'Quantity', key: 'qty_on_hand' },
+                            { label: 'Stock Alert', key: 'alert_status' },
+                        ], 'inventory-list.xlsx', 'inventory item')}
+                    />
                     <button onClick={() => printRows(items.filter((item) => selectedIds.includes(item.id)), [
                         { label: 'Seller SKU', render: (row) => row.merchantSku?.sku_name || row.sku_name || '' },
                         { label: 'Warehouse', render: (row) => row.warehouse?.name || '' },
                         { label: 'Quantity', key: 'qty_on_hand' },
                         { label: 'Stock Alert', key: 'alert_status' },
-                    ], 'Selected Inventory Items', 'inventory item')} className="px-6 py-2.5 text-sm font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors">
+                    ], 'Selected Inventory Items', 'inventory item')} className="px-16 py-2.5 text-base font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors">
                         Print
                     </button>
                 </div>

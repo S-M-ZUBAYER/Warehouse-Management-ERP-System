@@ -8,6 +8,7 @@ import {
   ResponsiveContainer,
   ReferenceDot,
 } from "recharts";
+import { ChevronDown } from "lucide-react";
 
 const MONTHS = [
   { value: 1, label: "January" },
@@ -29,18 +30,35 @@ const labelForPlatform = (value) => {
   return value.charAt(0).toUpperCase() + value.slice(1);
 };
 
-const CustomTooltip = ({ active, payload, label }) => {
+const CustomTooltip = ({ active, payload, label, coordinate }) => {
   if (!active || !payload?.length) return null;
   const row = payload[0]?.payload || {};
+  const x = (coordinate?.x || 0) + 12;
+  const y = Math.max((coordinate?.y || 0) - 48, 0);
+
   return (
+    <>
     <div
       className="rounded-xl px-4 py-3 text-sm font-body"
-      style={{ background: "#1E293B", boxShadow: "0 8px 24px rgba(0,0,0,0.2)" }}
+      style={{
+        "--tooltip-x": `${x}px`,
+        "--tooltip-y": `${y}px`,
+        background: "#1E293B",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
+        minWidth: "170px",
+        pointerEvents: "none",
+        position: "absolute",
+        transform: "translate(var(--tooltip-x), var(--tooltip-y)) scale(1)",
+        transformOrigin: "top left",
+        animation: "salesTooltipZoomIn 140ms ease-out",
+      }}
     >
       <p className="font-semibold text-white mb-1">Day {label}</p>
-      <div className="flex items-center gap-2">
-        <div className="w-2 h-2 rounded-full bg-indigo-400" />
-        <span style={{ color: "#94A3B8" }}>Sales:</span>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-indigo-400" />
+          <span style={{ color: "#94A3B8" }}>Sales:</span>
+        </div>
         <span className="text-white font-medium">{Number(row.sales || 0).toLocaleString()}</span>
       </div>
       <p className="text-xs mt-1" style={{ color: "#94A3B8" }}>
@@ -52,19 +70,37 @@ const CustomTooltip = ({ active, payload, label }) => {
         </p>
       )}
     </div>
+    <style>{`
+      @keyframes salesTooltipZoomIn {
+        from {
+          opacity: 0;
+          transform: translate(var(--tooltip-x), var(--tooltip-y)) scale(0.94);
+        }
+        to {
+          opacity: 1;
+          transform: translate(var(--tooltip-x), var(--tooltip-y)) scale(1);
+        }
+      }
+    `}</style>
+    </>
   );
 };
 
 function SelectBox({ value, onChange, children, minWidth = 110, numeric = false }) {
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(numeric ? Number(e.target.value) : e.target.value)}
-      className="text-xs border border-surface-border rounded-lg bg-white px-3 py-1.5 text-slate-600 outline-none focus:border-primary cursor-pointer font-medium capitalize"
-      style={{ minWidth }}
-    >
-      {children}
-    </select>
+    <div className="relative" style={{ minWidth }}>
+      <select
+        value={value}
+        onChange={(e) => onChange(numeric ? Number(e.target.value) : e.target.value)}
+        className="w-full appearance-none text-xs border border-surface-border rounded-lg bg-white pl-3 pr-9 py-1.5 text-slate-600 outline-none focus:border-primary cursor-pointer font-medium capitalize"
+      >
+        {children}
+      </select>
+      <ChevronDown
+        size={14}
+        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"
+      />
+    </div>
   );
 }
 
@@ -160,19 +196,24 @@ export default function SalesTrendsChart({
           <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
           <XAxis
             dataKey="label"
-            tick={{ fontSize: 10, fill: "#94A3B8", fontFamily: "'DM Sans', sans-serif" }}
+            tick={{ fontSize: 10, fill: "#94A3B8", fontFamily: "'Inter Tight', sans-serif" }}
             axisLine={false}
             tickLine={false}
             interval="preserveStartEnd"
           />
           <YAxis
-            tick={{ fontSize: 10, fill: "#94A3B8", fontFamily: "'DM Sans', sans-serif" }}
+            tick={{ fontSize: 10, fill: "#94A3B8", fontFamily: "'Inter Tight', sans-serif" }}
             axisLine={false}
             tickLine={false}
             allowDecimals={false}
             domain={[0, "dataMax"]}
           />
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip
+            content={<CustomTooltip />}
+            allowEscapeViewBox={{ x: true, y: true }}
+            offset={12}
+            position={{ x: 0, y: 0 }}
+          />
           <Area
             type="monotone"
             dataKey="chartValue"

@@ -11,7 +11,8 @@ import {
 import { useState, useRef, useEffect } from "react";
 import PortalActionMenu from "../../../../components/shared/PortalActionMenu";
 import RecordDetailModal from "../../../../components/shared/RecordDetailModal";
-import { exportRowsToCsv, printRows } from "../../../../utils/tableOutput";
+import { exportRowsToCsv, exportRowsToXlsx, printRows } from "../../../../utils/tableOutput";
+import ExportMenu from "../../../../components/shared/ExportMenu";
 
 const parseProductDetails = (row) => {
   const value = row?.product_details ?? row?.productDetails;
@@ -102,12 +103,31 @@ function RowActions({ product, onEdit, onDelete }) {
 }
 
 // ── Stock Badge ───────────────────────────────────────────────────────────────
-function StockBadge({ value }) {
-  const num = value ?? 0;
+const getStockStatus = (product, value) => {
+  const total = Number(value ?? 0);
+  const stockRows = Array.isArray(product?.stock) ? product.stock : [];
+
+  if (stockRows.length) {
+    const configuredRows = stockRows.filter((stock) => stock?.min_stock !== null && stock?.min_stock !== undefined);
+    if (!configuredRows.length) return total === 0 ? "out" : "in";
+    if (configuredRows.some((stock) => Number(stock?.qty_on_hand ?? 0) === 0)) return "out";
+    if (configuredRows.some((stock) => Number(stock?.qty_on_hand ?? 0) <= Number(stock?.min_stock ?? 0))) return "low";
+    return "in";
+  }
+
+  const minStock = product?.min_stock ?? product?.minStock ?? product?.stock?.min_stock;
+  if (total === 0) return "out";
+  if (minStock !== null && minStock !== undefined && total <= Number(minStock)) return "low";
+  return "in";
+};
+
+function StockBadge({ product, value }) {
+  const num = Number(value ?? 0);
+  const status = getStockStatus(product, num);
   const color =
-    num === 0
+    status === "out"
       ? "text-red-500"
-      : num < 50
+      : status === "low"
         ? "text-amber-500"
         : "text-emerald-600";
   return (
@@ -173,8 +193,11 @@ export default function ProductTable({
   hasActiveFilters,
   resetFilters,
   setShowAddModal,
+  onOpenImportModal,
+  onDownloadTemplate,
   openDeleteModal,
   openEditModal,
+  handleStockAlertOpen,
 }) {
   const [detailProduct, setDetailProduct] = useState(null);
   const selectedRows = products.filter((product) => selectedIds.includes(product.id));
@@ -186,6 +209,24 @@ export default function ProductTable({
     { label: "In Transit", key: "in_transit_inventory" },
     { label: "Status", key: "status" },
   ];
+  const runBulkAction = (action) => {
+    if (action === "print") {
+      printRows(selectedRows, exportColumns, "Selected Merchant SKU Products", "product");
+      return;
+    }
+    if (action === "export") {
+      exportRowsToXlsx(selectedRows, exportColumns, "merchant-sku-products.xlsx", "product");
+      return;
+    }
+    if (action === "stock-alert") {
+      handleStockAlertOpen?.();
+      return;
+    }
+    handleBulkAction(action);
+  };
+
+  console.log(products,"products");
+  
 
   return (
     <div className="bg-white rounded-xl border border-surface-border overflow-hidden">
@@ -229,15 +270,18 @@ export default function ProductTable({
           <div className="relative">
             <select
               value={bulkAction}
-              onChange={(e) => handleBulkAction(e.target.value)}
+              onChange={(e) => runBulkAction(e.target.value)}
               disabled={selectedIds.length === 0}
               className="appearance-none flex items-center gap-2 px-3 py-2 pr-7 text-sm border border-surface-border
                          rounded-lg text-slate-600 bg-white hover:bg-surface-card transition-colors
                          disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer outline-none"
             >
               <option value="">Bulk Action</option>
+              <option value="print">Batch Print</option>
+              <option value="export">Batch Export</option>
+              <option value="stock-alert">Batch Stock Alert Setting</option>
               <option value="delete">
-                Delete Selected ({selectedIds.length})
+                Batch Delete
               </option>
             </select>
             <ChevronDown
@@ -253,15 +297,11 @@ export default function ProductTable({
           )}
         </div>
 
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-semibold
-                     bg-white border border-surface-border rounded-lg text-slate-700
-                     hover:bg-surface-card transition-colors"
-        >
-          Add Products
-          <ChevronDown size={13} className="text-slate-400" />
-        </button>
+        <AddProductsMenu
+          onAddSingle={() => setShowAddModal(true)}
+          onImport={onOpenImportModal}
+          onDownloadTemplate={onDownloadTemplate}
+        />
       </div>
 
       {/* Table */}
@@ -279,7 +319,7 @@ export default function ProductTable({
           />
         ) : (
           <table className="w-full text-lg font-body">
-            <thead>
+            <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
               <tr className="border-b border-surface-border bg-white">
                 <th className="py-3 pl-5 w-36 text-left">
                   <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -382,6 +422,7 @@ export default function ProductTable({
                       </td>
                       <td className="py-3 pr-4">
                         <StockBadge
+                          product={product}
                           value={product.available_in_inventory ?? 0}
                         />
                       </td>
@@ -461,9 +502,10 @@ export default function ProductTable({
 
       {/* Footer */}
       <div className="flex justify-end gap-3 px-5 py-4 border-t border-surface-border">
-        <button onClick={() => exportRowsToCsv(selectedRows, exportColumns, "merchant-sku-products.csv", "product")} className="flex items-center gap-2 px-14 py-2.5 text-base font-semibold border border-surface-border rounded-lg text-slate-700 bg-white hover:bg-surface-card transition-colors">
-          Export <ChevronDown size={13} className="text-slate-400" />
-        </button>
+        <ExportMenu
+          onExportCsv={() => exportRowsToCsv(selectedRows, exportColumns, "merchant-sku-products.csv", "product")}
+          onExportXlsx={() => exportRowsToXlsx(selectedRows, exportColumns, "merchant-sku-products.xlsx", "product")}
+        />
         <button onClick={() => printRows(selectedRows, exportColumns, "Selected Merchant SKU Products", "product")} className="px-16 py-2.5 text-base font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors">
           Print
         </button>
@@ -504,6 +546,65 @@ export default function ProductTable({
           { label: "Updated", key: "updatedAt" },
         ]}
       />
+    </div>
+  );
+}
+
+function AddProductsMenu({ onAddSingle, onImport, onDownloadTemplate }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (event) => {
+      if (ref.current && !ref.current.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const runAction = (handler) => {
+    setOpen(false);
+    handler?.();
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex items-center gap-2 px-4 py-2 text-sm font-semibold
+                   bg-white border border-surface-border rounded-lg text-slate-700
+                   hover:bg-surface-card transition-colors"
+      >
+        Add Products
+        <ChevronDown size={13} className={`text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-30 bg-white rounded-xl border border-surface-border shadow-lg py-1 w-56">
+          <button
+            type="button"
+            onClick={() => runAction(onAddSingle)}
+            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-surface-card transition-colors"
+          >
+            Add Single Product
+          </button>
+          <button
+            type="button"
+            onClick={() => runAction(onImport)}
+            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-surface-card transition-colors"
+          >
+            Add Product via Template
+          </button>
+          <button
+            type="button"
+            onClick={() => runAction(onDownloadTemplate)}
+            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-surface-card transition-colors"
+          >
+            Download Template
+          </button>
+        </div>
+      )}
     </div>
   );
 }

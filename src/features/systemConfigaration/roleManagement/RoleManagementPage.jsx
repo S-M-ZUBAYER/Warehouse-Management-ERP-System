@@ -130,7 +130,7 @@ export default function RoleManagementPage() {
           {/* ── Table ── */}
           {!rolesLoading && !isRolesError && roles.length > 0 && (
             <table className="w-full text-sm font-body">
-              <thead>
+              <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                 <tr className="border-b border-surface-border">
                   {[
                     { label: "Role Name", cls: "pl-5 w-[22%]" },

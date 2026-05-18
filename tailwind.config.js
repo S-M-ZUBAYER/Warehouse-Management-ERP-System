@@ -24,9 +24,10 @@ export default {
 
       },
       fontFamily: {
-        display: ['Sora', 'sans-serif'],
-        body: ['DM Sans', 'sans-serif'],
-        mono: ['JetBrains Mono', 'monospace'],
+        sans: ['"Inter Tight"', 'sans-serif'],
+        display: ['"Inter Tight"', 'sans-serif'],
+        body: ['"Inter Tight"', 'sans-serif'],
+        mono: ['"Inter Tight"', 'sans-serif'],
       },
     },
   },

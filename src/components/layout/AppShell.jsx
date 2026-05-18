@@ -11,14 +11,14 @@ export default function AppShell() {
     useInitShopPlatform();
 
     return (
-        <div className="flex h-screen bg-[#EFEFEF] overflow-hidden">
+        <div className="flex h-screen bg-[#EFEFEF] overflow-hidden font-body">
             <Sidebar />
             <div
                 className={`flex flex-col flex-1 transition-all duration-300 overflow-hidden ${
                     sidebarCollapsed ? 'ml-16' : 'ml-80'
                 }`}
             >
-                <main className="flex-1 overflow-y-auto p-6">
+                <main className="flex-1 overflow-y-auto p-6 font-body">
                     <Outlet />
                 </main>
             </div>

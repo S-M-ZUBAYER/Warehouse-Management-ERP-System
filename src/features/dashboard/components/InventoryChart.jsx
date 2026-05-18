@@ -7,6 +7,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { ChevronDown } from "lucide-react";
 
 const MONTHS = [
   { value: 1, label: "January" },
@@ -23,39 +24,71 @@ const MONTHS = [
   { value: 12, label: "December" },
 ];
 
-const CustomTooltip = ({ active, payload, label }) => {
+const CustomTooltip = ({ active, payload, label, coordinate }) => {
   if (!active || !payload?.length) return null;
+  const x = (coordinate?.x || 0) + 12;
+  const y = Math.max((coordinate?.y || 0) - 48, 0);
+
   return (
-    <div
-      className="rounded-xl px-4 py-3 text-sm font-body"
-      style={{
-        background: "#1E293B",
-        boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
-        border: "none",
-      }}
-    >
-      <p className="font-semibold text-white mb-2">Day {label}</p>
-      {payload.map((entry) => (
-        <div key={entry.name} className="flex items-center gap-2 mb-1">
-          <div className="w-2 h-2 rounded-full" style={{ background: entry.color }} />
-          <span style={{ color: "#94A3B8" }}>{entry.name}:</span>
-          <span className="text-white font-medium">{Number(entry.value || 0).toLocaleString()}</span>
-        </div>
-      ))}
-    </div>
+    <>
+      <div
+        className="rounded-xl px-4 py-3 text-sm font-body"
+        style={{
+          "--tooltip-x": `${x}px`,
+          "--tooltip-y": `${y}px`,
+          background: "#1E293B",
+          boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
+          border: "none",
+          minWidth: "150px",
+          pointerEvents: "none",
+          position: "absolute",
+          transform: "translate(var(--tooltip-x), var(--tooltip-y)) scale(1)",
+          transformOrigin: "top left",
+          animation: "inventoryTooltipZoomIn 140ms ease-out",
+        }}
+      >
+        <p className="font-semibold text-white mb-2">Day {label}</p>
+        {payload.map((entry) => (
+          <div key={entry.name} className="flex items-center justify-between gap-3 mb-1">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full" style={{ background: entry.color }} />
+              <span className="whitespace-nowrap" style={{ color: "#94A3B8" }}>{entry.name}:</span>
+            </div>
+            <span className="text-white font-medium">{Number(entry.value || 0).toLocaleString()}</span>
+          </div>
+        ))}
+      </div>
+      <style>{`
+        @keyframes inventoryTooltipZoomIn {
+          from {
+            opacity: 0;
+            transform: translate(var(--tooltip-x), var(--tooltip-y)) scale(0.94);
+          }
+          to {
+            opacity: 1;
+            transform: translate(var(--tooltip-x), var(--tooltip-y)) scale(1);
+          }
+        }
+      `}</style>
+    </>
   );
 };
 
 function SelectBox({ value, onChange, children, minWidth = 110 }) {
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(Number(e.target.value))}
-      className="text-xs border border-surface-border rounded-lg bg-white px-3 py-1.5 text-slate-600 outline-none focus:border-primary cursor-pointer font-medium"
-      style={{ minWidth }}
-    >
-      {children}
-    </select>
+    <div className="relative" style={{ minWidth }}>
+      <select
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full appearance-none text-xs border border-surface-border rounded-lg bg-white pl-3 pr-9 py-1.5 text-slate-600 outline-none focus:border-primary cursor-pointer font-medium"
+      >
+        {children}
+      </select>
+      <ChevronDown
+        size={14}
+        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"
+      />
+    </div>
   );
 }
 
@@ -112,18 +145,23 @@ export default function InventoryChart({
           <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
           <XAxis
             dataKey="label"
-            tick={{ fontSize: 10, fill: "#94A3B8", fontFamily: "'DM Sans', sans-serif" }}
+            tick={{ fontSize: 10, fill: "#94A3B8", fontFamily: "'Inter Tight', sans-serif" }}
             axisLine={false}
             tickLine={false}
             interval="preserveStartEnd"
           />
           <YAxis
-            tick={{ fontSize: 11, fill: "#94A3B8", fontFamily: "'DM Sans', sans-serif" }}
+            tick={{ fontSize: 11, fill: "#94A3B8", fontFamily: "'Inter Tight', sans-serif" }}
             axisLine={false}
             tickLine={false}
             tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v)}
           />
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip
+            content={<CustomTooltip />}
+            allowEscapeViewBox={{ x: true, y: true }}
+            offset={12}
+            position={{ x: 0, y: 0 }}
+          />
           <Line
             type="monotone"
             dataKey="stockIn"

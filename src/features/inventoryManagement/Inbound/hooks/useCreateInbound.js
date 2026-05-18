@@ -130,6 +130,10 @@ export function useCreateInbound({ onSuccess }) {
     }, [pickerSkus]);
 
     const updatePickerQty = useCallback((id, val) => {
+        if (val === "") {
+            setQuantities((prev) => ({ ...prev, [id]: "" }));
+            return;
+        }
         setQuantities((prev) => ({ ...prev, [id]: Math.max(1, Number(val) || 1) }));
     }, []);
 

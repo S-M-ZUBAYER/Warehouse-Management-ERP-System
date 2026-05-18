@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { X, UploadCloud, ChevronDown, Search } from "lucide-react";
 
 export default function AddMerchantSKUModal({
@@ -17,6 +17,7 @@ export default function AddMerchantSKUModal({
   warehouseLoading,
 }) {
   const [showWarehousePicker, setShowWarehousePicker] = useState(false);
+  const modalBodyRef = useRef(null);
 
   const fields = [
     {
@@ -66,7 +67,12 @@ export default function AddMerchantSKUModal({
           </button>
         </div>
 
-        <div className="px-7 pb-7 space-y-4 max-h-[80vh] overflow-y-auto">
+        <div
+          ref={modalBodyRef}
+          className={`px-7 space-y-4 max-h-[80vh] overflow-y-auto ${
+            showWarehousePicker ? "pb-44" : "pb-7"
+          }`}
+        >
           {/* Photo upload */}
           <label className="flex flex-col items-center justify-center border-2 border-dashed border-surface-border rounded-xl py-6 cursor-pointer hover:border-primary/40 transition-colors bg-surface">
             <input
@@ -161,7 +167,20 @@ export default function AddMerchantSKUModal({
               </label>
               <button
                 type="button"
-                onClick={() => setShowWarehousePicker((p) => !p)}
+                onClick={() => {
+                  setShowWarehousePicker((p) => {
+                    const next = !p;
+                    if (next) {
+                      setTimeout(() => {
+                        modalBodyRef.current?.scrollTo({
+                          top: modalBodyRef.current.scrollHeight,
+                          behavior: "smooth",
+                        });
+                      }, 0);
+                    }
+                    return next;
+                  });
+                }}
                 className={`w-full flex items-center justify-between px-3 py-2 text-sm border rounded-lg bg-white text-left outline-none transition-all cursor-pointer
                   ${
                     errors.warehouseId
@@ -188,7 +207,7 @@ export default function AddMerchantSKUModal({
               )}
 
               {showWarehousePicker && (
-                <div className="absolute top-full left-0 right-0 mt-1 z-40 bg-white rounded-xl border border-surface-border shadow-lg overflow-hidden">
+                <div className="mt-2 bg-white rounded-xl border border-surface-border shadow-lg overflow-hidden">
                   <div className="p-2 border-b border-surface-border">
                     <div className="relative">
                       <Search

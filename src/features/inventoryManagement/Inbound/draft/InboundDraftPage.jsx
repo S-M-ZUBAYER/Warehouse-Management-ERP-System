@@ -9,6 +9,7 @@ import {
   ChevronDown,
   Loader2,
   AlertCircle,
+  ArrowLeft,
 } from "lucide-react";
 import Topbar from "../../../../components/layout/Topbar";
 import InboundFilterBar from "./component/InboundFilterBar";
@@ -19,7 +20,8 @@ import { useInboundDropdowns } from "../hooks/useInboundDropdowns";
 import { useCreateInbound } from "../hooks/useCreateInbound";
 import { useShipInbound } from "../hooks/useShipInbound";
 import { toast } from "sonner";
-import { exportRowsToCsv, printRows } from "../../../../utils/tableOutput";
+import { exportRowsToCsv, exportRowsToXlsx, printRows } from "../../../../utils/tableOutput";
+import ExportMenu from "../../../../components/shared/ExportMenu";
 import {
   buildInboundOutputRows,
   inboundOutputColumns,
@@ -231,15 +233,13 @@ function DraftListPage({ onCreateClick }) {
         )}
 
         <div className="flex justify-end gap-3 px-5 py-4 border-t border-surface-border">
-          <button
-            onClick={() => exportRowsToCsv(buildInboundOutputRows(items), inboundOutputColumns, "draft-inbounds.csv", "inbound")}
-            className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold border border-surface-border rounded-lg text-slate-700 bg-white hover:bg-surface-card transition-colors"
-          >
-            Export <ChevronDown size={13} className="text-slate-400" />
-          </button>
+          <ExportMenu
+            onExportCsv={() => exportRowsToCsv(buildInboundOutputRows(items), inboundOutputColumns, "draft-inbounds.csv", "inbound")}
+            onExportXlsx={() => exportRowsToXlsx(buildInboundOutputRows(items), inboundOutputColumns, "draft-inbounds.xlsx", "inbound")}
+          />
           <button
             onClick={() => printRows(buildInboundOutputRows(items), inboundOutputColumns, "Draft Inbounds", "inbound")}
-            className="px-6 py-2.5 text-sm font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors"
+            className="px-16 py-2.5 text-base font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors"
           >
             Print
           </button>
@@ -322,7 +322,18 @@ function CreateInboundPage({ onBack }) {
 
   return (
     <div className="space-y-4 font-body">
-      <Topbar PageTitle="Back to Draft" showBack onBack={onBack} />
+      <Topbar
+        PageTitle={
+          <button
+            type="button"
+            onClick={onBack}
+            className="flex items-center gap-2 text-primary-text hover:text-primary transition-colors"
+          >
+            <ArrowLeft size={20} />
+            Back to Draft
+          </button>
+        }
+      />
 
       {/* Warehouse selector + basic fields */}
       <div className="bg-white rounded-xl border border-surface-border p-5">
@@ -423,7 +434,7 @@ function CreateInboundPage({ onBack }) {
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm font-body">
-            <thead>
+            <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
               <tr className="border-b border-surface-border">
                 {[
                   "Image",

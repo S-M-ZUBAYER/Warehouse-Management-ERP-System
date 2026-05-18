@@ -52,7 +52,7 @@ export default function DashboardPage() {
       {/* ── Overview Section ── */}
       <section>
         <h2
-          className="text-xl font-semibold mb-4 text-primary-text"
+          className="text-lg font-semibold mb-4 text-primary-text"
           style={{
             letterSpacing: "0.5px",
           }}

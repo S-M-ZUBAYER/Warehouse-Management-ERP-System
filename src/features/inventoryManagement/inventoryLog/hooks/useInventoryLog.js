@@ -1,7 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../../../lib/api';
-import useDebounce from '../../../../hooks/useDebounce';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Query keys
@@ -24,7 +23,8 @@ const fetchLedger = (params) => {
     qs.set('page', params.page ?? 1);
     qs.set('limit', params.limit ?? 10);
     if (params.warehouseId) qs.set('warehouseId', params.warehouseId);
-    if (params.movementType) qs.set('movementType', params.movementType);
+    if (params.startDate) qs.set('startDate', params.startDate);
+    if (params.endDate) qs.set('endDate', params.endDate);
     if (params.skuName?.trim()) qs.set('skuName', params.skuName.trim()); // ✅ match backend
     return api.get(`/stock/ledger?${qs.toString()}`).then((r) => r);
 };
@@ -36,12 +36,19 @@ const fetchWarehouses = () =>
 // Movement type options
 // ─────────────────────────────────────────────────────────────────────────────
 export const MOVEMENT_TYPE_OPTIONS = [
-    { value: '', label: 'All Types' },
-    { value: 'inbound_receipt', label: 'Inbound Receipt' },
-    { value: 'sale_deduction', label: 'Sale Deduction' },
-    { value: 'manual_adjustment', label: 'Manual Adjustment' },
-    { value: 'return', label: 'Return' },
+    { value: 'recent', label: 'Recent' },
+    { value: 'history', label: 'History' },
 ];
+
+const formatDateInput = (date) => date.toISOString().slice(0, 10);
+
+const getLogDate = (log) => {
+    const rawDate = log.createdAt ?? log.created_at;
+    if (!rawDate) return '';
+    const parsedDate = new Date(rawDate);
+    if (Number.isNaN(parsedDate.getTime())) return '';
+    return formatDateInput(parsedDate);
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Hook
@@ -49,7 +56,11 @@ export const MOVEMENT_TYPE_OPTIONS = [
 export function useInventoryLog() {
     // ── Filter state ────────────────────────────────────────────────────────────
     const [warehouseId, setWarehouseId] = useState('');
-    const [movementType, setMovementType] = useState('');
+    const [movementType, setMovementType] = useState('recent');
+    const [startDate, setStartDate] = useState(formatDateInput(new Date()));
+    const [endDate, setEndDate] = useState(formatDateInput(new Date()));
+    const [appliedStartDate, setAppliedStartDate] = useState(formatDateInput(new Date()));
+    const [appliedEndDate, setAppliedEndDate] = useState(formatDateInput(new Date()));
     const [skuName, setSkuName] = useState("");       // input field
     const [searchSku, setSearchSku] = useState("");   // actual API param
     const [page, setPage] = useState(1);
@@ -61,7 +72,8 @@ export function useInventoryLog() {
         page,
         limit: 10,
         warehouseId: warehouseId || undefined,
-        movementType: movementType || undefined,
+        startDate: movementType === 'recent' ? formatDateInput(new Date()) : appliedStartDate,
+        endDate: movementType === 'recent' ? formatDateInput(new Date()) : appliedEndDate,
         skuName: searchSku, // ✅ use this instead
     };
 
@@ -87,7 +99,23 @@ export function useInventoryLog() {
         staleTime: 1000 * 60 * 5,
     });
 
-    const items = ledgerData?.data ?? [];
+    const rawItems = useMemo(() => ledgerData?.data ?? [], [ledgerData?.data]);
+    const items = useMemo(() => {
+        const today = formatDateInput(new Date());
+
+        if (movementType === 'recent') {
+            return rawItems.filter((log) => getLogDate(log) === today);
+        }
+
+        if (appliedStartDate && appliedEndDate) {
+            return rawItems.filter((log) => {
+                const logDate = getLogDate(log);
+                return logDate && logDate >= appliedStartDate && logDate <= appliedEndDate;
+            });
+        }
+
+        return rawItems;
+    }, [rawItems, movementType, appliedStartDate, appliedEndDate]);
     const pagination = ledgerData?.pagination ?? {
         total: 0,
         totalPages: 1,
@@ -119,14 +147,34 @@ export function useInventoryLog() {
     }, []);
 
     const handleSetMovementType = useCallback((val) => {
+        const today = formatDateInput(new Date());
         setMovementType(val);
+        if (val === 'history') {
+            setStartDate(today);
+            setEndDate(today);
+            setAppliedStartDate(today);
+            setAppliedEndDate(today);
+        }
         setPage(1);
     }, []);
 
-    const handleSetSearch = useCallback((val) => {
-        setSkuName(val);
+    const handleSetStartDate = useCallback((val) => {
+        setStartDate(val);
+        if (val) {
+            setAppliedStartDate(val);
+            setAppliedEndDate(endDate);
+        }
         setPage(1);
-    }, []);
+    }, [endDate]);
+
+    const handleSetEndDate = useCallback((val) => {
+        setEndDate(val);
+        if (val) {
+            setAppliedStartDate(startDate);
+            setAppliedEndDate(val);
+        }
+        setPage(1);
+    }, [startDate]);
 
     const handleSearch = useCallback(() => {
         setSearchSku(skuName.trim());
@@ -139,6 +187,10 @@ export function useInventoryLog() {
         setWarehouseId: handleSetWarehouseId,
         movementType,
         setMovementType: handleSetMovementType,
+        startDate,
+        setStartDate: handleSetStartDate,
+        endDate,
+        setEndDate: handleSetEndDate,
         skuName,
         setSkuName,
         handleSearch,

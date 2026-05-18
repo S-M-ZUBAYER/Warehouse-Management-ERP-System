@@ -314,8 +314,14 @@ export function useWarehouse() {
     // ── Toggle-default mutation ───────────────────────────────────────────────
     const toggleDefaultMutation = useMutation({
         mutationFn: (id) => api.patch(`/warehouses/${id}/set-default`),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["warehouses-all"] });
+        onSuccess: (_data, id) => {
+            queryClient.setQueriesData({ queryKey: ["warehouses-all"] }, (oldData) => {
+                if (!Array.isArray(oldData)) return oldData;
+                return oldData.map((warehouse) => ({
+                    ...warehouse,
+                    is_default: warehouse.id === id,
+                }));
+            });
         },
         onError: () => {
             toast.error("Failed to update default warehouse");

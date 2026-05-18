@@ -1,7 +1,6 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import {
   Search,
-  Plus,
   ChevronDown,
   Pencil,
   RefreshCw,
@@ -16,7 +15,8 @@ import SetPermissionModal from "./component/SetPermissionModal";
 import PortalActionMenu from "../../../components/shared/PortalActionMenu";
 import RecordDetailModal from "../../../components/shared/RecordDetailModal";
 import ConfirmActionModal from "../../../components/shared/ConfirmActionModal";
-import { exportRowsToCsv, printRows } from "../../../utils/tableOutput";
+import { exportRowsToCsv, exportRowsToXlsx, printRows } from "../../../utils/tableOutput";
+import ExportMenu from "../../../components/shared/ExportMenu";
 import shopeeLogo from "../../../assets/ShopPlatform/shopee.svg";
 import lazadaLogo from "../../../assets/ShopPlatform/lazada.svg";
 import tiktokLogo from "../../../assets/ShopPlatform/tiktok.svg";
@@ -50,7 +50,6 @@ export default function StoreAuthorizationPage() {
     openActionId,
     setOpenActionId,
     nicknameModal,
-    openAddStore,
     openEditStore,
     closeNickname,
     setNickname,
@@ -75,7 +74,7 @@ export default function StoreAuthorizationPage() {
     confirmUnlinkStore,
   } = useStoreAuthorization();
 
-  const actionRefs = useRef({});
+  const [actionAnchor, setActionAnchor] = useState(null);
   const [detailStore, setDetailStore] = useState(null);
   const selectedRows = stores.filter((store) => selectedIds.includes(store.id));
   const outputColumns = [
@@ -88,6 +87,9 @@ export default function StoreAuthorizationPage() {
     { label: "Status", key: "authStatus" },
     { label: "Create Time", key: "createdAt" },
   ];
+
+console.log(stores,"Stores");
+
 
   return (
     <div className="space-y-4 font-body">
@@ -240,7 +242,7 @@ export default function StoreAuthorizationPage() {
         {/* Table */}
         <div className="overflow-x-auto z-50">
           <table className="w-full text-sm font-body">
-            <thead>
+            <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
               <tr className="border-b border-surface-border">
                 {[
                   "Select All",
@@ -324,16 +326,17 @@ export default function StoreAuthorizationPage() {
 
                   {/* Actions — 3-dot with dropdown */}
                   <td className="py-3 pr-5">
-                    <div
-                      className="relative"
-                      ref={(el) => (actionRefs.current[store.id] = el)}
-                    >
+                    <div className="relative">
                       <button
-                        onClick={() =>
-                          setOpenActionId(
-                            openActionId === store.id ? null : store.id,
-                          )
-                        }
+                        onClick={(e) => {
+                          if (openActionId === store.id) {
+                            setOpenActionId(null);
+                            setActionAnchor(null);
+                            return;
+                          }
+                          setOpenActionId(store.id);
+                          setActionAnchor(e.currentTarget);
+                        }}
                         className="flex items-center gap-0.5 p-1.5 rounded-lg text-slate-400
                                    hover:text-primary-text hover:bg-surface-card transition-colors"
                       >
@@ -347,8 +350,11 @@ export default function StoreAuthorizationPage() {
 
                       <PortalActionMenu
                         open={openActionId === store.id}
-                        anchorRef={{ current: actionRefs.current[store.id] }}
-                        onClose={() => setOpenActionId(null)}
+                        anchorRef={{ current: actionAnchor }}
+                        onClose={() => {
+                          setOpenActionId(null);
+                          setActionAnchor(null);
+                        }}
                         width={176}
                       >
                         {[
@@ -393,25 +399,28 @@ export default function StoreAuthorizationPage() {
                             },
                             danger: true,
                           },
-                        ].map(({ label, icon: Icon, action, danger }) => (
-                          <button
-                            key={label}
-                            type="button"
-                            onClick={action}
-                            className={`w-full flex items-center gap-2.5 px-4 py-2 text-xs transition-colors ${
-                              danger
-                                ? "text-red-500 hover:bg-red-50"
-                                : "text-slate-700 border-b hover:bg-surface-card"
-                            }`}
-                          >
-                            <Icon
-                              size={13}
-                              className={danger ? "text-red-400" : "text-slate-400"}
-                              strokeWidth={1.8}
-                            />
-                            {label}
-                          </button>
-                        ))}
+                        ].map(({ label, icon, action, danger }) => {
+                          const ActionIcon = icon;
+                          return (
+                            <button
+                              key={label}
+                              type="button"
+                              onClick={action}
+                              className={`w-full flex items-center gap-2.5 px-4 py-2 text-xs transition-colors ${
+                                danger
+                                  ? "text-red-500 hover:bg-red-50"
+                                  : "text-slate-700 border-b hover:bg-surface-card"
+                              }`}
+                            >
+                              <ActionIcon
+                                size={13}
+                                className={danger ? "text-red-400" : "text-slate-400"}
+                                strokeWidth={1.8}
+                              />
+                              {label}
+                            </button>
+                          );
+                        })}
                       </PortalActionMenu>
                     </div>
                   </td>
@@ -421,10 +430,11 @@ export default function StoreAuthorizationPage() {
           </table>
         </div>
         <div className="flex justify-end gap-3 px-5 py-4 border-t border-surface-border">
-          <button onClick={() => exportRowsToCsv(selectedRows, outputColumns, "authorized-stores.csv", "store")} className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold border border-surface-border rounded-lg text-slate-700 bg-white hover:bg-surface-card transition-colors">
-            Export <ChevronDown size={13} className="text-slate-400" />
-          </button>
-          <button onClick={() => printRows(selectedRows, outputColumns, "Selected Authorized Stores", "store")} className="px-6 py-2.5 text-sm font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors">
+          <ExportMenu
+            onExportCsv={() => exportRowsToCsv(selectedRows, outputColumns, "authorized-stores.csv", "store")}
+            onExportXlsx={() => exportRowsToXlsx(selectedRows, outputColumns, "authorized-stores.xlsx", "store")}
+          />
+          <button onClick={() => printRows(selectedRows, outputColumns, "Selected Authorized Stores", "store")} className="px-16 py-2.5 text-base font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors">
             Print
           </button>
         </div>

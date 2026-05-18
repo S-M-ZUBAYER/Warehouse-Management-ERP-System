@@ -23,18 +23,44 @@ const fetchDropdowns = () =>
     api.get("/merchant-skus/dropdowns").then((r) => r.data);
 
 /** Fetch paginated merchant SKU list */
-const fetchMerchantSkus = (params) => {
+const fetchMerchantSkus = async (params) => {
     const qs = new URLSearchParams();
     if (params.page) qs.set("page", params.page);
-    if (params.limit) qs.set("limit", params.limit);
-    if (params.search?.trim()) qs.set("search", params.search.trim());
+    if (params.limit) qs.set("limit", params.searchField === "gtin" && params.search?.trim() ? 1000 : params.limit);
+    if (params.search?.trim() && params.searchField !== "gtin") qs.set("search", params.search.trim());
+    if (params.searchField) {
+        qs.set("searchField", params.searchField);
+        qs.set("skuType", params.searchField);
+    }
+    if (params.searchField === "gtin" && params.search?.trim()) {
+        qs.set("gtin", params.search.trim());
+    }
     if (params.warehouseId) qs.set("warehouseId", params.warehouseId);
     if (params.status && params.status !== "all") qs.set("status", params.status);
     if (params.country && params.country !== "all") qs.set("country", params.country);
     if (params.sku?.trim()) qs.set("search", params.sku.trim()); // server searches by sku_name
     if (params.sortBy) qs.set("sortBy", params.sortBy);
     if (params.sortOrder) qs.set("sortOrder", params.sortOrder);
-    return api.get(`/merchant-skus?${qs.toString()}`).then((r) => r);
+    const response = await api.get(`/merchant-skus?${qs.toString()}`);
+
+    if (params.searchField !== "gtin" || !params.search?.trim()) return response;
+
+    const query = params.search.trim().toLowerCase();
+    const filtered = (response?.data ?? []).filter((sku) =>
+        String(sku.gtin ?? "").toLowerCase().includes(query)
+    );
+
+    return {
+        ...response,
+        data: filtered,
+        pagination: {
+            ...(response?.pagination ?? {}),
+            page: 1,
+            limit: filtered.length || params.limit || 10,
+            total: filtered.length,
+            totalPages: 1,
+        },
+    };
 };
 
 /** Convert file → base64 string (strips the data:...;base64, prefix for API) */
@@ -68,6 +94,23 @@ const formatDetailsForSave = (value) => {
     return JSON.stringify(JSON.parse(trimmed));
 };
 
+const optionalValue = (value) => {
+    if (value === null || value === undefined) return undefined;
+    const trimmed = String(value).trim();
+    return trimmed === "" ? undefined : trimmed;
+};
+
+const optionalNumber = (value) => {
+    const normalized = optionalValue(value);
+    if (normalized === undefined) return undefined;
+    return Number(normalized);
+};
+
+const compactPayload = (payload) =>
+    Object.fromEntries(
+        Object.entries(payload).filter(([, value]) => value !== undefined && !Number.isNaN(value))
+    );
+
 /** Create a new merchant SKU */
 const createMerchantSku = async (payload) => {
     let image = undefined;
@@ -75,25 +118,46 @@ const createMerchantSku = async (payload) => {
         const base64 = await fileToBase64(payload.photoFile);
         // Strip the data URI prefix — send raw base64 only
         image = base64.replace(/^data:image\/[a-z]+;base64,/, "");
+    } else if (payload.imageBase64) {
+        image = String(payload.imageBase64).replace(/^data:image\/[a-z]+;base64,/, "");
+    } else if (payload.imageUrl) {
+        image = payload.imageUrl;
+    } else if (payload.image) {
+        image = payload.image;
     }
-
-    const body = {
-        skuName: payload.skuName,
-        skuTitle: payload.productName,  // ✅ make sure form.productName is set
+console.log({
+        skuName: optionalValue(payload.skuName),
+        skuTitle: optionalValue(payload.skuTitle ?? payload.productName),
         productDetails: formatDetailsForSave(payload.productDetails) || undefined,
-        gtin: payload.gtin || undefined,
-        price: payload.productPrice || undefined,
-        weight: payload.weight || undefined,
-        length: payload.length || undefined,
-        width: payload.width || undefined,
-        height: payload.height || undefined,
-        warehouseId: payload.warehouseId || undefined,
-        status: "active",
-        image,
-    };
+        gtin: optionalValue(payload.gtin),
+        price: optionalNumber(payload.price ?? payload.productPrice),
+        costPrice: optionalNumber(payload.costPrice ?? payload.cost_price),
+        country: optionalValue(payload.country),
+        weight: optionalNumber(payload.weight),
+        length: optionalNumber(payload.length),
+        width: optionalNumber(payload.width),
+        height: optionalNumber(payload.height),
+        warehouseId: optionalNumber(payload.warehouseId),
+        status: optionalValue(payload.status) ?? "active",
+        ...(image !== undefined && { image }),
+    });
 
-    console.log("BODY KEYS:", Object.keys(body));
-    console.log("skuTitle value:", body.skuTitle); // ← check this is not undefined
+    const body = compactPayload({
+        skuName: optionalValue(payload.skuName),
+        skuTitle: optionalValue(payload.skuTitle ?? payload.productName),
+        productDetails: formatDetailsForSave(payload.productDetails) || undefined,
+        gtin: optionalValue(payload.gtin),
+        price: optionalNumber(payload.price ?? payload.productPrice),
+        costPrice: optionalNumber(payload.costPrice ?? payload.cost_price),
+        country: optionalValue(payload.country),
+        weight: optionalNumber(payload.weight),
+        length: optionalNumber(payload.length),
+        width: optionalNumber(payload.width),
+        height: optionalNumber(payload.height),
+        warehouseId: optionalNumber(payload.warehouseId),
+        status: optionalValue(payload.status) ?? "active",
+        ...(image !== undefined && { image }),
+    });
 
     return api.post("/merchant-skus", body).then((r) => r.data);
 };
@@ -131,6 +195,211 @@ const deleteMerchantSku = (id) =>
 const bulkDeleteMerchantSkus = (skuIds) =>
     api.delete("/merchant-skus/bulk", { data: { skuIds } }).then((r) => r.data);
 
+const columnIndexFromRef = (ref = "") => {
+    const letters = String(ref).replace(/\d/g, "");
+    return [...letters].reduce((sum, letter) => sum * 26 + letter.charCodeAt(0) - 64, 0) - 1;
+};
+
+const unzipXlsxFile = async (file) => {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const files = {};
+    let offset = 0;
+    const decoder = new TextDecoder();
+
+    while (offset < bytes.length - 30) {
+        const view = new DataView(bytes.buffer, offset);
+        if (view.getUint32(0, true) !== 0x04034b50) break;
+
+        const method = view.getUint16(8, true);
+        const compressedSize = view.getUint32(18, true);
+        const fileNameLength = view.getUint16(26, true);
+        const extraLength = view.getUint16(28, true);
+        const nameStart = offset + 30;
+        const dataStart = nameStart + fileNameLength + extraLength;
+        const name = decoder.decode(bytes.slice(nameStart, nameStart + fileNameLength));
+        const compressed = bytes.slice(dataStart, dataStart + compressedSize);
+
+        if (method === 0) {
+            files[name] = decoder.decode(compressed);
+        } else if (method === 8 && "DecompressionStream" in globalThis) {
+            const stream = new Blob([compressed]).stream().pipeThrough(new globalThis.DecompressionStream("deflate-raw"));
+            files[name] = decoder.decode(await new Response(stream).arrayBuffer());
+        }
+
+        offset = dataStart + compressedSize;
+    }
+
+    return files;
+};
+
+const readCellValue = (cell, sharedStrings) => {
+    const type = cell.getAttribute("t");
+    if (type === "inlineStr") return cell.querySelector("is t")?.textContent ?? "";
+    const value = cell.querySelector("v")?.textContent ?? "";
+    if (type === "s") return sharedStrings[Number(value)] ?? "";
+    return value;
+};
+
+const TEMPLATE_HEADER_ALIASES = {
+    skuname: "skuName",
+    sku_name: "skuName",
+    sku: "skuName",
+    skutitle: "skuTitle",
+    sku_title: "skuTitle",
+    productname: "skuTitle",
+    product_name: "skuTitle",
+    producttitle: "skuTitle",
+    product_title: "skuTitle",
+    productdetails: "productDetails",
+    product_details: "productDetails",
+    details: "productDetails",
+    gtin: "gtin",
+    imageurl: "imageUrl",
+    image_url: "imageUrl",
+    imagebase64: "imageBase64",
+    image_base64: "imageBase64",
+    image: "image",
+    price: "price",
+    productprice: "price",
+    product_price: "price",
+    costprice: "costPrice",
+    cost_price: "costPrice",
+    country: "country",
+    weight: "weight",
+    length: "length",
+    width: "width",
+    height: "height",
+    status: "status",
+};
+
+const normalizeTemplateHeader = (header) => {
+    const key = String(header ?? "")
+        .trim()
+        .replace(/\s+/g, "")
+        .replace(/-/g, "_")
+        .toLowerCase();
+    return TEMPLATE_HEADER_ALIASES[key] ?? header;
+};
+
+const getApiErrorMessage = (err) => {
+    const data = err?.response?.data;
+    if (data?.errors && typeof data.errors === "object") {
+        return Object.entries(data.errors)
+            .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(", ") : messages}`)
+            .join("; ");
+    }
+    return data?.message ?? err?.message ?? "Validation error";
+};
+
+const parseMerchantSkuTemplate = async (file) => {
+    const files = await unzipXlsxFile(file);
+    const sheetXml = files["xl/worksheets/sheet1.xml"];
+    if (!sheetXml) throw new Error("Could not read the first worksheet from this XLSX file");
+
+    const parser = new DOMParser();
+    const sharedXml = files["xl/sharedStrings.xml"];
+    const sharedStrings = sharedXml
+        ? [...parser.parseFromString(sharedXml, "application/xml").querySelectorAll("si")]
+            .map((node) => [...node.querySelectorAll("t")].map((text) => text.textContent).join(""))
+        : [];
+    const sheet = parser.parseFromString(sheetXml, "application/xml");
+    const rows = [...sheet.querySelectorAll("sheetData row")].map((row) => {
+        const values = [];
+        [...row.querySelectorAll("c")].forEach((cell) => {
+            values[columnIndexFromRef(cell.getAttribute("r"))] = readCellValue(cell, sharedStrings);
+        });
+        return values;
+    }).filter((row) => row.some((value) => String(value ?? "").trim()));
+
+    const headers = (rows[0] ?? []).map(normalizeTemplateHeader);
+    return rows.slice(1).map((row) =>
+        headers.reduce((record, header, index) => {
+            if (header) record[header] = String(row[index] ?? "").trim();
+            return record;
+        }, {})
+    ).filter((record) => Object.values(record).some(Boolean));
+};
+
+const importMerchantSkuTemplate = async ({ file, warehouseId }) => {
+    const rows = await parseMerchantSkuTemplate(file);
+    if (!rows.length) throw new Error("No product rows found in the XLSX file");
+
+    const results = [];
+    for (const [index, row] of rows.entries()) {
+        if (!row.skuName || !(row.skuTitle || row.productName)) {
+            throw new Error(`Row ${index + 2}: Each row must include skuName and skuTitle`);
+        }
+        if (!optionalValue(row.price ?? row.productPrice)) {
+            throw new Error(`Row ${index + 2} (${row.skuName}): price is required`);
+        }
+        try {
+            results.push(await createMerchantSku({
+                ...row,
+                warehouseId,
+            }));
+        } catch (err) {
+            const message = getApiErrorMessage(err);
+            throw new Error(`Row ${index + 2} (${row.skuName}): ${message}`);
+        }
+    }
+
+    return { imported: results.length, message: `${results.length} product(s) imported successfully` };
+};
+
+const setStockAlert = ({ skuIds, minStock }) =>
+    api.put("/inventory/stock-alert", {
+        skuIds: skuIds.map(Number),
+        minStock: Number(minStock),
+    }).then((r) => r.data);
+
+const getStockRowIds = (product) => {
+    if (Array.isArray(product?.stock)) {
+        return product.stock.flatMap((stock) => [
+            stock?.id,
+            stock?.stock_id,
+            stock?.stockId,
+            stock?.sku_warehouse_stock_id,
+            stock?.skuWarehouseStockId,
+            stock?.skuWarehouseStock?.id,
+        ]).filter(Boolean);
+    }
+    return [
+        product?.stock?.id,
+        product?.stock?.stock_id,
+        product?.stock?.stockId,
+        product?.stock?.sku_warehouse_stock_id,
+        product?.stock?.skuWarehouseStockId,
+        product?.stock?.skuWarehouseStock?.id,
+        product?.stock_id,
+        product?.stockId,
+        product?.sku_warehouse_stock_id,
+        product?.skuWarehouseStockId,
+    ].filter(Boolean);
+};
+
+const findInventoryStockRowIds = async (product) => {
+    const skuName = product?.sku_name ?? product?.skuName;
+    if (!skuName) return [];
+
+    const qs = new URLSearchParams({
+        page: "1",
+        limit: "100",
+        search: skuName,
+        skuType: "sku_name",
+    });
+
+    const response = await api.get(`/inventory?${qs.toString()}`);
+    return (response?.data ?? [])
+        .filter((row) =>
+            row?.merchantSku?.id === product.id ||
+            row?.merchant_sku_id === product.id ||
+            row?.merchantSku?.sku_name === skuName ||
+            row?.sku_name === skuName
+        )
+        .map((row) => row.id)
+        .filter(Boolean);
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Empty form
 // ─────────────────────────────────────────────────────────────────────────────
@@ -156,14 +425,15 @@ const EMPTY_FORM = {
 export function useProductList() {
     // ── Filter state ──────────────────────────────────────────────────────────
     const [search, setSearch] = useState("");
+    const [searchField, setSearchField] = useState("sku_name");
     const [warehouseFilter, setWarehouseFilter] = useState("all");
     const [warehouseFilterName, setWarehouseFilterName] = useState("All Warehouses");
     const [productStatus, setProductStatus] = useState("all");
     const [country, setCountry] = useState("all");
     const [sku, setSku] = useState("");
     const [page, setPage] = useState(1);
-    const [sortBy, setSortBy] = useState("created_at");
-    const [sortOrder, setSortOrder] = useState("DESC");
+    const [sortBy] = useState("created_at");
+    const [sortOrder] = useState("DESC");
     const [bulkAction, setBulkAction] = useState("");
 
     // ── Selection state ───────────────────────────────────────────────────────
@@ -181,6 +451,12 @@ export function useProductList() {
     const [deleteTarget, setDeleteTarget] = useState(null);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+    const [showStockAlertModal, setShowStockAlertModal] = useState(false);
+    const [minStock, setMinStock] = useState("");
+    const [showImportModal, setShowImportModal] = useState(false);
+    const [importFile, setImportFile] = useState(null);
+    const [importWarehouseId, setImportWarehouseId] = useState("");
+    const [importWarehouseName, setImportWarehouseName] = useState("Warehouse name");
 
     // ── Debounced values ──────────────────────────────────────────────────────
     const debouncedSearch = useDebounce(search, 350);
@@ -264,7 +540,7 @@ export function useProductList() {
         staleTime: 1000 * 60 * 2,
         gcTime: 1000 * 60 * 5,
         placeholderData: (prev) => prev,
-        enabled: showAddModal,  // only fetch when modal is open
+        enabled: showAddModal || showImportModal,  // only fetch when a modal needs warehouses
     });
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -274,13 +550,14 @@ export function useProductList() {
         page,
         limit: 10,
         search: debouncedSearch,
+        searchField,
         sku: debouncedSku,
         warehouseId: warehouseFilter !== "all" ? warehouseFilter : undefined,
         status: productStatus,
         country: country,
         sortBy,
         sortOrder,
-    }), [page, debouncedSearch, debouncedSku, warehouseFilter, productStatus, country, sortBy, sortOrder]);
+    }), [page, debouncedSearch, searchField, debouncedSku, warehouseFilter, productStatus, country, sortBy, sortOrder]);
 
     const {
         data: listData,
@@ -296,7 +573,7 @@ export function useProductList() {
         placeholderData: (prev) => prev,
     });
 
-    const products = listData?.data ?? [];
+    const products = useMemo(() => listData?.data ?? [], [listData?.data]);
     const pagination = listData?.pagination ?? { total: 0, totalPages: 1, page: 1, limit: 20 };
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -400,6 +677,35 @@ export function useProductList() {
         onError: (err) => {
             const msg = err?.response?.data?.message ?? "Bulk delete failed";
             toast.error(msg);
+        },
+    });
+
+    const stockAlertMutation = useMutation({
+        mutationFn: setStockAlert,
+        onSuccess: (data) => {
+            toast.success(data?.message ?? "Stock alert updated");
+            setShowStockAlertModal(false);
+            setSelectedIds([]);
+            setMinStock("");
+            queryClient.invalidateQueries({ queryKey: MERCHANT_SKU_KEYS.all() });
+        },
+        onError: (err) => {
+            toast.error(err?.response?.data?.message ?? "Failed to set stock alert");
+        },
+    });
+
+    const importTemplateMutation = useMutation({
+        mutationFn: importMerchantSkuTemplate,
+        onSuccess: (data) => {
+            toast.success(data?.message ?? "Products imported successfully");
+            setShowImportModal(false);
+            setImportFile(null);
+            setImportWarehouseId("");
+            setImportWarehouseName("Warehouse name");
+            queryClient.invalidateQueries({ queryKey: MERCHANT_SKU_KEYS.all() });
+        },
+        onError: (err) => {
+            toast.error(err?.response?.data?.message ?? err?.message ?? "Failed to import products");
         },
     });
 
@@ -519,6 +825,62 @@ export function useProductList() {
         bulkDeleteMutation.mutate(selectedIds);
     }, [selectedIds, bulkDeleteMutation]);
 
+    const handleStockAlertOpen = useCallback(() => {
+        if (!selectedIds.length) {
+            toast.error("Select at least one product to set alert");
+            return;
+        }
+        setMinStock("");
+        setShowStockAlertModal(true);
+    }, [selectedIds]);
+
+    const confirmSetStockAlert = useCallback(async () => {
+        if (minStock === "" || isNaN(Number(minStock)) || Number(minStock) < 0) {
+            toast.error("Enter a valid minimum stock quantity (0 or more)");
+            return;
+        }
+
+        const selectedProducts = products.filter((product) => selectedIds.includes(product.id));
+        const directStockRowIds = selectedProducts.flatMap(getStockRowIds);
+        const productsNeedingLookup = selectedProducts.filter(
+            (product) => getStockRowIds(product).length === 0
+        );
+        const lookedUpStockRowIds = (
+            await Promise.all(productsNeedingLookup.map(findInventoryStockRowIds))
+        ).flat();
+        const stockRowIds = [...new Set([...directStockRowIds, ...lookedUpStockRowIds])];
+
+        if (!stockRowIds.length) {
+            toast.error("Could not resolve stock rows for the selected products");
+            return;
+        }
+
+        stockAlertMutation.mutate({ skuIds: stockRowIds, minStock });
+    }, [selectedIds, minStock, products, stockAlertMutation]);
+
+    const confirmImportTemplate = useCallback(() => {
+        if (!importFile) {
+            toast.error("Please select an XLSX file first");
+            return;
+        }
+        if (!importWarehouseId) {
+            toast.error("Please select a warehouse");
+            return;
+        }
+        importTemplateMutation.mutate({ file: importFile, warehouseId: importWarehouseId });
+    }, [importFile, importWarehouseId, importTemplateMutation]);
+
+    const handleImportWarehouseSelect = useCallback((warehouse) => {
+        setImportWarehouseId(String(warehouse.id ?? warehouse.value));
+        setImportWarehouseName(warehouse.name ?? warehouse.label);
+    }, []);
+
+    const resetImportTemplateState = useCallback(() => {
+        setImportFile(null);
+        setImportWarehouseId("");
+        setImportWarehouseName("Warehouse name");
+    }, []);
+
     // ─────────────────────────────────────────────────────────────────────────
     // Selection helpers
     // ─────────────────────────────────────────────────────────────────────────
@@ -539,6 +901,7 @@ export function useProductList() {
     // ─────────────────────────────────────────────────────────────────────────
     const resetFilters = useCallback(() => {
         setSearch("");
+        setSearchField("sku_name");
         setSku("");
         setWarehouseFilter("all");
         setWarehouseFilterName("All Warehouses");
@@ -572,6 +935,7 @@ export function useProductList() {
     return {
         // ── filter state ────────────────────────────────────────────────────
         search, setSearch,
+        searchField, setSearchField,
         warehouseFilter, warehouseFilterName, handleWarehouseFilterChange,
         productStatus, setProductStatus,
         country, setCountry,
@@ -636,5 +1000,19 @@ export function useProductList() {
         bulkDeleteConfirm, setBulkDeleteConfirm,
         confirmBulkDelete,
         bulkDeleting: bulkDeleteMutation.isPending,
+
+        showStockAlertModal, setShowStockAlertModal,
+        minStock, setMinStock,
+        handleStockAlertOpen,
+        confirmSetStockAlert,
+        stockAlertSaving: stockAlertMutation.isPending,
+
+        showImportModal, setShowImportModal,
+        importFile, setImportFile,
+        importWarehouseId, importWarehouseName,
+        handleImportWarehouseSelect,
+        resetImportTemplateState,
+        confirmImportTemplate,
+        importingTemplate: importTemplateMutation.isPending,
     };
 }

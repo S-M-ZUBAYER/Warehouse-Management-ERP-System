@@ -931,7 +931,7 @@
 // }
 
 import { useState, useRef, useEffect } from "react";
-import { Plus, ChevronDown, Trash2, Loader2, Printer, Download } from "lucide-react";
+import { Plus, ChevronDown, Trash2, Loader2, Printer, Download, ArrowLeft } from "lucide-react";
 import { useManualInbound } from "./hooks/useManualInbound";
 import { useManualInboundList } from "./hooks/useManualInboundList";
 import { useInboundDropdowns } from "../Inbound/hooks/useInboundDropdowns";
@@ -939,7 +939,8 @@ import InboundFilterBar from "../Inbound/draft/component/InboundFilterBar";
 import ManualInboundTable from "./component/ManualInboundTable";
 import SelectMerchantSKUModal from "./component/SelectMerchantSKUModal";
 import Topbar from "../../../components/layout/Topbar";
-import { exportRowsToCsv, printRows } from "../../../utils/tableOutput";
+import { exportRowsToCsv, exportRowsToXlsx, printRows } from "../../../utils/tableOutput";
+import ExportMenu from "../../../components/shared/ExportMenu";
 import {
   buildInboundOutputRows,
   inboundOutputColumns,
@@ -1058,17 +1059,16 @@ function ManualInboundListView({ onCreateClick }) {
 
         {/* Footer */}
         <div className="flex justify-end gap-2.5 px-5 py-3.5 border-t border-surface-border">
-          <button
-            onClick={() => exportRowsToCsv(buildInboundOutputRows(items), inboundOutputColumns, "manual-inbounds.csv", "manual inbound")}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border border-surface-border rounded-lg text-slate-700 bg-white hover:bg-slate-50 transition-colors"
-          >
-            <Download size={13} /> Export <ChevronDown size={12} className="text-slate-400" />
-          </button>
+          <ExportMenu
+            className="flex items-center gap-2 px-14 py-2.5 text-base font-semibold border border-surface-border rounded-lg text-slate-700 bg-white hover:bg-surface-card transition-colors"
+            onExportCsv={() => exportRowsToCsv(buildInboundOutputRows(items), inboundOutputColumns, "manual-inbounds.csv", "manual inbound")}
+            onExportXlsx={() => exportRowsToXlsx(buildInboundOutputRows(items), inboundOutputColumns, "manual-inbounds.xlsx", "manual inbound")}
+          />
           <button
             onClick={() => printRows(buildInboundOutputRows(items), inboundOutputColumns, "Manual Inbounds", "manual inbound")}
-            className="flex items-center gap-1.5 px-5 py-2 text-sm font-semibold bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors"
+            className="px-16 py-2.5 text-base font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors"
           >
-            <Printer size={13} /> Print
+             Print
           </button>
         </div>
       </div>
@@ -1123,7 +1123,18 @@ function ManualInboundCreateView({ onCancel, onSaveSuccess }) {
 
   return (
     <div className="p-5 font-body space-y-4">
-      {/* ── Top form card ── */}
+       <Topbar
+              PageTitle={
+                <button
+                  type="button"
+                  onClick={onCancel}
+                  className="flex items-center gap-2 text-primary-text hover:text-primary transition-colors"
+                >
+                  <ArrowLeft size={20} />
+                  Back to Manual Inbound
+                </button>
+              }
+            />
       <div className="bg-white rounded-xl border border-surface-border p-5">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
 
@@ -1184,7 +1195,7 @@ function ManualInboundCreateView({ onCancel, onSaveSuccess }) {
       {/* ── SKU lines table card ── */}
       <div className="bg-white rounded-xl border border-surface-border overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-surface-border">
-          <h2 className="text-sm font-bold text-slate-800">Draft List</h2>
+          <h2 className="text-sm font-bold text-slate-800">Manual Inbound List</h2>
           <button
             onClick={handleSelectSkuClick}
             className={`flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg transition-colors
@@ -1207,7 +1218,7 @@ function ManualInboundCreateView({ onCancel, onSaveSuccess }) {
         )}
 
         <table className="w-full text-sm">
-          <thead>
+          <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
             <tr className="border-b border-surface-border">
               <th className="py-3 pl-5 text-left font-semibold text-slate-700">Image</th>
               <th className="py-3 pl-4 text-left font-semibold text-slate-700">Product Name</th>

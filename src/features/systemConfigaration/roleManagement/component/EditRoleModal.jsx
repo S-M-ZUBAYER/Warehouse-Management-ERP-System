@@ -98,7 +98,7 @@ export default function EditRoleModal({
             <div className="border border-surface-border rounded-xl overflow-hidden bg-white">
               <div className="max-h-[430px] overflow-y-auto">
                 <table className="w-full text-sm">
-                  <thead className="sticky top-0 z-10 bg-white">
+                  <thead className="sticky top-0 z-10 bg-white [&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                     <tr className="border-b border-surface-border">
                       <th className="py-2.5 text-center text-xs font-semibold text-slate-600 w-24">
                         <label className="inline-flex items-center justify-center gap-2 cursor-pointer select-none">

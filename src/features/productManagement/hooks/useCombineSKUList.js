@@ -19,7 +19,6 @@ export const COMBINE_SKU_KEYS = {
 // API helpers
 // ─────────────────────────────────────────────────────────────────────────────
 const fetchCombineSkus = (params) => {
-    console.log("call");
 
     const qs = new URLSearchParams();
     qs.set("page", params.page ?? 1);

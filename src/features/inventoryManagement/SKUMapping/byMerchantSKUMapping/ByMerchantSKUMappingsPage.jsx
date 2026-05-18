@@ -21,12 +21,21 @@ import MappingStatusBadge from '../components/MappingStatusBadge';
 import ConfirmModal from '../components/ConfirmModal';
 import { TableSkeleton, EmptyState } from '../components/TableHelpers';
 import Pagination from '../../../../components/shared/Pagination';
+import ExportMenu from '../../../../components/shared/ExportMenu';
 import api from '../../../../lib/api';
+import { exportRowsToCsv, exportRowsToXlsx, printRows } from '../../../../utils/tableOutput';
 
 const TABS = [
     { label: 'All', value: 'all' },
     { label: 'Mapped', value: 'mapped' },
     { label: 'Unmapped', value: 'unmapped' },
+];
+
+const SEARCH_TYPE_OPTIONS = [
+    { label: 'SKU Name', value: 'sku_name' },
+    { label: 'Product Name', value: 'product_name' },
+    { label: 'Product ID', value: 'platform_product_id' },
+    { label: 'Store ID', value: 'platform_shop_id' },
 ];
 
 const fetchSyncGroups = () => api.get('/sku-sync-groups').then((r) => r.data ?? []);
@@ -63,12 +72,21 @@ export default function ByMerchantSKUMappingsPage() {
         allSelected, someSelected,
         expandedIds, toggleExpand,
     } = useByMerchantMapping();
+    const selectedRows = merchantSkus.filter((sku) => selectedIds.includes(sku.id));
+    const outputColumns = [
+        { label: 'Merchant SKU', key: 'sku_name' },
+        { label: 'SKU Title', key: 'sku_title' },
+        { label: 'Mapped', render: (row) => row.is_mapped ? 'Yes' : 'No' },
+        { label: 'Mapped Products', render: (row) => row.mappings?.length ?? 0 },
+        { label: 'Status', key: 'status' },
+    ];
 
     const { data: syncGroups = [], isLoading: groupsLoading } = useQuery({
         queryKey: ['sku-sync-groups'],
         queryFn: fetchSyncGroups,
         staleTime: 1000 * 60 * 5,
     });
+
 
     const getPrimaryGroupForSku = (skuId) =>
         syncGroups.find((g) => g.primarySku?.id === skuId) ?? null;
@@ -90,6 +108,8 @@ export default function ByMerchantSKUMappingsPage() {
         ...tab,
         displayLabel: `${tab.label} (${tab.value === 'all' ? counts.all : tab.value === 'mapped' ? counts.mapped : counts.unmapped})`,
     }));
+    const selectedSearchTypeLabel =
+        SEARCH_TYPE_OPTIONS.find((option) => option.value === skuType)?.label ?? 'SKU Name';
 
     // Store mapping modal: opens from the mapping icon when a parent SKU is not mapped.
     const [showMapModal, setShowMapModal] = useState(false);
@@ -341,8 +361,11 @@ export default function ByMerchantSKUMappingsPage() {
                         }}
                         className="appearance-none pl-3 pr-8 py-2 text-sm border border-surface-border rounded-lg bg-white text-slate-600 outline-none focus:border-primary cursor-pointer w-36"
                     >
-                        <option value="sku_name">SKU Name</option>
-                        <option value="product_name">Product Name</option>
+                        {SEARCH_TYPE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                                {option.label}
+                            </option>
+                        ))}
                     </select>
                     <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>
@@ -351,7 +374,7 @@ export default function ByMerchantSKUMappingsPage() {
                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                         type="text"
-                        placeholder="Search merchant SKU"
+                        placeholder={`Search by ${selectedSearchTypeLabel}`}
                         value={searchInput}
                         onChange={(e) => setSearchInput(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -398,7 +421,7 @@ export default function ByMerchantSKUMappingsPage() {
                         </div>
                     ) : (
                         <table className="w-full text-sm font-body">
-                            <thead>
+                            <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                                 <tr className="border-b border-surface-border">
                                     <th className="py-3 pl-5 w-28 text-left">
                                         <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -409,11 +432,11 @@ export default function ByMerchantSKUMappingsPage() {
                                                 onChange={toggleAll}
                                                 className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
                                             />
-                                            <span className="text-xs font-semibold text-slate-600">Select All</span>
+                                            <span className="text-sm font-bold text-slate-800">Select All</span>
                                         </label>
                                     </th>
                                     {['Image', 'Parent Merchant SKU', 'Mapped Stores', 'Status', 'Sync Group', 'Action'].map((h) => (
-                                        <th key={h} className="py-3 pr-4 text-left text-xs font-semibold text-slate-600">{h}</th>
+                                        <th key={h} className="py-3 pr-4 text-left text-sm font-bold text-slate-800">{h}</th>
                                     ))}
                                 </tr>
                             </thead>
@@ -573,6 +596,13 @@ export default function ByMerchantSKUMappingsPage() {
                 </div>
 
                 <Pagination page={page} totalPages={pagination.totalPages} total={pagination.total} limit={pagination.limit} onPageChange={setPage} />
+                <div className="flex justify-end gap-3 px-5 py-4 border-t border-surface-border">
+                    <ExportMenu
+                        onExportCsv={() => exportRowsToCsv(selectedRows, outputColumns, 'sku-mapping-by-merchant.csv', 'SKU mapping')}
+                        onExportXlsx={() => exportRowsToXlsx(selectedRows, outputColumns, 'sku-mapping-by-merchant.xlsx', 'SKU mapping')}
+                    />
+                    <button onClick={() => printRows(selectedRows, outputColumns, 'SKU Mapping By Merchant', 'SKU mapping')} className="px-16 py-2.5 text-base font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors">Print</button>
+                </div>
             </div>
 
             {showMapModal && mapTarget && (
@@ -621,7 +651,7 @@ export default function ByMerchantSKUMappingsPage() {
                                     <div className="h-24 flex items-center justify-center text-sm text-slate-400">No active stores found</div>
                                 ) : (
                                     <table className="w-full text-sm">
-                                        <thead className="sticky top-0 bg-white border-b border-surface-border">
+                                        <thead className="sticky top-0 bg-white border-b border-surface-border [&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                                             <tr>
                                                 <th className="py-2.5 pl-4 text-left text-xs font-semibold text-slate-600 w-10">Select</th>
                                                 <th className="py-2.5 px-3 text-left text-xs font-semibold text-slate-600">Platform</th>
@@ -794,7 +824,7 @@ export default function ByMerchantSKUMappingsPage() {
                                                 </span>
                                             </div>
                                             <table className="w-full text-sm">
-                                                <thead className="bg-white border-b border-surface-border">
+                                                <thead className="bg-white border-b border-surface-border [&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                                                     <tr>
                                                         <th className="py-2.5 pl-4 text-left text-xs font-semibold text-slate-600 w-10">Select</th>
                                                         <th className="py-2.5 px-3 text-left text-xs font-semibold text-slate-600">Product SKU</th>
@@ -858,8 +888,8 @@ export default function ByMerchantSKUMappingsPage() {
                         </div>
 
                         <div className="px-8 py-4">
-                            <div className="bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 mb-4">
-                                <p className="text-xs text-violet-700">Same-warehouse merchant SKUs are shown. A SKU can be child in multiple groups and can also be another parent SKU.</p>
+                            <div className="bg-blue-100 border-violet-200 rounded-xl px-4 py-3 mb-4">
+                                <p className="text-xs text-primary">Same-warehouse merchant SKUs are shown. A SKU can be child in multiple groups and can also be another parent SKU.</p>
                             </div>
 
                             <div className="relative mb-3">
@@ -909,7 +939,7 @@ export default function ByMerchantSKUMappingsPage() {
 
                         <div className="flex gap-3 px-8 py-5 border-t border-surface-border">
                             <button onClick={() => setShowGroupModal(false)} disabled={linkMembersMutation.isPending} className="flex-1 py-2.5 rounded-xl text-sm font-semibold border border-surface-border text-slate-700 bg-white hover:bg-surface-card disabled:opacity-50">Cancel</button>
-                            <button onClick={confirmGroupSync} disabled={linkMembersMutation.isPending || memberSelectedIds.length === 0} className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-violet-600 hover:bg-violet-700 text-white disabled:opacity-60 flex items-center justify-center gap-2">
+                            <button onClick={confirmGroupSync} disabled={linkMembersMutation.isPending || memberSelectedIds.length === 0} className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-primary hover:bg-primary-dark text-white disabled:opacity-60 flex items-center justify-center gap-2">
                                 {linkMembersMutation.isPending && <Loader2 size={14} className="animate-spin" />}
                                 {linkMembersMutation.isPending ? 'Linking...' : `Link ${memberSelectedIds.length || ''} SKU(s)`}
                             </button>
@@ -954,7 +984,7 @@ function MappedProductsPanel({ mappings }) {
             ) : (
                 <div className="overflow-x-auto">
                     <table className="w-full text-xs">
-                        <thead className="bg-surface-card border-b border-surface-border">
+                        <thead className="bg-surface-card border-b border-surface-border [&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                             <tr>
                                 <th className="py-2 px-3 text-left font-semibold text-slate-500">Platform</th>
                                 <th className="py-2 px-3 text-left font-semibold text-slate-500">Store</th>
@@ -1026,7 +1056,7 @@ function GroupSyncPanel({ groups, currentSkuId, onAdd, onRemove, removing }) {
                                     {!currentIsPrimary && <span className="ml-2 text-indigo-600 font-semibold">Current SKU is child in this group</span>}
                                 </div>
                                 <table className="w-full text-xs">
-                                    <thead className="bg-white border-b border-surface-border">
+                                    <thead className="bg-white border-b border-surface-border [&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                                         <tr>
                                             <th className="py-2 px-3 text-left font-semibold text-slate-500">Image</th>
                                             <th className="py-2 px-3 text-left font-semibold text-slate-500">Merchant SKU</th>

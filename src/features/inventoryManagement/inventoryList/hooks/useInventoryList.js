@@ -88,9 +88,8 @@ const batchDeleteInventory = (merchantSkuIds) =>
 // ─────────────────────────────────────────────────────────────────────────────
 export const SKU_TYPE_OPTIONS = [
     { label: 'SKU Name', value: 'sku_name' },
-    { label: 'Product Name', value: 'product_name' },
-    { label: 'Product ID', value: 'gtin' },  // maps to gtin search
-    { label: 'Store ID', value: 'store_id' },
+    { label: 'SKU Title', value: 'product_name' },
+    { label: 'GTIN', value: 'gtin' },
 ];
 
 export const MAPPING_TABS = [

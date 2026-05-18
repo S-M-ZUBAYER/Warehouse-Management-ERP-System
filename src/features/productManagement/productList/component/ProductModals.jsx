@@ -6,7 +6,7 @@ import {
   AlertCircle,
   Loader2,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 const formatDetailsForEdit = (value) => {
   if (value === null || value === undefined) return "";
@@ -101,6 +101,7 @@ export function AddSkuModal({
   isWarehouseError,
 }) {
   const [warehouseDropdownOpen, setWarehouseDropdownOpen] = useState(false);
+  const modalScrollRef = useRef(null);
 
   return (
     <div
@@ -114,6 +115,7 @@ export function AddSkuModal({
       }
     >
       <div
+        ref={modalScrollRef}
         className="bg-white rounded-2xl shadow-xl w-full font-body overflow-hidden"
         style={{
           maxWidth: "560px",
@@ -141,7 +143,11 @@ export function AddSkuModal({
           </button>
         </div>
 
-        <div className="px-7 pb-7 space-y-4">
+        <div
+          className={`px-7 space-y-4 ${
+            warehouseDropdownOpen ? "pb-44" : "pb-7"
+          }`}
+        >
           {/* Photo upload */}
           <label className="flex flex-col items-center justify-center border-2 border-dashed border-surface-border rounded-xl py-6 cursor-pointer hover:border-primary/40 transition-colors bg-surface">
             <input
@@ -300,7 +306,20 @@ export function AddSkuModal({
                 <button
                   type="button"
                   disabled={saving}
-                  onClick={() => setWarehouseDropdownOpen((p) => !p)}
+                  onClick={() => {
+                    setWarehouseDropdownOpen((p) => {
+                      const next = !p;
+                      if (next) {
+                        setTimeout(() => {
+                          modalScrollRef.current?.scrollTo({
+                            top: modalScrollRef.current.scrollHeight,
+                            behavior: "smooth",
+                          });
+                        }, 0);
+                      }
+                      return next;
+                    });
+                  }}
                   className="w-full flex items-center justify-between px-3 py-2 text-xs border border-surface-border rounded-lg bg-white text-slate-700 outline-none focus:border-primary disabled:opacity-60"
                 >
                   <span
@@ -317,7 +336,7 @@ export function AddSkuModal({
                 </button>
 
                 {warehouseDropdownOpen && (
-                  <div className="absolute z-50 mt-1 w-full bg-white border border-surface-border rounded-lg shadow-lg overflow-hidden">
+                  <div className="mt-2 w-full bg-white border border-surface-border rounded-lg shadow-lg overflow-hidden">
                     <div className="p-2 border-b border-surface-border">
                       <div className="relative">
                         <Search

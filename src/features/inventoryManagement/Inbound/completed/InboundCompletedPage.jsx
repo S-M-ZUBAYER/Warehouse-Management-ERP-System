@@ -4,7 +4,8 @@ import InboundFilterBar    from '../draft/component/InboundFilterBar';
 import InboundTable        from '../draft/component/InboundTable';
 import { useInboundList }  from '../hooks/useInboundList';
 import { useInboundDropdowns } from '../hooks/useInboundDropdowns';
-import { exportRowsToCsv, printRows } from '../../../../utils/tableOutput';
+import { exportRowsToCsv, exportRowsToXlsx, printRows } from '../../../../utils/tableOutput';
+import ExportMenu from '../../../../components/shared/ExportMenu';
 import {
     buildInboundOutputRows,
     inboundOutputColumns,
@@ -97,15 +98,13 @@ export default function InboundCompletedPage() {
                 )}
 
                 <div className="flex justify-end gap-3 px-5 py-4 border-t border-surface-border">
-                    <button
-                        onClick={() => exportRowsToCsv(buildInboundOutputRows(items), inboundOutputColumns, 'completed-inbounds.csv', 'inbound')}
-                        className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold border border-surface-border rounded-lg text-slate-700 bg-white hover:bg-surface-card transition-colors"
-                    >
-                        Export <ChevronDown size={13} className="text-slate-400" />
-                    </button>
+                    <ExportMenu
+                        onExportCsv={() => exportRowsToCsv(buildInboundOutputRows(items), inboundOutputColumns, 'completed-inbounds.csv', 'inbound')}
+                        onExportXlsx={() => exportRowsToXlsx(buildInboundOutputRows(items), inboundOutputColumns, 'completed-inbounds.xlsx', 'inbound')}
+                    />
                     <button
                         onClick={() => printRows(buildInboundOutputRows(items), inboundOutputColumns, 'Completed Inbounds', 'inbound')}
-                        className="px-6 py-2.5 text-sm font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors"
+                        className="px-16 py-2.5 text-base font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors"
                     >
                         Print
                     </button>

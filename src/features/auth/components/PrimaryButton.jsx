@@ -32,7 +32,7 @@ export default function PrimaryButton({
         borderRadius: "12px",
         fontSize: "15px",
         fontWeight: 600,
-        fontFamily: "'DM Sans', sans-serif",
+        fontFamily: "'Inter Tight', sans-serif",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

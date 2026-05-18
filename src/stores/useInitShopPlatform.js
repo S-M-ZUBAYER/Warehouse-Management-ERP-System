@@ -42,6 +42,8 @@ export function useInitShopPlatform() {
 
     useEffect(() => {
         if (isSuccess && data) {
+            console.log(data,"all platform data..........");
+            
             setDropdownData(data);
         }
     }, [isSuccess, data, setDropdownData]);

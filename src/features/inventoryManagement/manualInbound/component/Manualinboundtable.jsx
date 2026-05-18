@@ -74,7 +74,7 @@ export default function ManualInboundTable({
     return (
         <div className="overflow-x-auto font-body">
             <table className="w-full text-sm">
-                <thead>
+                <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                     <tr className="border-b border-surface-border">
                         <th className="py-3 pl-5 w-12 text-left">
                             <input
@@ -254,7 +254,7 @@ export default function ManualInboundTable({
                                                 {item.lines?.length > 0 && (
                                                     <div className="border border-surface-border rounded-lg overflow-hidden">
                                                         <table className="w-full text-xs">
-                                                            <thead>
+                                                            <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                                                                 <tr className="bg-surface-card border-b border-surface-border">
                                                                     {['SKU', 'Product', 'Qty Received', 'Unit Cost'].map((h) => (
                                                                         <th key={h} className="py-2 px-3 text-left font-semibold text-slate-500">{h}</th>

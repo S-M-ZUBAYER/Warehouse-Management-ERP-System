@@ -779,17 +779,23 @@ export default function AddAccountPage({
                   <p className="text-xs text-slate-500 mb-1">
                     Select Marketplace
                   </p>
-                  <select
-                    value={storeMarketplace}
-                    onChange={(e) => setStoreMarketplace(e.target.value)}
-                    className="appearance-none px-3 py-2 text-xs border border-surface-border rounded-lg bg-white text-slate-700 outline-none pr-7 w-24"
-                  >
-                    {storeMarketplaceOptions.map((marketplace) => (
-                      <option key={marketplace} value={marketplace}>
-                        {marketplace}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative w-24">
+                    <select
+                      value={storeMarketplace}
+                      onChange={(e) => setStoreMarketplace(e.target.value)}
+                      className="appearance-none px-3 py-2 text-xs border border-surface-border rounded-lg bg-white text-slate-700 outline-none pr-7 w-full"
+                    >
+                      {storeMarketplaceOptions.map((marketplace) => (
+                        <option key={marketplace} value={marketplace}>
+                          {marketplace}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown
+                      size={13}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                    />
+                  </div>
                 </div>
                 <div className="relative flex-1 mt-4">
                   <Search
@@ -812,7 +818,7 @@ export default function AddAccountPage({
             </div>
             <div className="max-h-60 overflow-y-auto border border-surface-border">
               <table className="w-full text-xs">
-                <thead className="sticky top-0 z-10 bg-white">
+                <thead className="sticky top-0 z-10 bg-white [&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                   <tr className="border-y border-surface-border bg-surface/50">
                     <th className="py-2.5 pl-5 text-left font-semibold text-slate-600 w-14">
                       Select
@@ -921,7 +927,7 @@ export default function AddAccountPage({
             </div>
             <div className="max-h-44 overflow-y-auto border-t border-surface-border">
               <table className="w-full text-xs">
-                <thead>
+                <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                   <tr className="border-y border-surface-border bg-surface/50">
                     <th className="py-2.5 pl-5 text-left font-semibold text-slate-600 w-14">
                       Select

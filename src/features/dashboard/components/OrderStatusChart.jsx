@@ -110,20 +110,32 @@ function DateRangePicker({ value, onChange }) {
 
 const CustomTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null;
-  const { name, value, payload: p } = payload[0];
-  const total = p.total;
-  const pct = total ? ((value / total) * 100).toFixed(1) : 0;
+  const { name, value } = payload[0];
   return (
-    <div
-      className="rounded-xl font-body px-4 py-3 text-sm"
-      style={{ background: "#1E293B", boxShadow: "0 8px 24px rgba(0,0,0,0.2)" }}
-    >
-      <div className="flex items-center gap-2 mb-1">
-        <div className="w-2 h-2 rounded-full" style={{ background: payload[0].payload.color }} />
-        <span className="text-white font-medium">{name}</span>
+    <>
+      <div
+        className="rounded-xl font-body px-4 py-3 text-sm"
+        style={{
+          background: "#1E293B",
+          boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
+          minWidth: "165px",
+          transformOrigin: "center",
+          animation: "orderTooltipZoomIn 140ms ease-out",
+        }}
+      >
+        <div className="flex items-center gap-2 mb-1">
+          <div className="w-2 h-2 rounded-full" style={{ background: payload[0].payload.color }} />
+          <span className="text-white font-medium">{name}</span>
+        </div>
+        <p style={{ color: "#94A3B8" }}>{value} orders</p>
       </div>
-      <p style={{ color: "#94A3B8" }}>{value} orders ({pct}%)</p>
-    </div>
+      <style>{`
+        @keyframes orderTooltipZoomIn {
+          from { opacity: 0; transform: scale(0.94); }
+          to { opacity: 1; transform: scale(1); }
+        }
+      `}</style>
+    </>
   );
 };
 
@@ -180,10 +192,10 @@ export default function OrderStatusChart({ data, loading }) {
                   <Cell key={index} fill={entry.color} />
                 ))}
               </Pie>
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip content={<CustomTooltip />} wrapperStyle={{ zIndex: 20 }} />
             </PieChart>
           </ResponsiveContainer>
-          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <div className="absolute inset-0 z-0 flex flex-col items-center justify-center pointer-events-none">
             <span className="text-xl font-bold font-display" style={{ color: "#0F172A" }}>
               {total.toLocaleString()}
             </span>

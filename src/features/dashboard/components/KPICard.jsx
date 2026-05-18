@@ -1,4 +1,6 @@
 import { Package, Boxes, AlertTriangle, XCircle, ShoppingCart } from "lucide-react";
+import productManagementIcon from "../../../assets/sideNavbar/Product_Management.svg";
+import outOfStockIcon from "../../../assets/sideNavbar/Out of stock.svg";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // KPICard — matches the 4 overview cards in the Figma design
@@ -10,10 +12,13 @@ const ICONS = {
   cart: ShoppingCart,
   alert: AlertTriangle,
   "x-circle": XCircle,
+  "product-management": productManagementIcon,
+  "out-of-stock": outOfStockIcon,
 };
 
 export default function KPICard({ label, value, icon, color, bg, loading }) {
   const Icon = ICONS[icon] || Package;
+  const isSvgIcon = typeof Icon === "string";
 
   if (loading) {
     return (
@@ -49,7 +54,11 @@ export default function KPICard({ label, value, icon, color, bg, loading }) {
         className="w-10 h-10 rounded-xl flex items-center justify-center mb-11"
         style={{ background: bg }}
       >
-        <Icon size={20} color={color} strokeWidth={1.8} />
+        {isSvgIcon ? (
+          <img src={Icon} alt="" aria-hidden="true" className="w-5 h-5" />
+        ) : (
+          <Icon size={20} color={color} strokeWidth={1.8} />
+        )}
       </div>
 
       {/* Value */}

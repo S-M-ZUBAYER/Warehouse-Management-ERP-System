@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import useDebounce from '../../../../hooks/useDebounce';
@@ -59,6 +59,30 @@ const unlinkMapping = (id) =>
 const syncMapped = (body) =>
     api.post('/sku-mapping/sync-mapped', body).then((r) => r.data);
 
+const LOCAL_MAPPING_SEARCH_TYPES = new Set(['platform_product_id', 'platform_shop_id']);
+
+const mappingValueMatches = (value, query) =>
+    String(value ?? '').toLowerCase().includes(query);
+
+const matchesLocalMappingSearch = (sku, skuType, query) => {
+    if (!query) return true;
+    const mappings = sku.mappings ?? [];
+
+    if (skuType === 'platform_product_id') {
+        return mappings.some((mapping) =>
+            mappingValueMatches(mapping.platform_product_id, query)
+        );
+    }
+
+    if (skuType === 'platform_shop_id') {
+        return mappings.some((mapping) =>
+            mappingValueMatches(mapping.platform_shop_id, query)
+        );
+    }
+
+    return true;
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Hook
 // ─────────────────────────────────────────────────────────────────────────────
@@ -101,9 +125,9 @@ export function useByMerchantMapping() {
     // ── Query: merchant SKU list ──────────────────────────────────────────────
     const listParams = {
         page,
-        limit:         20,
-        search:        searchApplied || undefined,
-        skuType:       skuType       || undefined,
+        limit:         LOCAL_MAPPING_SEARCH_TYPES.has(skuType) && searchApplied ? 500 : 20,
+        search:        LOCAL_MAPPING_SEARCH_TYPES.has(skuType) ? undefined : searchApplied || undefined,
+        skuType:       LOCAL_MAPPING_SEARCH_TYPES.has(skuType) ? undefined : skuType || undefined,
         mappingStatus: mappingStatus !== 'all' ? mappingStatus : undefined,
     };
 
@@ -120,8 +144,21 @@ export function useByMerchantMapping() {
         placeholderData: (prev) => prev,
     });
 
-    const merchantSkus = listData?.data       ?? [];
-    const pagination   = listData?.pagination ?? { total: 0, totalPages: 1, page: 1, limit: 20 };
+    const rawMerchantSkus = listData?.data ?? [];
+    const merchantSkus = useMemo(() => {
+        if (!LOCAL_MAPPING_SEARCH_TYPES.has(skuType) || !searchApplied.trim()) {
+            return rawMerchantSkus;
+        }
+
+        const query = searchApplied.trim().toLowerCase();
+        return rawMerchantSkus.filter((sku) =>
+            matchesLocalMappingSearch(sku, skuType, query)
+        );
+    }, [rawMerchantSkus, skuType, searchApplied]);
+    const rawPagination = listData?.pagination ?? { total: 0, totalPages: 1, page: 1, limit: 20 };
+    const pagination = LOCAL_MAPPING_SEARCH_TYPES.has(skuType) && searchApplied.trim()
+        ? { ...rawPagination, total: merchantSkus.length, totalPages: 1, page: 1, limit: merchantSkus.length || 20 }
+        : rawPagination;
 
     // ── Query: counts ─────────────────────────────────────────────────────────
     const { data: counts = { all: 0, mapped: 0, unmapped: 0 } } = useQuery({

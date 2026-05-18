@@ -14,7 +14,7 @@ export default function WarehouseTable({ warehouses, onToggleDefault, onDetails,
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-base font-body">
-        <thead>
+        <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
           <tr className="border-b border-surface-border">
             <th className="py-3 text-left font-semibold text-primary-text pr-6 pl-1 w-[22%]">
               Warehouse Name

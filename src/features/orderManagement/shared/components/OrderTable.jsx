@@ -24,15 +24,21 @@ export default function OrderTable({
   onDetails,
   statusLabel = "Status",
   showActionsCol = true,
+  compact = false,
 }) {
   const someSelected =
     orders.some((o) => selectedIds.includes(o.id)) && !allSelected;
   const [detailOrder, setDetailOrder] = useState(null);
+  const tableTextClass = compact ? "text-sm font-body" : "text-sm";
+  const headerTextClass = compact
+    ? "text-sm font-bold text-slate-800"
+    : "text-base font-semibold text-primary-text";
+  const smallCellTextClass = compact ? "text-sm" : "text-xs";
 
   return (
     <div className="overflow-x-auto font-body">
-      <table className="w-full text-sm">
-        <thead>
+      <table className={`w-full ${tableTextClass}`}>
+        <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
           <tr className="border-b border-surface-border">
             <th className="py-3 pl-5 text-left max-w-40 flex items-center">
               <input
@@ -44,7 +50,7 @@ export default function OrderTable({
                 onChange={onToggleAll}
                 className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
               />
-              <span className="pl-2 text-base font-semibold text-primary-text">
+              <span className={`pl-2 ${headerTextClass}`}>
                 Select All
               </span>
             </th>
@@ -61,13 +67,13 @@ export default function OrderTable({
             ].map((h) => (
               <th
                 key={h}
-                className="py-3 pr-4 text-left text-base font-semibold text-primary-text"
+                className={`py-3 pr-4 text-left ${headerTextClass}`}
               >
                 {h}
               </th>
             ))}
             {showActionsCol && actionLabel && (
-              <th className="py-3 pr-5 text-left text-xs font-semibold text-primary-text">
+              <th className={`py-3 pr-5 text-left ${headerTextClass}`}>
                 Actions
               </th>
             )}
@@ -124,12 +130,12 @@ export default function OrderTable({
                   <td className="py-3 pr-4 text-slate-700">{order.sku}</td>
 
                   {/* Order Number */}
-                  <td className="py-3 pr-4 text-primary-text font-mono text-xs">
+                  <td className={`py-3 pr-4 text-primary-text font-mono ${smallCellTextClass}`}>
                     {order.orderNo}
                   </td>
 
                   {/* Tracking Number */}
-                  <td className="py-3 pr-4 text-slate-500 font-mono text-xs">
+                  <td className={`py-3 pr-4 text-slate-500 font-mono ${smallCellTextClass}`}>
                     {order.trackingNo}
                   </td>
 
@@ -139,14 +145,14 @@ export default function OrderTable({
                   </td>
 
                   {/* Create Time */}
-                  <td className="py-3 pr-4 text-slate-500 text-xs">
+                  <td className={`py-3 pr-4 text-slate-500 ${smallCellTextClass}`}>
                     {order.createdAt}
                   </td>
 
                   {/* Status */}
                   <td className="py-3 pr-4">
                     <span
-                      className={`text-xs font-medium ${
+                      className={`${smallCellTextClass} font-medium ${
                         order.status === "To Ship"
                           ? "text-amber-600"
                           : order.status === "Processed"
@@ -167,8 +173,8 @@ export default function OrderTable({
                   {/* Details */}
                   <td className="py-3 pr-4">
                     <button
-                      onClick={() => setDetailOrder(order)}
-                      className="text-xs font-semibold text-[#004368] hover:underline transition-colors"
+                      onClick={() => (onDetails ? onDetails(order) : setDetailOrder(order))}
+                      className={`${smallCellTextClass} font-semibold text-[#004368] hover:underline transition-colors`}
                     >
                       Details
                     </button>
@@ -179,7 +185,7 @@ export default function OrderTable({
                     <td className="py-3 pr-5">
                       <button
                         onClick={() => onAction?.(order)}
-                        className="text-xs font-semibold text-primary hover:underline transition-colors"
+                        className={`${smallCellTextClass} font-semibold text-primary hover:underline transition-colors`}
                       >
                         {actionLabel}
                       </button>

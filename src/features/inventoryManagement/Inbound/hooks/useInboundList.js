@@ -22,7 +22,6 @@ export const INBOUND_KEYS = {
 // API helpers
 // ─────────────────────────────────────────────────────────────────────────────
 const fetchInboundList = (params) => {
-    console.log(params);
 
     const qs = new URLSearchParams();
     qs.set('page', params.page ?? 1);
@@ -144,7 +143,7 @@ export function useInboundList({ status }) {
         }),
         [rawItems, warehouseId, debouncedSearch, inboundType, timeType, dateFrom, dateTo],
     );
-    console.log(listData);
+   
 
     const apiPagination = listData?.pagination ?? { total: 0, totalPages: 1, page: 1, limit: 20 };
     const pagination = items.length === rawItems.length

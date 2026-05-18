@@ -448,7 +448,7 @@ export default function Topbar({ PageTitle }) {
     return (
         <header className="flex items-center justify-between flex-shrink-0" style={{ height: '64px' }}>
             {PageTitle && (
-                <h1 className="text-[28px] font-semibold font-display text-primary-text">
+                <h1 className="text-[26px] font-semibold font-display text-primary-text">
                     {PageTitle}
                 </h1>
             )}
@@ -464,7 +464,7 @@ export default function Topbar({ PageTitle }) {
                         className="flex items-center gap-2.5 rounded-xl px-2 py-1 transition-colors cursor-pointer"
                     >
                         <div
-                            className="w-10 h-10 font-display border-2 border-primary rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 text-xs font-bold"
+                            className="w-9 h-9 font-display border-2 border-primary rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 text-xs font-bold"
                             style={{ background: profile.image ? 'none' : '#1E3A5F', color: '#F59E0B' }}
                         >
                             {profile.image ? (
@@ -481,8 +481,8 @@ export default function Topbar({ PageTitle }) {
                             {profile.fullName}
                         </span>
                         <ChevronRight
-                            size={14}
-                            color="#94A3B8"
+                            size={18}
+                            color="#0F172A"
                             style={{ transform: showDropdown ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
                         />
                     </button>

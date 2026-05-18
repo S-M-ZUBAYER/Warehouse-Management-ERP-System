@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import Topbar from "../../../components/layout/Topbar";
 import InvFooter from "../shared/components/InvFooter";
+import calendarIcon from "../../../assets/calendar.svg";
 import {
   useInventoryLog,
   MOVEMENT_TYPE_OPTIONS,
@@ -31,6 +32,36 @@ const SkeletonRow = () => (
       </td>
     ))}
   </tr>
+);
+
+const openDatePicker = (input) => {
+  input?.focus();
+  try {
+    input?.showPicker?.();
+  } catch {
+    // Some browsers only allow showPicker from a direct click.
+  }
+};
+
+const DateFilterInput = ({ value, onChange }) => (
+  <div
+    className="relative"
+    onClick={(e) => openDatePicker(e.currentTarget.querySelector("input"))}
+  >
+    <input
+      type="date"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onFocus={(e) => openDatePicker(e.currentTarget)}
+      className="inventory-log-date-input w-full pl-3 pr-10 py-2 text-sm border border-surface-border rounded-lg bg-white text-slate-600 outline-none focus:border-primary cursor-pointer"
+    />
+    <img
+      src={calendarIcon}
+      alt=""
+      aria-hidden="true"
+      className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2"
+    />
+  </div>
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -120,6 +151,10 @@ export default function InventoryLogPage() {
     setWarehouseId,
     movementType,
     setMovementType,
+    startDate,
+    setStartDate,
+    endDate,
+    setEndDate,
     skuName,
     setSkuName,
     handleSearch,
@@ -146,7 +181,13 @@ export default function InventoryLogPage() {
 
       {/* ── Filter bar ── */}
       <div className="bg-white rounded-xl border border-surface-border p-4">
-        <div className="grid grid-cols-3 gap-3 max-w-2xl">
+        <div
+          className={`grid gap-3 ${
+            movementType === "history"
+              ? "grid-cols-5 max-w-5xl"
+              : "grid-cols-3 max-w-2xl"
+          }`}
+        >
           {/* Type */}
           <div>
             <p className="text-xs font-semibold text-slate-600 mb-1.5">Type</p>
@@ -168,6 +209,24 @@ export default function InventoryLogPage() {
               />
             </div>
           </div>
+
+          {movementType === "history" && (
+            <>
+              <div>
+                <p className="text-xs font-semibold text-slate-600 mb-1.5">
+                  Start Date
+                </p>
+                <DateFilterInput value={startDate} onChange={setStartDate} />
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-slate-600 mb-1.5">
+                  End Date
+                </p>
+                <DateFilterInput value={endDate} onChange={setEndDate} />
+              </div>
+            </>
+          )}
 
           {/* Select Warehouse */}
           <div>
@@ -232,7 +291,7 @@ export default function InventoryLogPage() {
       <div className="bg-white rounded-xl border border-surface-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm font-body">
-            <thead>
+            <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
               <tr className="border-b border-surface-border">
                 <th className="py-3 pl-5 w-12 text-left">
                   <input
@@ -339,6 +398,17 @@ export default function InventoryLogPage() {
           ]}
         />
       </div>
+
+      <style>{`
+        .inventory-log-date-input::-webkit-calendar-picker-indicator {
+          opacity: 0;
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          cursor: pointer;
+        }
+      `}</style>
     </div>
   );
 }

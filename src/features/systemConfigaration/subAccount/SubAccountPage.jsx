@@ -476,7 +476,7 @@ export default function SubAccountPage() {
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm font-body">
-            <thead>
+            <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
               <tr className="border-b border-surface-border">
                 {[
                   "Select",
@@ -490,7 +490,7 @@ export default function SubAccountPage() {
                   <th
                     key={h}
                     className={`py-4 text-left text-xs font-semibold text-slate-600
-                      ${i === 0 ? "pl-5 w-14" : "pr-4"} ${i === 6 ? "pr-5" : ""}`}
+                      ${i === 0 ? "pl-5 pr-3 w-14" : "pr-4"} ${i === 6 ? "pr-5" : ""}`}
                   >
                     {h}
                   </th>

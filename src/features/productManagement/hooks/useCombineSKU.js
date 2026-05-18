@@ -250,9 +250,11 @@ export function useAddCombineSKU() {
             height: form.height || undefined,
             warehouseId: form.warehouseId ? Number(form.warehouseId) : undefined,
             status: "active",
-            items: selectedIds.map((id) => ({
+            items: selectedIds.map((id, index) => ({
                 merchantSkuId: id,
                 quantity: quantities[id] ?? 1,
+                order: index,
+                sortOrder: index,
             })),
         };
         createMutation.mutate(body);

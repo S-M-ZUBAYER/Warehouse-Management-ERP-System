@@ -512,12 +512,48 @@ import Topbar from "../../../components/layout/Topbar";
 import ProductFilterBar from "./component/ProductFilterBar";
 import ProductTable from "./component/ProductTable";
 import { AddSkuModal, ConfirmModal } from "./component/ProductModals";
+import { FileSpreadsheet, Loader2, UploadCloud, X } from "lucide-react";
+import { useState } from "react";
+import { exportRowsToXlsx } from "../../../utils/tableOutput";
+
+const productTemplateColumns = [
+  { label: "skuName", key: "skuName" },
+  { label: "skuTitle", key: "skuTitle" },
+  { label: "productDetails", key: "productDetails" },
+  { label: "gtin", key: "gtin" },
+  { label: "imageUrl", key: "imageUrl" },
+  { label: "price", key: "price" },
+  { label: "costPrice", key: "costPrice" },
+  { label: "country", key: "country" },
+  { label: "weight", key: "weight" },
+  { label: "length", key: "length" },
+  { label: "width", key: "width" },
+  { label: "height", key: "height" },
+];
+
+const productTemplateRows = [
+  {
+    skuName: "SKU-001",
+    skuTitle: "Example Product",
+    productDetails: "Product details here",
+    gtin: "GTIN-00001",
+    imageUrl: "https://example.com/product-image.jpg",
+    price: "100",
+    costPrice: "60",
+    country: "Malaysia",
+    weight: "1.5",
+    length: "10",
+    width: "8",
+    height: "5",
+  },
+];
 
 export default function ProductListPage() {
+  const [confirmImportCancel, setConfirmImportCancel] = useState(false);
+
   const {
     search,
     setSearch,
-    warehouseFilter,
     warehouseFilterName,
     handleWarehouseFilterChange,
     productStatus,
@@ -575,7 +611,39 @@ export default function ProductListPage() {
     setBulkDeleteConfirm,
     confirmBulkDelete,
     bulkDeleting,
+    showStockAlertModal,
+    setShowStockAlertModal,
+    minStock,
+    setMinStock,
+    handleStockAlertOpen,
+    confirmSetStockAlert,
+    stockAlertSaving,
+    showImportModal,
+    setShowImportModal,
+    importFile,
+    setImportFile,
+    importWarehouseId,
+    importWarehouseName,
+    handleImportWarehouseSelect,
+    resetImportTemplateState,
+    confirmImportTemplate,
+    importingTemplate,
   } = useProductList();
+
+  const confirmCancelImport = () => {
+    resetImportTemplateState();
+    setConfirmImportCancel(false);
+    setShowImportModal(false);
+  };
+
+  const handleDownloadTemplate = () => {
+    exportRowsToXlsx(
+      productTemplateRows,
+      productTemplateColumns,
+      "merchant-sku-import-template.xlsx",
+      "template row"
+    );
+  };
 
   return (
     <div className="space-y-4 font-body">
@@ -620,8 +688,11 @@ export default function ProductListPage() {
         hasActiveFilters={hasActiveFilters}
         resetFilters={resetFilters}
         setShowAddModal={setShowAddModal}
+        onOpenImportModal={() => setShowImportModal(true)}
+        onDownloadTemplate={handleDownloadTemplate}
         openDeleteModal={openDeleteModal}
         openEditModal={openEditModal}
+        handleStockAlertOpen={handleStockAlertOpen}
       />
 
       {showAddModal && (
@@ -642,6 +713,129 @@ export default function ProductListPage() {
           modalWarehouses={modalWarehouses}
           warehouseLoading={warehouseLoading}
           isWarehouseError={isWarehouseError}
+        />
+      )}
+
+      {showImportModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(200,210,220,0.55)", backdropFilter: "blur(3px)" }}
+          onClick={(e) => e.target === e.currentTarget && !importingTemplate && setShowImportModal(false)}
+        >
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md font-body overflow-hidden">
+            <div className="flex items-start justify-between px-7 pt-7 pb-3">
+              <div>
+                <h2 className="text-lg font-bold text-slate-800 font-display">
+                  Add Product via Template
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  Upload the completed Merchant SKU XLSX template with imageUrl or imageBase64.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowImportModal(false)}
+                disabled={importingTemplate}
+                className="w-7 h-7 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="px-7 pb-7">
+              <div className="mb-4">
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Select Warehouse
+                </label>
+                <select
+                  value={importWarehouseId}
+                  onChange={(e) => {
+                    const selected = modalWarehouses.find((warehouse) => String(warehouse.id) === e.target.value);
+                    if (selected) handleImportWarehouseSelect(selected);
+                  }}
+                  disabled={importingTemplate || warehouseLoading}
+                  className="w-full px-3.5 py-2.5 text-sm border border-surface-border rounded-xl bg-white
+                             text-slate-700 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all disabled:opacity-60"
+                >
+                  <option value="">
+                    {warehouseLoading ? "Loading warehouses..." : importWarehouseName}
+                  </option>
+                  {modalWarehouses.map((warehouse) => (
+                    <option key={warehouse.id} value={String(warehouse.id)}>
+                      {warehouse.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <label className="flex flex-col items-center justify-center border-2 border-dashed border-surface-border rounded-xl py-8 cursor-pointer hover:border-primary/40 transition-colors bg-surface">
+                <input
+                  type="file"
+                  accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+                  className="hidden"
+                  disabled={importingTemplate}
+                />
+                {importFile ? (
+                  <FileSpreadsheet size={30} className="text-primary mb-2" />
+                ) : (
+                  <UploadCloud size={30} className="text-slate-400 mb-2" />
+                )}
+                <p className="text-sm font-semibold text-slate-700">
+                  {importFile ? (
+                    <span className="text-primary">{importFile.name}</span>
+                  ) : (
+                    "Choose XLSX file"
+                  )}
+                </p>
+                <p className="text-xs text-slate-400 mt-1">
+                  Use the downloaded template format.
+                </p>
+                <span className="mt-3 px-5 py-1.5 text-xs font-semibold border border-surface-border rounded-lg text-slate-700 bg-white">
+                  {importFile ? "Change File" : "Browse File"}
+                </span>
+              </label>
+
+              <button
+                type="button"
+                onClick={handleDownloadTemplate}
+                className="mt-3 text-xs font-semibold text-primary hover:underline"
+              >
+                Download template again
+              </button>
+
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setConfirmImportCancel(true)}
+                  disabled={importingTemplate}
+                  className="px-5 py-2.5 text-sm font-semibold border border-surface-border rounded-xl text-slate-700 bg-white hover:bg-surface-card transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmImportTemplate}
+                  disabled={importingTemplate}
+                  className="px-5 py-2.5 text-sm font-semibold bg-primary hover:bg-primary-dark text-white rounded-xl transition-colors disabled:opacity-60 flex items-center gap-2"
+                >
+                  {importingTemplate && <Loader2 size={14} className="animate-spin" />}
+                  {importingTemplate ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmImportCancel && (
+        <ConfirmModal
+          title="Cancel Template Import?"
+          message="Are you sure you want to cancel this upload? The selected file will be cleared."
+          confirmLabel="Yes, Cancel"
+          confirmClass="bg-red-500 hover:bg-red-600 text-white"
+          onCancel={() => setConfirmImportCancel(false)}
+          onConfirm={confirmCancelImport}
         />
       )}
 
@@ -696,6 +890,56 @@ export default function ProductListPage() {
           onConfirm={confirmBulkDelete}
           loading={bulkDeleting}
         />
+      )}
+
+      {showStockAlertModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(200,210,220,0.55)", backdropFilter: "blur(3px)" }}
+          onClick={(e) => e.target === e.currentTarget && !stockAlertSaving && setShowStockAlertModal(false)}
+        >
+          <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-sm text-center font-body">
+            <h2 className="text-lg font-bold text-slate-800 font-display mb-1.5">
+              Set Stock Alert
+            </h2>
+            <p className="text-sm text-slate-500 mb-6">
+              Applies to <span className="font-semibold text-primary">{selectedIds.length} selected product(s)</span>
+            </p>
+
+            <div className="text-left mb-5">
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Set minimum Stock
+              </label>
+              <input
+                type="number"
+                min={0}
+                value={minStock}
+                onChange={(e) => setMinStock(e.target.value)}
+                placeholder="Minimum Stock Quantity here"
+                className="w-full px-3.5 py-2.5 text-sm border border-surface-border rounded-xl bg-white
+                           text-slate-700 placeholder-slate-400 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowStockAlertModal(false)}
+                disabled={stockAlertSaving}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold border border-surface-border text-slate-700 bg-white hover:bg-surface-card transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmSetStockAlert}
+                disabled={stockAlertSaving}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-primary hover:bg-primary-dark text-white transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {stockAlertSaving && <Loader2 size={14} className="animate-spin" />}
+                {stockAlertSaving ? "Saving..." : "Set"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

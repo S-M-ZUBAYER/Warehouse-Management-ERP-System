@@ -1,6 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // NicknameModal — Store Authorization edit nickname modal
 // ─────────────────────────────────────────────────────────────────────────────
+import { X } from "lucide-react";
+
 export default function NicknameModal({
   modal,
   onClose,
@@ -22,9 +24,17 @@ export default function NicknameModal({
       onClick={(e) => e.target === e.currentTarget && !saving && onClose()}
     >
       <div
-        className="bg-white rounded-2xl shadow-xl w-full font-body"
+        className="relative bg-white rounded-2xl shadow-xl w-full font-body"
         style={{ maxWidth: "410px", animation: "popIn 0.18s ease both" }}
       >
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={saving}
+          className="absolute right-4 top-4 w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-50"
+        >
+          <X size={16} />
+        </button>
         <div className="px-9 pt-8 pb-8 space-y-6">
           <div className="text-center">
             <h2 className="text-2xl font-bold text-slate-800 font-display mb-2">
@@ -62,7 +72,7 @@ export default function NicknameModal({
             className="w-full py-3 rounded-lg text-sm font-semibold bg-primary
                        hover:bg-primary-dark text-white transition-colors disabled:opacity-60"
           >
-            {saving ? "Saving..." : "Continue"}
+            {saving ? "Saving..." : "Save"}
           </button>
         </div>
       </div>

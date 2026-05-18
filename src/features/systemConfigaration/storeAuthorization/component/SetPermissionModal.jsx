@@ -24,6 +24,13 @@ export default function SetPermissionModal({
   if (!open) return null;
 
   const selectedCount = selected?.length || 0;
+  const handleAccessToggle = (id) => {
+    const isChecked = selected.includes(id);
+    onToggle(id);
+    if (!isChecked && !editSelected.includes(id)) {
+      onToggleEdit(id);
+    }
+  };
 
   return (
     <div
@@ -90,9 +97,9 @@ export default function SetPermissionModal({
 
         <div className="mx-8 mb-6 border rounded-2xl border-surface-border overflow-hidden">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
               <tr className="border-b border-surface-border bg-slate-50/60">
-                {['Access', 'Can Work/Edit', 'Sub-Accounts', 'Full Name', 'Roles'].map((h) => (
+                {['Access', 'Sub-Accounts', 'Full Name', 'Roles'].map((h) => (
                   <th key={h} className="py-3 px-5 text-left text-sm font-semibold text-primary-text">
                     {h}
                   </th>
@@ -116,16 +123,7 @@ export default function SetPermissionModal({
                     <input
                       type="checkbox"
                       checked={selected.includes(acc.id)}
-                      onChange={() => onToggle(acc.id)}
-                      disabled={saving}
-                      className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
-                    />
-                  </td>
-                  <td className="py-3 px-5">
-                    <input
-                      type="checkbox"
-                      checked={editSelected.includes(acc.id)}
-                      onChange={() => onToggleEdit(acc.id)}
+                      onChange={() => handleAccessToggle(acc.id)}
                       disabled={saving}
                       className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
                     />

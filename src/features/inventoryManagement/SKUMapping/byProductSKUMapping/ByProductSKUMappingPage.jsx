@@ -2532,8 +2532,10 @@ import WarehouseSelect               from '../components/WarehouseSelect';
 import ConfirmModal                  from '../components/ConfirmModal';
 import { TableSkeleton, EmptyState } from '../components/TableHelpers';
 import Pagination                    from '../../../../components/shared/Pagination';
+import ExportMenu                    from '../../../../components/shared/ExportMenu';
 import api                           from '../../../../lib/api';
 import { toast } from 'sonner';
+import { exportRowsToCsv, exportRowsToXlsx, printRows } from '../../../../utils/tableOutput';
 
 const TABS = [
     { label: 'All',      value: 'all'      },
@@ -2605,6 +2607,16 @@ export default function ByProductSKUMappingPage() {
             : counts.unmapped
         })`,
     }));
+    const selectedRows = products
+        .flatMap((product) => (product.children ?? product.skus ?? product.items ?? []).map((child) => ({ ...child, parentProduct: product })))
+        .filter((child) => selectedIds.includes(child.id));
+    const outputColumns = [
+        { label: 'Product Name', render: (row) => row.parentProduct?.product_name ?? row.parentProduct?.name ?? row.product_name ?? '' },
+        { label: 'Seller SKU', render: (row) => row.seller_sku ?? row.sku ?? row.sku_name ?? '' },
+        { label: 'Product ID', render: (row) => row.platform_product_id ?? row.product_id ?? row.parentProduct?.platform_product_id ?? '' },
+        { label: 'Merchant SKU', render: (row) => row.merchant_sku?.sku_name ?? row.merchantSku?.sku_name ?? '' },
+        { label: 'Status', render: (row) => row.mapping_status ?? row.status ?? '' },
+    ];
 
     // "Generate Merchant SKU" works from selected child/variant rows only. No platform filter is required.
     const handleGenerateBtnClick = () => {
@@ -2794,7 +2806,7 @@ export default function ByProductSKUMappingPage() {
                         </div>
                     ) : (
                         <table className="w-full text-sm font-body">
-                            <thead>
+                            <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                                 <tr className="border-b border-surface-border">
                                     <th className="py-3 pl-5 w-28 text-left">
                                         <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -2805,7 +2817,7 @@ export default function ByProductSKUMappingPage() {
                                                 onChange={toggleAll}
                                                 className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
                                             />
-                                            <span className="text-xs font-semibold text-slate-600">Select All</span>
+                                            <span className="text-sm font-bold text-slate-800">Select All</span>
                                         </label>
                                     </th>
                                     {['Image', 'Product Name', 'Product ID', 'Store Name', 'Parent SKU', 'Variation Name', 'SKU', 'Merchant SKU', 'Actions'].map((h) => (
@@ -2945,10 +2957,11 @@ export default function ByProductSKUMappingPage() {
                 <Pagination page={page} totalPages={pagination.totalPages} total={pagination.total} limit={pagination.limit} onPageChange={setPage} />
 
                 <div className="flex justify-end gap-3 px-5 py-4 border-t border-surface-border">
-                    <button className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold border border-surface-border rounded-lg text-slate-700 bg-white hover:bg-surface-card transition-colors">
-                        Export <ChevronDown size={13} className="text-slate-400" />
-                    </button>
-                    <button className="px-6 py-2.5 text-sm font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors">Print</button>
+                    <ExportMenu
+                        onExportCsv={() => exportRowsToCsv(selectedRows, outputColumns, 'sku-mapping-by-product.csv', 'SKU mapping')}
+                        onExportXlsx={() => exportRowsToXlsx(selectedRows, outputColumns, 'sku-mapping-by-product.xlsx', 'SKU mapping')}
+                    />
+                    <button onClick={() => printRows(selectedRows, outputColumns, 'SKU Mapping By Product', 'SKU mapping')} className="px-16 py-2.5 text-base font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors">Print</button>
                 </div>
             </div>
 
@@ -3330,7 +3343,7 @@ function AddMappingFromProductModal({ product, onClose, onConfirm, confirming })
                             <div className="flex items-center justify-center h-24 text-sm text-slate-400">No merchant SKUs found for this warehouse</div>
                         ) : (
                             <table className="w-full text-sm">
-                                <thead className="bg-surface-card text-xs text-slate-500">
+                                <thead className="bg-surface-card text-xs text-slate-500 [&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                                     <tr>
                                         <th className="py-2 pl-4 w-8 text-left">Select</th>
                                         <th className="py-2 px-3 text-left">Image</th>
