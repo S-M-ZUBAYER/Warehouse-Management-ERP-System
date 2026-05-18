@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import authApi from "@/lib/authApi";
+import api from "@/lib/api";
 
 
 export function useForgotPassword() {
     const navigate = useNavigate();
+    const location = useLocation();
 
     // ── Send email state ───────────────────────────────────────────────────────
     const [forgotEmail, setForgotEmail] = useState("");
@@ -46,8 +48,12 @@ export function useForgotPassword() {
 
             if (res.code === 200 && res.status === "success") {
                 setForgotSuccess(res.message || "Reset email sent! Check your inbox.");
+                sessionStorage.setItem("forgotPasswordEmail", forgotEmail);
+                const resetEmail = forgotEmail;
                 setForgotEmail("");
-                setTimeout(() => navigate("/warehouse_management/forgotpassword"), 1500);
+                setTimeout(() => navigate("/warehouse_management/forgotpassword", {
+                    state: { email: resetEmail },
+                }), 1500);
             } else {
                 setForgotError(res.message || "Email not found. Please try another.");
             }
@@ -64,7 +70,11 @@ export function useForgotPassword() {
     // ── Action 2: Reset password with code ────────────────────────────────────
     const handleChange = (e) => {
         const { name, value } = e.target;
-        setFormData((prev) => ({ ...prev, [name]: value }));
+        const nextValue = name === "code"
+            ? value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase()
+            : value;
+
+        setFormData((prev) => ({ ...prev, [name]: nextValue }));
         if (name === "code") setCodeError("");
         if (name === "newPassword" || name === "confirmPass") {
             setPasswordError("");
@@ -80,40 +90,69 @@ export function useForgotPassword() {
             return;
         }
 
+        const resetEmail = location.state?.email || sessionStorage.getItem("forgotPasswordEmail");
+
+        if (!resetEmail) {
+            setPasswordError("Please request a reset code again before updating your password.");
+            return;
+        }
+
         setLoading(true);
         setCodeError("");
         setPasswordError("");
         setSuccess("");
 
         try {
-            const res = await authApi.post(
+            const resetRes = await authApi.post(
                 `/dev/user/reset-password?code=${encodeURIComponent(formData.code)}&newPassword=${encodeURIComponent(formData.newPassword)}`,
-                "",   // empty body
+                "",
                 {
                     headers: {
-                        "Content-Type": "application/x-www-form-urlencoded",
                         Accept: "*/*",
                     },
                 }
             );
 
-            if (res.code === 200 && res.status === "success") {
-                setSuccess(res.message || "Password reset successfully!");
+            const resetSuccess = resetRes?.status === "success" || resetRes?.code === 200;
+
+            if (!resetSuccess) {
+                const message = resetRes?.message || "Invalid or expired verification code.";
+                setCodeError(message);
+                return;
+            }
+
+            const res = await api.put(
+                "/auth/password",
+                {
+                    email: resetEmail,
+                    newPassword: formData.newPassword,
+                },
+                {
+                    headers: {
+                        Accept: "*/*",
+                        "Content-Type": "application/json",
+                    },
+                }
+            );
+
+            if (res?.success) {
+                setSuccess(res.message || "Password updated successfully!");
                 setFormData({ code: "", newPassword: "", confirmPass: "" });
+                sessionStorage.removeItem("forgotPasswordEmail");
                 setTimeout(() => navigate("/warehouse_management/login"), 2000);
             } else {
-                const msg = res.message || "";
-                if (msg.toLowerCase().includes("code")) {
-                    setCodeError(msg || "Invalid or expired code.");
-                } else {
-                    setPasswordError(msg || "Failed to reset password.");
-                }
+                setPasswordError(res?.message || "Failed to update password.");
             }
         } catch (err) {
             console.error("Reset password error:", err);
-            setPasswordError(
-                err.response?.data?.message || "Network error. Please try again."
-            );
+            const status = err.response?.status;
+            const message = err.response?.data?.message || "Network error. Please try again.";
+
+            if (status === 404) {
+                setCodeError("Invalid or expired verification code.");
+            } else {
+                setPasswordError(message);
+            }
         } finally {
             setLoading(false);
         }

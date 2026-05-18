@@ -25,6 +25,8 @@ export default function SelectMerchantSKUModal({
 }) {
   const [skuType, setSkuType] = useState("SKU Name");
   if (!open) return null;
+ 
+  
 
   return (
     <div
@@ -103,7 +105,7 @@ export default function SelectMerchantSKUModal({
                 </div>
               ) : (
                 <table className="w-full text-xs">
-                  <thead className="sticky top-0 bg-white z-10">
+                  <thead className="sticky top-0 bg-white z-10 [&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                     <tr className="border-b border-surface-border">
                       {[
                         "Select",
@@ -135,7 +137,7 @@ export default function SelectMerchantSKUModal({
                       pickerSkus.map((sku) => {
                         const isChecked = selectedIds.includes(sku.id);
                         const available =
-                          sku.available_in_inventory ?? sku.qty_on_hand ?? 0;
+                          sku.stock?.[0]?.qty_on_hand ?? sku.qty_on_hand ?? 0;
                         return (
                           <tr
                             key={sku.id}
@@ -212,7 +214,7 @@ export default function SelectMerchantSKUModal({
                 </div>
               ) : (
                 <table className="w-full text-xs">
-                  <thead className="sticky top-0 bg-white z-10">
+                  <thead className="sticky top-0 bg-white z-10 [&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                     <tr className="border-b border-surface-border">
                       {["Image", "Product Name", "Quantity", "Action"].map(
                         (h) => (
@@ -260,8 +262,13 @@ export default function SelectMerchantSKUModal({
                             onChange={(e) =>
                               updatePickerQty(sku.id, e.target.value)
                             }
+                            onBlur={(e) => {
+                              if (e.target.value === "") {
+                                updatePickerQty(sku.id, "1");
+                              }
+                            }}
                             onClick={(e) => e.stopPropagation()}
-                            className="w-12 px-1.5 py-1 text-xs border border-surface-border rounded-md text-center text-slate-700 outline-none focus:border-primary"
+                            className="w-20 px-1.5 py-1 text-xs border border-surface-border rounded-md text-center text-slate-700 outline-none focus:border-primary"
                           />
                         </td>
                         <td className="py-2 pl-4">

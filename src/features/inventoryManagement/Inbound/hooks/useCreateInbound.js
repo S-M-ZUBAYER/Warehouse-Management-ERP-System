@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'react-hot-toast';
+import { toast } from 'sonner';
 import { INBOUND_KEYS } from './useInboundList';
 import api from '../../../../lib/api';
 import useDebounce from '../../../../hooks/useDebounce';
@@ -130,6 +130,10 @@ export function useCreateInbound({ onSuccess }) {
     }, [pickerSkus]);
 
     const updatePickerQty = useCallback((id, val) => {
+        if (val === "") {
+            setQuantities((prev) => ({ ...prev, [id]: "" }));
+            return;
+        }
         setQuantities((prev) => ({ ...prev, [id]: Math.max(1, Number(val) || 1) }));
     }, []);
 

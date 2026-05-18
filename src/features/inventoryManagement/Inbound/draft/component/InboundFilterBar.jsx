@@ -1,48 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Calendar, Search, Loader2 } from 'lucide-react';
+import { Calendar, ChevronDown, ChevronRight, Search, Loader2 } from 'lucide-react';
+import { formatInboundDateRange } from '../../../shared/inboundFilterUtils';
 
 const TIME_TYPES   = ['Created Time', 'Estimated arrival time'];
-const TIME_FILTERS = ['All', 'Yesterday', 'Today', 'Last 7 days', 'Last 30 days'];
-const INBOUND_TYPES = ['Inbound No.', 'SKU Name', 'GTIN'];
+const INBOUND_TYPES = ['Inbound No.', 'SKU Name'];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// InboundFilterBar — shared by Draft, OnTheWay, Completed
-// warehouseOptions: [{ label, value }] from useInboundDropdowns
-// ─────────────────────────────────────────────────────────────────────────────
-export default function InboundFilterBar({
-    warehouseId, setWarehouseId,
-    warehouseOptions = [],
-    warehouseLoading = false,
-    timeType, setTimeType,
-    timeFilter, setTimeFilter,
-    inboundType, setInboundType,
-    search, setSearch,
-    onSearch,
-}) {
-    const [showWareDrop,    setShowWareDrop]    = useState(false);
-    const [showTimeDrop,    setShowTimeDrop]    = useState(false);
-    const [showAllDrop,     setShowAllDrop]     = useState(false);
-    const [showInboundDrop, setShowInboundDrop] = useState(false);
-
-    const wareRef    = useRef(null);
-    const timeRef    = useRef(null);
-    const allRef     = useRef(null);
-    const inboundRef = useRef(null);
-
-    useEffect(() => {
-        const handler = (e) => {
-            if (wareRef.current    && !wareRef.current.contains(e.target))    setShowWareDrop(false);
-            if (timeRef.current    && !timeRef.current.contains(e.target))    setShowTimeDrop(false);
-            if (allRef.current     && !allRef.current.contains(e.target))     setShowAllDrop(false);
-            if (inboundRef.current && !inboundRef.current.contains(e.target)) setShowInboundDrop(false);
-        };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
-    }, []);
-
-    const selectedWarehouseLabel = warehouseOptions.find((o) => o.value === warehouseId)?.label ?? 'Warehouse name here';
-
-    const DropBtn = ({ value, onClick, open, className = '', loading = false }) => (
+function DropBtn({ value, onClick, open, className = '', loading = false }) {
+    return (
         <button
             type="button"
             onClick={onClick}
@@ -55,8 +19,10 @@ export default function InboundFilterBar({
             }
         </button>
     );
+}
 
-    const DropMenu = ({ options, selected, onSelect }) => (
+function DropMenu({ options, selected, onSelect }) {
+    return (
         <div className="absolute left-0 top-full mt-1 z-30 bg-white rounded-xl border border-surface-border shadow-lg py-1 min-w-full w-max">
             {options.map((opt) => {
                 const label = typeof opt === 'string' ? opt : opt.label;
@@ -73,6 +39,46 @@ export default function InboundFilterBar({
             })}
         </div>
     );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// InboundFilterBar — shared by Draft, OnTheWay, Completed
+// warehouseOptions: [{ label, value }] from useInboundDropdowns
+// ─────────────────────────────────────────────────────────────────────────────
+export default function InboundFilterBar({
+    warehouseId, setWarehouseId,
+    warehouseOptions = [],
+    warehouseLoading = false,
+    timeType, setTimeType,
+    dateFrom, setDateFrom,
+    dateTo, setDateTo,
+    inboundType, setInboundType,
+    search, setSearch,
+    onSearch,
+}) {
+    const [showWareDrop,    setShowWareDrop]    = useState(false);
+    const [showTimeDrop,    setShowTimeDrop]    = useState(false);
+    const [showDateDrop,    setShowDateDrop]    = useState(false);
+    const [showInboundDrop, setShowInboundDrop] = useState(false);
+
+    const wareRef    = useRef(null);
+    const timeRef    = useRef(null);
+    const dateRef    = useRef(null);
+    const inboundRef = useRef(null);
+
+    useEffect(() => {
+        const handler = (e) => {
+            if (wareRef.current    && !wareRef.current.contains(e.target))    setShowWareDrop(false);
+            if (timeRef.current    && !timeRef.current.contains(e.target))    setShowTimeDrop(false);
+            if (dateRef.current    && !dateRef.current.contains(e.target))    setShowDateDrop(false);
+            if (inboundRef.current && !inboundRef.current.contains(e.target)) setShowInboundDrop(false);
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, []);
+
+    const selectedWarehouseLabel = warehouseOptions.find((o) => o.value === warehouseId)?.label ?? 'Warehouse name here';
+    const dateRangeLabel = formatInboundDateRange({ dateFrom, dateTo });
 
     return (
         <div className="bg-white rounded-xl border border-surface-border p-4 font-body">
@@ -107,21 +113,50 @@ export default function InboundFilterBar({
                     )}
                 </div>
 
-                {/* Time filter */}
-                <div className="w-28 relative mt-5" ref={allRef}>
-                    <DropBtn value={timeFilter} onClick={() => setShowAllDrop((p) => !p)} open={showAllDrop} className="w-full" />
-                    {showAllDrop && (
-                        <DropMenu options={TIME_FILTERS} selected={timeFilter} onSelect={(v) => { setTimeFilter(v); setShowAllDrop(false); }} />
-                    )}
-                </div>
-
                 {/* Date range */}
-                <div className="mt-5">
-                    <button className="flex items-center gap-2 px-3 py-2 text-sm border border-surface-border rounded-lg bg-white text-slate-500 hover:border-primary/40 transition-colors whitespace-nowrap">
-                        <Calendar size={13} className="text-slate-400" />
-                        01 Oct 2025 - 31 Oct 2025
-                        <ChevronDown size={12} className="text-slate-400" />
+                <div className="w-64 relative mt-5" ref={dateRef}>
+                    <button
+                        type="button"
+                        onClick={() => setShowDateDrop((p) => !p)}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm border border-surface-border rounded-lg bg-white text-slate-600 hover:border-primary/40 transition-colors"
+                    >
+                        <Calendar size={16} className="text-slate-500 flex-shrink-0" />
+                        <span className="flex-1 truncate text-left">{dateRangeLabel}</span>
+                        <ChevronRight size={14} className={`text-slate-400 flex-shrink-0 transition-transform ${showDateDrop ? 'rotate-90' : ''}`} />
                     </button>
+
+                    {showDateDrop && (
+                        <div className="absolute left-0 top-full mt-1 z-30 w-72 rounded-xl border border-surface-border bg-white shadow-lg p-3">
+                            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                                <input
+                                    type="date"
+                                    value={dateFrom ?? ''}
+                                    onChange={(e) => setDateFrom(e.target.value)}
+                                    className="min-w-0 px-3 py-2 text-sm border border-surface-border rounded-lg bg-white text-slate-600 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
+                                />
+                                <span className="text-xs text-slate-400">to</span>
+                                <input
+                                    type="date"
+                                    value={dateTo ?? ''}
+                                    onChange={(e) => setDateTo(e.target.value)}
+                                    className="min-w-0 px-3 py-2 text-sm border border-surface-border rounded-lg bg-white text-slate-600 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10"
+                                />
+                            </div>
+                            <div className="flex justify-end mt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setDateFrom('');
+                                        setDateTo('');
+                                        setShowDateDrop(false);
+                                    }}
+                                    className="px-3 py-1.5 text-xs font-semibold text-slate-500 hover:text-primary transition-colors"
+                                >
+                                    Clear
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Inbound No. type */}

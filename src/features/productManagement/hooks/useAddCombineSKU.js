@@ -1,7 +1,7 @@
-import { useState, useMemo, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { toast } from "react-hot-toast";
+import { toast } from "sonner";
 import { COMBINE_SKU_KEYS } from "./useCombineSKUList";
 import api from "../../../lib/api";
 import useDebounce from "../../../hooks/useDebounce";
@@ -158,8 +158,18 @@ export function useAddCombineSKU() {
     }, [filteredSkus]);
 
     const updateQty = useCallback((id, val) => {
-        setQuantities((prev) => ({ ...prev, [id]: Math.max(1, Number(val) || 1) }));
-    }, []);
+        if (val === "") {
+            setQuantities((prev) => ({ ...prev, [id]: "" }));
+            return;
+        }
+
+        const available = Number(skuMap[id]?.available_in_inventory ?? 1);
+        const quantity = Math.max(1, Number(val) || 1);
+        setQuantities((prev) => ({
+            ...prev,
+            [id]: Math.min(quantity, Math.max(1, available)),
+        }));
+    }, [skuMap]);
 
     const removeFromPreview = useCallback((id) => {
         setSelectedIds((prev) => prev.filter((x) => x !== id));
@@ -263,9 +273,11 @@ export function useAddCombineSKU() {
             height: form.height || undefined,
             warehouseId: form.warehouseId ? Number(form.warehouseId) : undefined,
             status: "active",
-            items: selectedIds.map((id) => ({
+            items: selectedIds.map((id, index) => ({
                 merchantSkuId: id,
-                quantity: quantities[id] ?? 1,
+                quantity: Number(quantities[id]) || 1,
+                order: index,
+                sortOrder: index,
             })),
         };
         createMutation.mutate(body);

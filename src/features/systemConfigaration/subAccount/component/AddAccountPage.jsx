@@ -438,7 +438,8 @@
 //   );
 // }
 
-import { ArrowLeft, UploadCloud, Search, ChevronDown } from "lucide-react";
+import { useState } from "react";
+import { ArrowLeft, UploadCloud, Search, ChevronDown, Eye, EyeOff } from "lucide-react";
 import Topbar from "../../../../components/layout/Topbar";
 
 function FormInput({
@@ -451,6 +452,7 @@ function FormInput({
   required,
   type = "text",
   hint,
+  rightElement,
 }) {
   return (
     <div>
@@ -463,16 +465,23 @@ function FormInput({
           </span>
         )}
       </label>
-      <input
-        type={type}
-        name={name}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        className={`w-full px-3 py-2 text-sm rounded-lg border bg-white placeholder-slate-400
-                    text-slate-700 outline-none transition-all
-                    ${error ? "border-red-300 focus:border-red-400" : "border-surface-border focus:border-primary focus:ring-2 focus:ring-primary/10"}`}
-      />
+      <div className="relative">
+        <input
+          type={type}
+          name={name}
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          className={`w-full px-3 py-2 text-sm rounded-lg border bg-white placeholder-slate-400
+                      text-slate-700 outline-none transition-all ${rightElement ? "pr-9" : ""}
+                      ${error ? "border-red-300 focus:border-red-400" : "border-surface-border focus:border-primary focus:ring-2 focus:ring-primary/10"}`}
+        />
+        {rightElement && (
+          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+            {rightElement}
+          </div>
+        )}
+      </div>
       {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
     </div>
   );
@@ -536,6 +545,11 @@ export default function AddAccountPage({
   onSave,
   storeSearch,
   setStoreSearch,
+  storeMarketplace,
+  setStoreMarketplace,
+  storeMarketplaceOptions = ["All"],
+  storeLoading,
+  storeError,
   filteredStores,
   selectedStores,
   onToggleStore,
@@ -548,6 +562,7 @@ export default function AddAccountPage({
   warehouses,
 }) {
   const isEdit = !!editAccount;
+  const [showPassword, setShowPassword] = useState(false);
 
   return (
     <div className="space-y-4 font-body">
@@ -671,7 +686,7 @@ export default function AddAccountPage({
             <FormInput
               label="Password(LogIn & Sub Account Keep Same)"
               name="password"
-              type="password"
+              type={showPassword ? "text" : "password"}
               value={form.password}
               onChange={onChange}
               placeholder={
@@ -682,6 +697,16 @@ export default function AddAccountPage({
               required={!isEdit}
               hint={isEdit ? "(optional)" : undefined}
               error={errors.password}
+              rightElement={
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              }
             />
 
             <FormInput
@@ -754,9 +779,23 @@ export default function AddAccountPage({
                   <p className="text-xs text-slate-500 mb-1">
                     Select Marketplace
                   </p>
-                  <select className="appearance-none px-3 py-2 text-xs border border-surface-border rounded-lg bg-white text-slate-700 outline-none pr-7 w-20">
-                    <option>All</option>
-                  </select>
+                  <div className="relative w-24">
+                    <select
+                      value={storeMarketplace}
+                      onChange={(e) => setStoreMarketplace(e.target.value)}
+                      className="appearance-none px-3 py-2 text-xs border border-surface-border rounded-lg bg-white text-slate-700 outline-none pr-7 w-full"
+                    >
+                      {storeMarketplaceOptions.map((marketplace) => (
+                        <option key={marketplace} value={marketplace}>
+                          {marketplace}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown
+                      size={13}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                    />
+                  </div>
                 </div>
                 <div className="relative flex-1 mt-4">
                   <Search
@@ -779,7 +818,7 @@ export default function AddAccountPage({
             </div>
             <div className="max-h-60 overflow-y-auto border border-surface-border">
               <table className="w-full text-xs">
-                <thead className="sticky top-0 z-10 bg-white">
+                <thead className="sticky top-0 z-10 bg-white [&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                   <tr className="border-y border-surface-border bg-surface/50">
                     <th className="py-2.5 pl-5 text-left font-semibold text-slate-600 w-14">
                       Select
@@ -793,7 +832,27 @@ export default function AddAccountPage({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-surface-border">
-                  {filteredStores.map((s) => (
+                  {storeLoading && (
+                    <tr>
+                      <td
+                        colSpan={3}
+                        className="py-6 text-center text-slate-400 text-xs"
+                      >
+                        Loading stores...
+                      </td>
+                    </tr>
+                  )}
+                  {storeError && !storeLoading && (
+                    <tr>
+                      <td
+                        colSpan={3}
+                        className="py-6 text-center text-red-400 text-xs"
+                      >
+                        Failed to load stores
+                      </td>
+                    </tr>
+                  )}
+                  {!storeLoading && !storeError && filteredStores.map((s) => (
                     <tr key={s.id} className="hover:bg-surface/50">
                       <td className="py-2.5 pl-5">
                         <input
@@ -809,7 +868,7 @@ export default function AddAccountPage({
                       </td>
                     </tr>
                   ))}
-                  {filteredStores.length === 0 && (
+                  {!storeLoading && !storeError && filteredStores.length === 0 && (
                     <tr>
                       <td
                         colSpan={3}
@@ -868,7 +927,7 @@ export default function AddAccountPage({
             </div>
             <div className="max-h-44 overflow-y-auto border-t border-surface-border">
               <table className="w-full text-xs">
-                <thead>
+                <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                   <tr className="border-y border-surface-border bg-surface/50">
                     <th className="py-2.5 pl-5 text-left font-semibold text-slate-600 w-14">
                       Select

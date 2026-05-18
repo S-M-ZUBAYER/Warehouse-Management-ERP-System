@@ -237,6 +237,8 @@ const validateWarehouseForm = (form) => {
 export function useWarehouse() {
     const [platform, setPlatform] = useState(PLATFORMS[0]);
     const [showModal, setShowModal] = useState(false);
+    const [editingWarehouse, setEditingWarehouse] = useState(null);
+    const [deleteModal, setDeleteModal] = useState({ open: false, warehouse: null });
     const [form, setForm] = useState(EMPTY_FORM);
     const [errors, setErrors] = useState({});
     const [search, setSearch] = useState("");
@@ -281,11 +283,45 @@ export function useWarehouse() {
         },
     });
 
+    // ── Update warehouse mutation ─────────────────────────────────────────────
+    const updateMutation = useMutation({
+        mutationFn: ({ id, payload }) => api.put(`/warehouses/${id}`, payload),
+        onSuccess: () => {
+            toast.success("Warehouse updated successfully");
+            queryClient.invalidateQueries({ queryKey: ["warehouses-all"] });
+            closeModal();
+        },
+        onError: (err) => {
+            const msg = err?.response?.data?.message || err?.message || "Failed to update warehouse";
+            setErrors({ api: msg });
+            toast.error(msg);
+        },
+    });
+
+    // ── Delete warehouse mutation ─────────────────────────────────────────────
+    const deleteMutation = useMutation({
+        mutationFn: (id) => api.delete(`/warehouses/${id}`),
+        onSuccess: () => {
+            toast.success("Warehouse deleted successfully");
+            setDeleteModal({ open: false, warehouse: null });
+            queryClient.invalidateQueries({ queryKey: ["warehouses-all"] });
+        },
+        onError: (err) => {
+            toast.error(err?.response?.data?.message || err?.message || "Failed to delete warehouse");
+        },
+    });
+
     // ── Toggle-default mutation ───────────────────────────────────────────────
     const toggleDefaultMutation = useMutation({
-        mutationFn: (id) => api.patch(`/warehouses/${id}/default`),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["warehouses-all"] });
+        mutationFn: (id) => api.patch(`/warehouses/${id}/set-default`),
+        onSuccess: (_data, id) => {
+            queryClient.setQueriesData({ queryKey: ["warehouses-all"] }, (oldData) => {
+                if (!Array.isArray(oldData)) return oldData;
+                return oldData.map((warehouse) => ({
+                    ...warehouse,
+                    is_default: warehouse.id === id,
+                }));
+            });
         },
         onError: () => {
             toast.error("Failed to update default warehouse");
@@ -305,6 +341,7 @@ export function useWarehouse() {
 
     // ── Modal helpers ─────────────────────────────────────────────────────────
     const openModal = useCallback(() => {
+        setEditingWarehouse(null);
         setForm(EMPTY_FORM);
         setErrors({});
         setShowModal(true);
@@ -312,8 +349,37 @@ export function useWarehouse() {
 
     const closeModal = useCallback(() => {
         setShowModal(false);
+        setEditingWarehouse(null);
         setErrors({});
     }, []);
+
+    const openEditModal = useCallback((warehouse) => {
+        setEditingWarehouse(warehouse);
+        setForm({
+            attribute: warehouse.attribute || "own_warehouse",
+            name: warehouse.name || "",
+            manager: warehouse.manager || "",
+            phoneNumber: warehouse.phoneNumber || "",
+            location: warehouse.location === "—" ? "" : (warehouse.location || ""),
+            city: warehouse.city || "",
+            country: warehouse.country || "",
+        });
+        setErrors({});
+        setShowModal(true);
+    }, []);
+
+    const openDeleteModal = useCallback((warehouse) => {
+        setDeleteModal({ open: true, warehouse });
+    }, []);
+
+    const closeDeleteModal = useCallback(() => {
+        setDeleteModal({ open: false, warehouse: null });
+    }, []);
+
+    const confirmDelete = useCallback(() => {
+        if (!deleteModal.warehouse?.id) return;
+        deleteMutation.mutate(deleteModal.warehouse.id);
+    }, [deleteModal.warehouse, deleteMutation]);
 
     // ── Submit ────────────────────────────────────────────────────────────────
     const handleAdd = useCallback(() => {
@@ -335,8 +401,12 @@ export function useWarehouse() {
         };
 
 
-        addMutation.mutate(payload);
-    }, [form, addMutation]);
+        if (editingWarehouse) {
+            updateMutation.mutate({ id: editingWarehouse.id, payload });
+        } else {
+            addMutation.mutate(payload);
+        }
+    }, [form, addMutation, updateMutation, editingWarehouse]);
 
     // ── Toggle default ────────────────────────────────────────────────────────
     const toggleDefault = useCallback(
@@ -358,12 +428,14 @@ export function useWarehouse() {
         showModal,
         openModal,
         closeModal,
+        editingWarehouse, openEditModal,
+        deleteModal, openDeleteModal, closeDeleteModal, confirmDelete, deleting: deleteMutation.isPending,
         // form
         form,
         handleFormChange,
         handleAttributeChange,
         errors,
-        saving: addMutation.isPending,
+        saving: addMutation.isPending || updateMutation.isPending,
         handleAdd,
         // default toggle
         toggleDefault,

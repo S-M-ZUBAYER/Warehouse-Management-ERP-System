@@ -1,5 +1,5 @@
-// import { Search, Plus, Pencil, Trash2 } from "lucide-react";
-// import { useRef, useEffect } from "react";
+// import { Search, Plus, Pencil, Trash2, Eye } from "lucide-react";
+// import { useRef, useEffect, useState } from "react";
 // import Topbar from "../../../components/layout/Topbar";
 // import { useSubAccount } from "./hooks/useSubAccount";
 // import AddAccountPage from "./component/AddAccountPage";
@@ -49,6 +49,7 @@
 //   } = useSubAccount();
 
 //   const actionRefs = useRef({});
+  // const [detailAccount, setDetailAccount] = useState(null);
 
 //   useEffect(() => {
 //     const handler = (e) => {
@@ -360,11 +361,13 @@
 //   );
 // }
 
-import { Search, Plus, Pencil, Trash2 } from "lucide-react";
-import { useRef, useEffect } from "react";
+import { Search, Plus, Pencil, Trash2, Eye } from "lucide-react";
+import { useRef, useEffect, useState } from "react";
 import Topbar from "../../../components/layout/Topbar";
 import { useSubAccount } from "./hooks/useSubAccount";
 import AddAccountPage from "./component/AddAccountPage";
+import PortalActionMenu from "../../../components/shared/PortalActionMenu";
+import RecordDetailModal from "../../../components/shared/RecordDetailModal";
 
 export default function SubAccountPage() {
   const {
@@ -397,7 +400,10 @@ export default function SubAccountPage() {
     setWarehouseSearch,
     storeMarketplace,
     setStoreMarketplace,
+    storeMarketplaceOptions,
     filteredStores,
+    storeLoading,
+    storeError,
     filteredWarehouses,
     selectedStores,
     selectedWarehouses,
@@ -412,6 +418,7 @@ export default function SubAccountPage() {
   } = useSubAccount();
 
   const actionRefs = useRef({});
+  const [detailAccount, setDetailAccount] = useState(null);
 
   useEffect(() => {
     const handler = (e) => {
@@ -423,36 +430,6 @@ export default function SubAccountPage() {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [openActionId]);
-
-  // Show Add / Edit page
-  if (showAddPage) {
-    return (
-      <AddAccountPage
-        onBack={handleBack} // ✅ full reset on back
-        editAccount={editAccount} // ✅ null = create, object = edit
-        form={form}
-        onChange={handleFormChange}
-        onPhotoChange={handlePhotoChange}
-        onDrop={handleDropChange}
-        fileInputRef={fileInputRef}
-        errors={errors}
-        saving={saving}
-        onSave={handleSave}
-        storeSearch={storeSearch}
-        setStoreSearch={setStoreSearch}
-        filteredStores={filteredStores}
-        selectedStores={selectedStores}
-        onToggleStore={toggleStore}
-        warehouseSearch={warehouseSearch}
-        setWarehouseSearch={setWarehouseSearch}
-        filteredWarehouses={filteredWarehouses}
-        selectedWarehouses={selectedWarehouses}
-        onToggleWarehouse={toggleWarehouse}
-        roles={roles}
-        warehouses={warehouses}
-      />
-    );
-  }
 
   return (
     <div className="space-y-4 font-body">
@@ -499,7 +476,7 @@ export default function SubAccountPage() {
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm font-body">
-            <thead>
+            <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
               <tr className="border-b border-surface-border">
                 {[
                   "Select",
@@ -513,7 +490,7 @@ export default function SubAccountPage() {
                   <th
                     key={h}
                     className={`py-4 text-left text-xs font-semibold text-slate-600
-                      ${i === 0 ? "pl-5 w-14" : "pr-4"} ${i === 6 ? "pr-5" : ""}`}
+                      ${i === 0 ? "pl-5 pr-3 w-14" : "pr-4"} ${i === 6 ? "pr-5" : ""}`}
                   >
                     {h}
                   </th>
@@ -612,35 +589,45 @@ export default function SubAccountPage() {
                           ))}
                         </button>
 
-                        {openActionId === acc.id && (
-                          <div
-                            className="absolute right-0 top-full mt-1 z-30 bg-white rounded-xl
-                                    border border-surface-border shadow-lg py-1 w-32"
+                        <PortalActionMenu
+                          open={openActionId === acc.id}
+                          anchorRef={{ current: actionRefs.current[acc.id] }}
+                          onClose={() => setOpenActionId(null)}
+                          width={128}
+                        >
+                          <button
+                            type="button"
+                            className="flex items-center gap-2 w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-surface-card transition-colors"
+                            onClick={() => {
+                              setDetailAccount(acc);
+                              setOpenActionId(null);
+                            }}
                           >
-                            {/* ✅ Edit button calls handleEditClick with the full account */}
-                            <button
-                              className="flex items-center gap-2 w-full text-left px-4 py-2 text-xs
-                                       text-slate-700 hover:bg-surface-card transition-colors"
-                              onClick={() => {
-                                handleEditClick(acc);
-                                setOpenActionId(null);
-                              }}
-                            >
-                              <Pencil size={12} className="text-slate-400" />
-                              Edit
-                            </button>
-                            <button
-                              className="flex items-center gap-2 w-full text-left px-4 py-2 text-xs
-                                         text-red-500 hover:bg-red-50 transition-colors"
-                              onClick={() => {
-                                setDeleteTarget({ id: acc.id, name: acc.name });
-                                setOpenActionId(null);
-                              }}
-                            >
-                              <Trash2 size={12} /> Delete
-                            </button>
-                          </div>
-                        )}
+                            <Eye size={12} className="text-slate-400" />
+                            Details
+                          </button>
+                          <button
+                            type="button"
+                            className="flex items-center gap-2 w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-surface-card transition-colors"
+                            onClick={() => {
+                              handleEditClick(acc);
+                              setOpenActionId(null);
+                            }}
+                          >
+                            <Pencil size={12} className="text-slate-400" />
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="flex items-center gap-2 w-full text-left px-4 py-2 text-xs text-red-500 hover:bg-red-50 transition-colors"
+                            onClick={() => {
+                              setDeleteTarget({ id: acc.id, name: acc.name });
+                              setOpenActionId(null);
+                            }}
+                          >
+                            <Trash2 size={12} /> Delete
+                          </button>
+                        </PortalActionMenu>
                       </div>
                     </td>
                   </tr>
@@ -649,6 +636,61 @@ export default function SubAccountPage() {
           </table>
         </div>
       </div>
+
+      <RecordDetailModal
+        open={!!detailAccount}
+        title="Sub Account Details"
+        subtitle={detailAccount?.name}
+        record={detailAccount}
+        onClose={() => setDetailAccount(null)}
+        fields={[
+          { label: "Name", key: "name" },
+          { label: "Account ID", key: "account_id" },
+          { label: "Email", key: "email" },
+          { label: "Phone", render: (row) => row.phone || row.phoneNumber || "—" },
+          { label: "Role", render: (row) => row.roleInfo?.name || "—" },
+          { label: "Department", key: "department" },
+          { label: "Designation", key: "designation" },
+          { label: "Address", key: "address" },
+          { label: "Create Time", key: "createdAt" },
+        ]}
+      />
+
+      {showAddPage && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 backdrop-blur-sm overflow-y-auto py-8 px-4">
+          <div className="w-full max-w-6xl bg-surface rounded-2xl shadow-2xl border border-white/50 p-4 max-h-[calc(100vh-4rem)] overflow-y-auto">
+            <AddAccountPage
+              onBack={handleBack}
+              editAccount={editAccount}
+              form={form}
+              onChange={handleFormChange}
+              onPhotoChange={handlePhotoChange}
+              onDrop={handleDropChange}
+              fileInputRef={fileInputRef}
+              errors={errors}
+              saving={saving}
+              onSave={handleSave}
+              storeSearch={storeSearch}
+              setStoreSearch={setStoreSearch}
+              storeMarketplace={storeMarketplace}
+              setStoreMarketplace={setStoreMarketplace}
+              storeMarketplaceOptions={storeMarketplaceOptions}
+              storeLoading={storeLoading}
+              storeError={storeError}
+              filteredStores={filteredStores}
+              selectedStores={selectedStores}
+              onToggleStore={toggleStore}
+              warehouseSearch={warehouseSearch}
+              setWarehouseSearch={setWarehouseSearch}
+              filteredWarehouses={filteredWarehouses}
+              selectedWarehouses={selectedWarehouses}
+              onToggleWarehouse={toggleWarehouse}
+              roles={roles}
+              warehouses={warehouses}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Delete confirm modal */}
       {deleteTarget && (

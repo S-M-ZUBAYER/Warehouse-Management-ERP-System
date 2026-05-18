@@ -2,12 +2,34 @@
 import { useState, useEffect, useRef } from "react";
 import { X, UploadCloud, ChevronDown, Search, Loader2 } from "lucide-react";
 
+const formatDetailsForEdit = (value) => {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "object") return JSON.stringify(value, null, 2);
+  if (typeof value !== "string") return String(value);
+
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  try {
+    return JSON.stringify(JSON.parse(trimmed), null, 2);
+  } catch {
+    return value;
+  }
+};
+
+const formatDetailsForSave = (value) => {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (!["{", "["].includes(trimmed[0])) return trimmed;
+  return JSON.stringify(JSON.parse(trimmed));
+};
+
 export default function EditMerchantSKUModal({
   sku,
   onClose,
   onSave,
   saving,
-  warehouses,
+  warehouses = [],
   warehouseLoading,
 }) {
   const [form, setForm] = useState({
@@ -28,40 +50,40 @@ export default function EditMerchantSKUModal({
     image: null,
     photoPreview: "",
   });
-  console.log(form);
 
   const [errors, setErrors] = useState({});
   const [showWarehousePicker, setShowWarehousePicker] = useState(false);
   const [warehouseSearch, setWarehouseSearch] = useState("");
-  const [fileInputRef] = useState(useRef(null));
+  const fileInputRef = useRef(null);
+  const modalBodyRef = useRef(null);
 
-  // Filter warehouses based on search
   const filteredWarehouses = warehouses.filter((w) =>
     w.name.toLowerCase().includes(warehouseSearch.toLowerCase()),
   );
 
-  // Load SKU data when modal opens
   useEffect(() => {
-    if (sku) {
-      setForm({
-        skuTitle: sku.sku_title || sku.skuTitle || "",
-        skuName: sku.sku_name || sku.skuName || "",
-        productDetails: sku.product_details || sku.productDetails || "",
-        gtin: sku.gtin || "",
-        price: sku.price || "",
-        costPrice: sku.cost_price || sku.costPrice || "",
-        weight: sku.weight || "",
-        length: sku.length || "",
-        width: sku.width || "",
-        height: sku.height || "",
-        warehouseId: sku.warehouse_id || sku.warehouseId || "",
-        warehouseName: sku.warehouse?.name || "",
-        country: sku.country || "",
-        status: sku.status || "active",
-        image: null,
-        photoPreview: sku.image_url || sku.image || "",
-      });
-    }
+    if (!sku) return;
+
+    setForm({
+      skuTitle: sku.sku_title || sku.skuTitle || "",
+      skuName: sku.sku_name || sku.skuName || "",
+      productDetails: formatDetailsForEdit(
+        sku.product_details ?? sku.productDetails ?? "",
+      ),
+      gtin: sku.gtin || "",
+      price: sku.price || "",
+      costPrice: sku.cost_price || sku.costPrice || "",
+      weight: sku.weight || "",
+      length: sku.length || "",
+      width: sku.width || "",
+      height: sku.height || "",
+      warehouseId: sku.warehouse_id || sku.warehouseId || "",
+      warehouseName: sku.warehouse?.name || sku.warehouse_name || "",
+      country: sku.country || "",
+      status: sku.status || "active",
+      image: null,
+      photoPreview: sku.image_url || sku.image || "",
+    });
   }, [sku]);
 
   const handleFormChange = (e) => {
@@ -73,74 +95,55 @@ export default function EditMerchantSKUModal({
   };
 
   const handlePhotoChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setForm((prev) => ({
-        ...prev,
-        image: file,
-        photoPreview: URL.createObjectURL(file),
-      }));
-    }
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setForm((prev) => ({
+      ...prev,
+      image: file,
+      photoPreview: URL.createObjectURL(file),
+    }));
   };
 
   const handleWarehouseSelect = (warehouse) => {
     setForm((prev) => ({
       ...prev,
-      warehouseId: warehouse.id,
+      warehouseId: String(warehouse.id),
       warehouseName: warehouse.name,
     }));
     setShowWarehousePicker(false);
+    if (errors.warehouseId) {
+      setErrors((prev) => ({ ...prev, warehouseId: "" }));
+    }
   };
 
   const validateForm = () => {
     const newErrors = {};
-    if (!form.skuTitle) newErrors.skuTitle = "Product name is required";
-    if (!form.skuName) newErrors.skuName = "SKU name is required";
-    if (!form.productDetails)
-      newErrors.productDetails = "Product details are required";
+    const trimmedDetails = form.productDetails.trim();
+
+    if (!form.skuTitle.trim()) newErrors.skuTitle = "Product name is required";
+    if (!form.skuName.trim()) newErrors.skuName = "SKU name is required";
+    if (!trimmedDetails) newErrors.productDetails = "Product details are required";
+    if (trimmedDetails && ["{", "["].includes(trimmedDetails[0])) {
+      try {
+        JSON.parse(trimmedDetails);
+      } catch {
+        newErrors.productDetails = "Details JSON is not valid";
+      }
+    }
     if (!form.warehouseId) newErrors.warehouseId = "Please select a warehouse";
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async () => {
     if (!validateForm()) return;
-    console.log(form.skuTitle);
 
-    const formData = new FormData();
-    formData.append("skuTitle", form.skuTitle);
-    formData.append("skuName", form.skuName);
-    formData.append("productDetails", form.productDetails);
-    formData.append("gtin", form.gtin);
-    formData.append("price", form.price);
-    formData.append("costPrice", form.costPrice);
-    formData.append("weight", form.weight);
-    formData.append("length", form.length);
-    formData.append("width", form.width);
-    formData.append("height", form.height);
-    formData.append("warehouseId", form.warehouseId);
-    formData.append("country", form.country);
-    formData.append("status", form.status);
-    if (form.image) {
-      formData.append("image", form.image);
-    }
-
-    // ✅ This is how to properly log FormData contents
-    console.log("FormData contents:");
-    for (let [key, value] of formData.entries()) {
-      console.log(key, value);
-    }
-
-    // Or using forEach
-    formData.forEach((value, key) => {
-      console.log(key, value);
+    await onSave(sku.id, {
+      ...form,
+      productDetails: formatDetailsForSave(form.productDetails),
     });
-
-    // ✅ Also log if image exists
-    console.log("Image file:", form.image);
-    console.log("FormData has image:", formData.has("image"));
-
-    await onSave(sku.id, formData);
   };
 
   const fields = [
@@ -150,11 +153,6 @@ export default function EditMerchantSKUModal({
       placeholder: "Write product name here",
     },
     { label: "*SKU Name", name: "skuName", placeholder: "Write SKU here" },
-    {
-      label: "*Product Details",
-      name: "productDetails",
-      placeholder: "Product details here",
-    },
     { label: "GTIN", name: "gtin", placeholder: "GTIN here" },
     { label: "Product Price", name: "price", placeholder: "180.00" },
     { label: "Cost Price", name: "costPrice", placeholder: "120.00" },
@@ -173,9 +171,8 @@ export default function EditMerchantSKUModal({
     >
       <div
         className="bg-white rounded-2xl shadow-xl w-full font-body overflow-hidden"
-        style={{ maxWidth: "500px", animation: "popIn 0.18s ease both" }}
+        style={{ maxWidth: "560px", animation: "popIn 0.18s ease both" }}
       >
-        {/* Header */}
         <div className="flex items-start justify-between px-7 pt-7 pb-2">
           <div>
             <h2 className="text-lg font-bold text-slate-800 font-display">
@@ -193,8 +190,12 @@ export default function EditMerchantSKUModal({
           </button>
         </div>
 
-        <div className="px-7 pb-7 space-y-4 max-h-[80vh] overflow-y-auto">
-          {/* Photo upload */}
+        <div
+          ref={modalBodyRef}
+          className={`px-7 space-y-4 max-h-[80vh] overflow-y-auto ${
+            showWarehousePicker ? "pb-44" : "pb-7"
+          }`}
+        >
           <label className="flex flex-col items-center justify-center border-2 border-dashed border-surface-border rounded-xl py-6 cursor-pointer hover:border-primary/40 transition-colors bg-surface">
             <input
               ref={fileInputRef}
@@ -213,7 +214,7 @@ export default function EditMerchantSKUModal({
               <>
                 <UploadCloud size={28} className="text-slate-400 mb-2" />
                 <p className="text-sm font-semibold text-slate-700">
-                  Choose a file or drag & drop it here
+                  Choose a file or drag and drop it here
                 </p>
                 <p className="text-xs text-slate-400 mt-0.5">
                   JPEG or PNG, less than 5MB
@@ -233,7 +234,6 @@ export default function EditMerchantSKUModal({
             </button>
           </label>
 
-          {/* Form fields 2-col */}
           <div className="grid grid-cols-2 gap-3">
             {fields.map(({ label, name, placeholder }) => (
               <div key={name}>
@@ -259,7 +259,30 @@ export default function EditMerchantSKUModal({
               </div>
             ))}
 
-            {/* Size */}
+            <div className="col-span-2">
+              <label className="block text-xs text-slate-600 mb-1">
+                *Product Details
+              </label>
+              <textarea
+                name="productDetails"
+                value={form.productDetails}
+                onChange={handleFormChange}
+                placeholder='Product details or JSON, e.g. {"platform":"tiktok","seller_sku":"Aface01N"}'
+                rows={7}
+                className={`w-full px-3 py-2 text-sm border rounded-lg bg-white text-slate-700 placeholder-slate-400 outline-none transition-all resize-y font-mono leading-5
+                  ${
+                    errors.productDetails
+                      ? "border-red-300 focus:border-red-400"
+                      : "border-surface-border focus:border-primary focus:ring-2 focus:ring-primary/10"
+                  }`}
+              />
+              {errors.productDetails && (
+                <p className="text-xs text-red-500 mt-0.5">
+                  {errors.productDetails}
+                </p>
+              )}
+            </div>
+
             <div>
               <label className="block text-xs text-slate-600 mb-1">
                 Size (cm)
@@ -283,14 +306,26 @@ export default function EditMerchantSKUModal({
               </div>
             </div>
 
-            {/* Warehouse picker */}
             <div className="relative">
               <label className="block text-xs text-slate-600 mb-1">
                 Select Warehouse
               </label>
               <button
                 type="button"
-                onClick={() => setShowWarehousePicker((p) => !p)}
+                onClick={() => {
+                  setShowWarehousePicker((p) => {
+                    const next = !p;
+                    if (next) {
+                      setTimeout(() => {
+                        modalBodyRef.current?.scrollTo({
+                          top: modalBodyRef.current.scrollHeight,
+                          behavior: "smooth",
+                        });
+                      }, 0);
+                    }
+                    return next;
+                  });
+                }}
                 className={`w-full flex items-center justify-between px-3 py-2 text-sm border rounded-lg bg-white text-left outline-none transition-all cursor-pointer
                   ${
                     errors.warehouseId
@@ -317,7 +352,7 @@ export default function EditMerchantSKUModal({
               )}
 
               {showWarehousePicker && (
-                <div className="absolute top-full left-0 right-0 mt-1 z-40 bg-white rounded-xl border border-surface-border shadow-lg overflow-hidden">
+                <div className="mt-2 bg-white rounded-xl border border-surface-border shadow-lg overflow-hidden">
                   <div className="p-2 border-b border-surface-border">
                     <div className="relative">
                       <Search
@@ -341,7 +376,7 @@ export default function EditMerchantSKUModal({
                           size={14}
                           className="animate-spin inline mr-1"
                         />
-                        Loading…
+                        Loading...
                       </div>
                     ) : filteredWarehouses.length === 0 ? (
                       <div className="px-4 py-3 text-xs text-slate-400 text-center">
@@ -354,7 +389,7 @@ export default function EditMerchantSKUModal({
                           type="button"
                           onClick={() => handleWarehouseSelect(w)}
                           className={`w-full text-left px-4 py-2 text-sm transition-colors hover:bg-surface-card
-                            ${form.warehouseId === String(w.id) ? "text-primary font-semibold bg-primary/5" : "text-slate-700"}`}
+                            ${String(form.warehouseId) === String(w.id) ? "text-primary font-semibold bg-primary/5" : "text-slate-700"}`}
                         >
                           {w.name}
                         </button>
@@ -366,7 +401,6 @@ export default function EditMerchantSKUModal({
             </div>
           </div>
 
-          {/* Footer */}
           <div className="flex justify-end gap-3 pt-1">
             <button
               onClick={onClose}
@@ -391,7 +425,7 @@ export default function EditMerchantSKUModal({
       <style>{`
         @keyframes popIn {
           from { opacity: 0; transform: scale(0.96) translateY(8px); }
-          to   { opacity: 1; transform: scale(1)    translateY(0);   }
+          to   { opacity: 1; transform: scale(1)    translateY(0); }
         }
       `}</style>
     </div>

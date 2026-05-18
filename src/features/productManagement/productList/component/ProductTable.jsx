@@ -8,8 +8,43 @@ import {
   Pencil,
   MoreHorizontal,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import { useState, useRef, useEffect } from "react";
+import PortalActionMenu from "../../../../components/shared/PortalActionMenu";
+import RecordDetailModal from "../../../../components/shared/RecordDetailModal";
+import { exportRowsToCsv, exportRowsToXlsx, printRows } from "../../../../utils/tableOutput";
+import ExportMenu from "../../../../components/shared/ExportMenu";
+
+const parseProductDetails = (row) => {
+  const value = row?.product_details ?? row?.productDetails;
+  if (!value) return {};
+  if (typeof value === "object") return value;
+  if (typeof value !== "string") return {};
+
+  const trimmed = value.trim();
+  if (!trimmed || !["{", "["].includes(trimmed[0])) return {};
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed
+      : {};
+  } catch {
+    return {};
+  }
+};
+
+const firstValue = (...values) =>
+  values.find((value) => value !== null && value !== undefined && value !== "") ?? "-";
+
+const detailField = (key) => ({
+  label: key
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase()),
+  render: (row) => {
+    const details = parseProductDetails(row);
+    return firstValue(details[key], row?.[key]);
+  },
+});
 
 // ── Row Actions Dropdown ──────────────────────────────────────────────────────
 function RowActions({ product, onEdit, onDelete }) {
@@ -34,50 +69,70 @@ function RowActions({ product, onEdit, onDelete }) {
         <MoreHorizontal size={15} />
       </button>
 
-      {open && (
-        <div
-          className="absolute right-0 z-50 mt-1 w-36 bg-white border border-surface-border rounded-xl shadow-lg overflow-hidden"
-          style={{ animation: "fadeIn 0.1s ease both" }}
+      <PortalActionMenu
+        open={open}
+        anchorRef={ref}
+        onClose={() => setOpen(false)}
+        width={144}
+        className="overflow-hidden"
+      >
+        <button
+          onClick={() => {
+            setOpen(false);
+            onEdit(product);
+          }}
+          className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
         >
-          <button
-            onClick={() => {
-              setOpen(false);
-              onEdit(product);
-            }}
-            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-          >
-            <Pencil size={13} className="text-slate-400" />
-            Edit
-          </button>
-          <button
-            onClick={() => {
-              setOpen(false);
-              onDelete(product);
-            }}
-            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors"
-          >
-            <Trash2 size={13} />
-            Delete
-          </button>
-        </div>
-      )}
+          <Pencil size={13} className="text-slate-400" />
+          Edit
+        </button>
+        <button
+          onClick={() => {
+            setOpen(false);
+            onDelete(product);
+          }}
+          className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors"
+        >
+          <Trash2 size={13} />
+          Delete
+        </button>
+      </PortalActionMenu>
       <style>{`@keyframes fadeIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }`}</style>
     </div>
   );
 }
 
 // ── Stock Badge ───────────────────────────────────────────────────────────────
-function StockBadge({ value }) {
-  const num = value ?? 0;
+const getStockStatus = (product, value) => {
+  const total = Number(value ?? 0);
+  const stockRows = Array.isArray(product?.stock) ? product.stock : [];
+
+  if (stockRows.length) {
+    const configuredRows = stockRows.filter((stock) => stock?.min_stock !== null && stock?.min_stock !== undefined);
+    if (!configuredRows.length) return total === 0 ? "out" : "in";
+    if (configuredRows.some((stock) => Number(stock?.qty_on_hand ?? 0) === 0)) return "out";
+    if (configuredRows.some((stock) => Number(stock?.qty_on_hand ?? 0) <= Number(stock?.min_stock ?? 0))) return "low";
+    return "in";
+  }
+
+  const minStock = product?.min_stock ?? product?.minStock ?? product?.stock?.min_stock;
+  if (total === 0) return "out";
+  if (minStock !== null && minStock !== undefined && total <= Number(minStock)) return "low";
+  return "in";
+};
+
+function StockBadge({ product, value }) {
+  const num = Number(value ?? 0);
+  const status = getStockStatus(product, num);
   const color =
-    num === 0
+    status === "out"
       ? "text-red-500"
-      : num < 50
+      : status === "low"
         ? "text-amber-500"
         : "text-emerald-600";
   return (
     <span className={`text-sm font-semibold ${color}`}>
-      {num.toLocaleString()}
+      {num.toLocaleString()} units
     </span>
   );
 }
@@ -138,9 +193,40 @@ export default function ProductTable({
   hasActiveFilters,
   resetFilters,
   setShowAddModal,
+  onOpenImportModal,
+  onDownloadTemplate,
   openDeleteModal,
+  openEditModal,
+  handleStockAlertOpen,
 }) {
-  const navigate = useNavigate();
+  const [detailProduct, setDetailProduct] = useState(null);
+  const selectedRows = products.filter((product) => selectedIds.includes(product.id));
+  const exportColumns = [
+    { label: "SKU", key: "sku_name" },
+    { label: "Product Name", key: "sku_title" },
+    { label: "Warehouse", render: (row) => row.warehouse?.name || row.warehouse_name || "" },
+    { label: "Available", key: "available_in_inventory" },
+    { label: "In Transit", key: "in_transit_inventory" },
+    { label: "Status", key: "status" },
+  ];
+  const runBulkAction = (action) => {
+    if (action === "print") {
+      printRows(selectedRows, exportColumns, "Selected Merchant SKU Products", "product");
+      return;
+    }
+    if (action === "export") {
+      exportRowsToXlsx(selectedRows, exportColumns, "merchant-sku-products.xlsx", "product");
+      return;
+    }
+    if (action === "stock-alert") {
+      handleStockAlertOpen?.();
+      return;
+    }
+    handleBulkAction(action);
+  };
+
+  console.log(products,"products");
+  
 
   return (
     <div className="bg-white rounded-xl border border-surface-border overflow-hidden">
@@ -184,15 +270,18 @@ export default function ProductTable({
           <div className="relative">
             <select
               value={bulkAction}
-              onChange={(e) => handleBulkAction(e.target.value)}
+              onChange={(e) => runBulkAction(e.target.value)}
               disabled={selectedIds.length === 0}
               className="appearance-none flex items-center gap-2 px-3 py-2 pr-7 text-sm border border-surface-border
                          rounded-lg text-slate-600 bg-white hover:bg-surface-card transition-colors
                          disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer outline-none"
             >
               <option value="">Bulk Action</option>
+              <option value="print">Batch Print</option>
+              <option value="export">Batch Export</option>
+              <option value="stock-alert">Batch Stock Alert Setting</option>
               <option value="delete">
-                Delete Selected ({selectedIds.length})
+                Batch Delete
               </option>
             </select>
             <ChevronDown
@@ -208,15 +297,11 @@ export default function ProductTable({
           )}
         </div>
 
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-semibold
-                     bg-white border border-surface-border rounded-lg text-slate-700
-                     hover:bg-surface-card transition-colors"
-        >
-          Add Products
-          <ChevronDown size={13} className="text-slate-400" />
-        </button>
+        <AddProductsMenu
+          onAddSingle={() => setShowAddModal(true)}
+          onImport={onOpenImportModal}
+          onDownloadTemplate={onDownloadTemplate}
+        />
       </div>
 
       {/* Table */}
@@ -234,7 +319,7 @@ export default function ProductTable({
           />
         ) : (
           <table className="w-full text-lg font-body">
-            <thead>
+            <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
               <tr className="border-b border-surface-border bg-white">
                 <th className="py-3 pl-5 w-36 text-left">
                   <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -337,30 +422,27 @@ export default function ProductTable({
                       </td>
                       <td className="py-3 pr-4">
                         <StockBadge
+                          product={product}
                           value={product.available_in_inventory ?? 0}
                         />
                       </td>
                       <td className="py-3 pr-4">
                         <span className="text-sm font-semibold text-blue-600">
-                          {(product.in_transit_inventory ?? 0).toLocaleString()}
+                          {(product.in_transit_inventory ?? 0).toLocaleString()} units
                         </span>
                       </td>
                       <td className="py-3 pr-4">
                         <button
-                          onClick={() =>
-                            navigate(`/inventory/merchant-skus/${product.id}`)
-                          }
+                          onClick={() => setDetailProduct(product)}
                           className="text-xs font-semibold text-primary hover:underline"
                         >
-                          View
+                          Details
                         </button>
                       </td>
                       <td className="py-3 pr-4">
                         <RowActions
                           product={product}
-                          onEdit={(p) =>
-                            navigate(`/inventory/merchant-skus/${p.id}/edit`)
-                          }
+                          onEdit={openEditModal}
                           onDelete={openDeleteModal}
                         />
                       </td>
@@ -420,13 +502,109 @@ export default function ProductTable({
 
       {/* Footer */}
       <div className="flex justify-end gap-3 px-5 py-4 border-t border-surface-border">
-        <button className="flex items-center gap-2 px-14 py-2.5 text-base font-semibold border border-surface-border rounded-lg text-slate-700 bg-white hover:bg-surface-card transition-colors">
-          Export <ChevronDown size={13} className="text-slate-400" />
-        </button>
-        <button className="px-16 py-2.5 text-base font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors">
+        <ExportMenu
+          onExportCsv={() => exportRowsToCsv(selectedRows, exportColumns, "merchant-sku-products.csv", "product")}
+          onExportXlsx={() => exportRowsToXlsx(selectedRows, exportColumns, "merchant-sku-products.xlsx", "product")}
+        />
+        <button onClick={() => printRows(selectedRows, exportColumns, "Selected Merchant SKU Products", "product")} className="px-16 py-2.5 text-base font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors">
           Print
         </button>
       </div>
+      <RecordDetailModal
+        open={!!detailProduct}
+        title="Product Details"
+        subtitle={detailProduct?.sku_name}
+        record={detailProduct}
+        onClose={() => setDetailProduct(null)}
+        fields={[
+          { label: "SKU", key: "sku_name" },
+          { label: "Product Name", key: "sku_title" },
+          { label: "Warehouse", render: (row) => row.warehouse?.name || row.warehouse_name || "—" },
+          { label: "Available Inventory", key: "available_in_inventory" },
+          { label: "In Transit Inventory", key: "in_transit_inventory" },
+          { label: "GTIN", key: "gtin" },
+          { label: "Price", key: "price" },
+          { label: "Weight", key: "weight" },
+          { label: "Size", render: (row) => [row.length, row.width, row.height].filter(Boolean).join(" × ") || "—" },
+          { label: "Status", key: "status" },
+          { label: "Created", key: "createdAt" },
+          { label: "Merchant SKU ID", render: (row) => firstValue(row.id) },
+          { label: "Product Details", render: (row) => firstValue(row.product_details, row.productDetails), fullWidth: true },
+          { label: "Warehouse ID", render: (row) => firstValue(row.warehouse_id, row.warehouseId) },
+          { label: "Cost Price", render: (row) => firstValue(row.cost_price, row.costPrice) },
+          { label: "Length", render: (row) => firstValue(row.length) },
+          { label: "Width", render: (row) => firstValue(row.width) },
+          { label: "Height", render: (row) => firstValue(row.height) },
+          { label: "Country", render: (row) => firstValue(row.country) },
+          detailField("source"),
+          detailField("platform"),
+          detailField("platform_store_id"),
+          detailField("platform_product_id"),
+          detailField("platform_sku_id"),
+          detailField("seller_sku"),
+          detailField("variant_name"),
+          { label: "Updated", key: "updatedAt" },
+        ]}
+      />
+    </div>
+  );
+}
+
+function AddProductsMenu({ onAddSingle, onImport, onDownloadTemplate }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (event) => {
+      if (ref.current && !ref.current.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const runAction = (handler) => {
+    setOpen(false);
+    handler?.();
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex items-center gap-2 px-4 py-2 text-sm font-semibold
+                   bg-white border border-surface-border rounded-lg text-slate-700
+                   hover:bg-surface-card transition-colors"
+      >
+        Add Products
+        <ChevronDown size={13} className={`text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-30 bg-white rounded-xl border border-surface-border shadow-lg py-1 w-56">
+          <button
+            type="button"
+            onClick={() => runAction(onAddSingle)}
+            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-surface-card transition-colors"
+          >
+            Add Single Product
+          </button>
+          <button
+            type="button"
+            onClick={() => runAction(onImport)}
+            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-surface-card transition-colors"
+          >
+            Add Product via Template
+          </button>
+          <button
+            type="button"
+            onClick={() => runAction(onDownloadTemplate)}
+            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-surface-card transition-colors"
+          >
+            Download Template
+          </button>
+        </div>
+      )}
     </div>
   );
 }

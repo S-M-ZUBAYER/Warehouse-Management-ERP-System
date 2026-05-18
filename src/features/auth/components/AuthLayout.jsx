@@ -2,7 +2,7 @@ import { Warehouse } from "lucide-react";
 import logInLogo from "../../../assets/Login/logInLogo.svg";
 import grozziieLogo from "../../../assets/Login/GrozziieLogo.svg";
 
-export default function AuthLayout({ children, title, subtitle }) {
+export default function AuthLayout({ children, subtitle }) {
   return (
     <div className="min-h-screen flex items-center justify-center p-6 relative overflow-hidden bg-white font-body">
       {/* Ambient glow top-right */}
@@ -47,7 +47,7 @@ export default function AuthLayout({ children, title, subtitle }) {
         style={{
           maxWidth: "1080px",
           boxShadow:
-            "0 40px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)",
+            "0 20px 45px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.04)",
         }}
       >
         {/* ── Left Panel ── */}
@@ -75,7 +75,6 @@ export default function AuthLayout({ children, title, subtitle }) {
       </div>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=DM+Sans:wght@400;500;600&display=swap');
         *, *::before, *::after { box-sizing: border-box; }
         input:focus { outline: none; }
         button { cursor: pointer; }
