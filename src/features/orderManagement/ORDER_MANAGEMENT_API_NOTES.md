@@ -14,7 +14,7 @@ The frontend strips `/CustomerService-Chat/api` from `VITE_AUTH_BASE_LOGIN_URL` 
 - Shopee: `/shopee-open-shop/api/dev/order/get-order-list`
 - Shopee detail: `/shopee-open-shop/api/dev/order/get-order-details`
 - Shopee tracking: `/shopee-open-shop/api/dev/logistics/get-tracking-number`
-- TikTok: `/tiktokshop-partner-country/api/dev/order/list/filter`
+- TikTok: `/tiktokshop-partner/api/dev/order/list/filter`
 
 ## Backend APIs expected from local ERP backend
 
