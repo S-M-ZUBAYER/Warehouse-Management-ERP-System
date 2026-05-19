@@ -1,24 +1,38 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import Topbar from "../../../../components/layout/Topbar";
 import OrderProcessingFilterBar from "../../shared/components/OrderProcessingFilterBar";
 import OrderTable from "../../shared/components/OrderTable";
 import OrderFooter from "../../shared/components/OrderFooter";
 import WaybillPrintModal from "../../shared/components/WaybillPrintModal";
+import OrderActionModals from "../../shared/components/OrderActionModals";
 import { useOrderList } from "../../shared/hooks/useOrderList";
 
 const SUB_TABS = ["Pushing", "Pushed Successful", "Withdraw"];
 
 export default function ProcessedOrderPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState("Pushing");
   const [waybillOpen, setWaybillOpen] = useState(false);
   const list = useOrderList({ pageType: "processed", activeTab });
+  const isWithdrawTab = activeTab === "Withdraw";
+  const isPushedSuccessfulTab = activeTab === "Pushed Successful";
+  const isShopee = String(list.storeContext?.platform || "").toLowerCase().includes("shopee");
+  const shopeePrintLabel = isPushedSuccessfulTab ? "Print AWB Again" : "Push";
+  const topActionName = isWithdrawTab ? "pack" : "push";
+  const topActionLabel = isShopee && topActionName === "push" ? shopeePrintLabel : isWithdrawTab ? "Pack" : "Push";
+  const rowActionName = isShopee && !isWithdrawTab ? "push" : isWithdrawTab ? "pack" : "withdraw";
+  const rowActionLabel = isShopee && rowActionName === "push" ? shopeePrintLabel : isWithdrawTab ? "Pack" : "Withdraw";
+  const showTopActionButton = !isShopee || topActionName !== "pack";
+  const showRowActions = isShopee ? rowActionName === "push" : !isPushedSuccessfulTab;
 
   const handleDetails = (order) => {
     list.cacheOrderForDetail(order);
-    navigate(`/warehouse_management/orders/detail/${encodeURIComponent(order.id)}`, { state: { order } });
+    navigate(`/warehouse_management/orders/detail/${encodeURIComponent(order.id)}`, {
+      state: { order, fromPath: location.pathname },
+    });
   };
 
   const handleWaybillPrint = () => {
@@ -39,15 +53,17 @@ export default function ProcessedOrderPage() {
         <div className="px-5 pt-5 pb-0">
           <h2 className="text-xl font-bold text-slate-800 font-display mb-4">Processed Orders</h2>
 
-          <div className="mb-3">
-            <button
-              onClick={() => list.runAction("push")}
-              disabled={list.actionLoading}
-              className="px-4 py-1.5 text-sm font-semibold border border-surface-border rounded-lg text-slate-700 bg-white hover:bg-surface-card transition-colors disabled:opacity-60"
-            >
-              Push
-            </button>
-          </div>
+          {showTopActionButton && (
+            <div className="mb-3">
+              <button
+                onClick={() => list.runAction(topActionName)}
+                disabled={list.actionLoading}
+                className="px-4 py-1.5 text-sm font-semibold border border-surface-border rounded-lg text-slate-700 bg-white hover:bg-surface-card transition-colors disabled:opacity-60"
+              >
+                {topActionLabel}
+              </button>
+            </div>
+          )}
 
           <div className="flex items-center gap-5 border-b border-surface-border">
             {SUB_TABS.map((tab) => (
@@ -80,9 +96,10 @@ export default function ProcessedOrderPage() {
           pagination={list.pagination}
           page={list.page}
           setPage={list.setPage}
-          actionLabel="Withdraw"
+          showActionsCol={showRowActions}
+          actionLabel={rowActionLabel}
           compact
-          onAction={(order) => list.runAction("withdraw", [order])}
+          onAction={(order) => list.runAction(rowActionName, [order])}
           onDetails={handleDetails}
         />
 
@@ -94,6 +111,8 @@ export default function ProcessedOrderPage() {
         orders={list.selectedRows}
         onClose={() => setWaybillOpen(false)}
       />
+
+      <OrderActionModals list={list} />
     </div>
   );
 }
