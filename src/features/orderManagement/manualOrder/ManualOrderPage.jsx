@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Plus, Gift } from "lucide-react";
 import Topbar from "../../../components/layout/Topbar";
 import OrderProcessingFilterBar from "../shared/components/OrderProcessingFilterBar";
@@ -16,6 +16,7 @@ const SUB_TABS = [
 
 export default function ManualOrderPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState("All");
   const [showAddPage, setShowAddPage] = useState(false);
   const [addMode, setAddMode] = useState("order");
@@ -27,7 +28,9 @@ export default function ManualOrderPage() {
 
   const handleDetails = (order) => {
     list.cacheOrderForDetail(order);
-    navigate(`/warehouse_management/orders/detail/${encodeURIComponent(order.id)}`, { state: { order } });
+    navigate(`/warehouse_management/orders/detail/${encodeURIComponent(order.id)}`, {
+      state: { order, fromPath: location.pathname },
+    });
   };
 
   return (

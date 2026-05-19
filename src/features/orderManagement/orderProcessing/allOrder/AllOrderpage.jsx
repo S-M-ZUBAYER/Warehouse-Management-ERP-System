@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Calendar, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import Topbar from "../../../../components/layout/Topbar";
@@ -42,6 +42,7 @@ const dateInputToSeconds = (value, endOfDay = false) => {
 
 export default function AllOrderPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [datePreset, setDatePreset] = useState("last_7_days");
   const [dateRange, setDateRange] = useState(() => getPresetRange("last_7_days"));
   const [datePickerOpen, setDatePickerOpen] = useState(false);
@@ -77,7 +78,7 @@ export default function AllOrderPage() {
   const handleDetails = (order) => {
     list.cacheOrderForDetail(order);
     navigate(`/warehouse_management/orders/detail/${encodeURIComponent(order.id)}`, {
-      state: { order },
+      state: { order, fromPath: location.pathname },
     });
   };
 

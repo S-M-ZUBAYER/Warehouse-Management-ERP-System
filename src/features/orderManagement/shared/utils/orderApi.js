@@ -5,7 +5,9 @@ export const ORDER_SEARCH_CONTEXT_KEY = "order-search-context";
 export const ORDER_DETAIL_CACHE_KEY = "order-detail-cache";
 
 // const DEFAULT_PLATFORM_HOST = "https://grozziie.zjweiting.com:3091";
-const DEFAULT_PLATFORM_HOST = "http://192.168.1.222:8080/";
+// const DEFAULT_PLATFORM_HOST = "http://192.168.1.222:8080/";
+const DEFAULT_PLATFORM_HOST = "https://grozziie.zjweiting.com:3091/";
+const DEFAULT_MERGE_HOST = "https://grozziieget.zjweiting.com:8033";
 const DEFAULT_IMAGE = "https://placehold.co/36x36/E6ECF0/004368?text=?";
 
 export const SUPPORTED_PLATFORMS = ["shopee", "tiktok"];
@@ -31,14 +33,14 @@ export const ORDER_PAGE_CONFIG = {
   },
   pickup: {
     label: "Pickup Orders",
-    shopeeStatus: "PROCESSED",
-    tiktokStatus: "AWAITING_COLLECTION",
+    shopeeStatus: "SHIPPED",
+    tiktokStatus: "IN_TRANSIT",
     statusLabel: "Processed",
   },
   shipped: {
     label: "Shipped Orders",
     shopeeStatus: "SHIPPED",
-    tiktokStatus: "IN_TRANSIT",
+    tiktokStatus: "DELIVERED",
     statusLabel: "Shipping",
   },
   completed: {
@@ -50,7 +52,7 @@ export const ORDER_PAGE_CONFIG = {
   canceled: {
     label: "Cancelled Orders",
     shopeeStatus: "CANCELLED",
-    tiktokStatus: "CANCELLED",
+    tiktokStatus: "CANCEL",
     statusLabel: "Cancelled",
   },
 };
@@ -61,9 +63,9 @@ const SHOOPEE_TAB_STATUS = {
   "Packed Successfully": "PROCESSED",
   "Pack Failed": "READY_TO_SHIP",
   "Out Of Stock": "READY_TO_SHIP",
-  "Platform Processing": "INVOICE_PENDING",
+  "Platform Processing": "PENDING",
   "Pushing": "PROCESSED",
-  "Pushed Successful": "PROCESSED",
+  "Pushed Successful": "SHIPPED",
   "Withdraw": "PROCESSED",
   "All": "",
   "Cancelation Request": "IN_CANCEL",
@@ -78,11 +80,11 @@ const TIKTOK_TAB_STATUS = {
   "Out Of Stock": "AWAITING_SHIPMENT",
   "Platform Processing": "ON_HOLD",
   "Pushing": "AWAITING_COLLECTION",
-  "Pushed Successful": "AWAITING_COLLECTION",
-  "Withdraw": "AWAITING_COLLECTION",
+  "Pushed Successful": "IN_TRANSIT",
+  "Withdraw": "AWAITING_SHIPMENT",
   "All": "",
-  "Cancelation Request": "CANCELLED",
-  "Cancelled": "CANCELLED",
+  "Cancelation Request": "CANCEL",
+  "Cancelled": "CANCEL",
 };
 
 export const SEARCH_FIELD_MAP = {
@@ -160,6 +162,9 @@ const getPlatformApiBase = () => {
     .replace(/\/api\/v1$/i, "");
 };
 
+const getMergeApiBase = () =>
+  String(import.meta.env.VITE_PDF_MERGE_BASE_URL || DEFAULT_MERGE_HOST).replace(/\/+$/, "");
+
 const buildUrl = (path, params) => {
   const base = getPlatformApiBase();
   const url = new URL(`${base}${path}`);
@@ -179,7 +184,15 @@ const fetchJson = async (path, { method = "GET", params, body } = {}) => {
   });
 
   const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
+  let data = null;
+
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error(text || `Request failed (${response.status})`);
+    }
+  }
 
   if (!response.ok) {
     throw new Error(data?.message || data?.error || `Request failed (${response.status})`);
@@ -192,18 +205,39 @@ const fetchJson = async (path, { method = "GET", params, body } = {}) => {
   return data;
 };
 
+const fetchBlob = async (path, { method = "GET", params, body } = {}) => {
+  const response = await fetch(buildUrl(path, params), {
+    method,
+    headers: body ? { "Content-Type": "application/json", Accept: "*/*" } : undefined,
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Request failed (${response.status})`);
+  }
+
+  return response.blob();
+};
+
 const SECONDS_IN_DAY = 24 * 60 * 60;
 const SHOPEE_MAX_RANGE_SECONDS = 15 * SECONDS_IN_DAY - 60;
+const SHOPEE_ORDER_STATUSES = [
+  // "PENDING",
+  "READY_TO_SHIP",
+  "PROCESSED",
+  "SHIPPED",
+  "COMPLETED",
+  "IN_CANCEL",
+  "CANCELLED",
+];
 const TIKTOK_ORDER_STATUSES = [
-  "UNPAID",
   "AWAITING_SHIPMENT",
   "AWAITING_COLLECTION",
   "IN_TRANSIT",
   "DELIVERED",
   "COMPLETED",
-  "CANCELLED",
-  "ON_HOLD",
-  "PARTIALLY_SHIPPING",
+  "CANCEL",
+  "ON_HOLD"
 ];
 
 const toUnixSeconds = (value) => {
@@ -288,10 +322,11 @@ const maskString = (value, keepStart = 1, keepEnd = 1) => {
 
 const normalizeShopeeStatus = (status) => {
   const value = String(status || "").toUpperCase();
-  if (["INVOICE_PENDING"].includes(value)) return "Platform Processing";
+  if (["INVOICE_PENDING", "PENDING"].includes(value)) return "Platform Processing";
   if (["READY_TO_SHIP", "RETRY_SHIP"].includes(value)) return "To Ship";
   if (["PROCESSED"].includes(value)) return "Processed";
-  if (["SHIPPED", "TO_CONFIRM_RECEIVE"].includes(value)) return "Shipping";
+  if (["TO_CONFIRM_RECEIVE"].includes(value)) return "Shipped";
+  if (["SHIPPED"].includes(value)) return "Shipping";
   if (["COMPLETED"].includes(value)) return "Completed";
   if (["CANCELLED", "IN_CANCEL"].includes(value)) return "Cancelled";
   return status || "-";
@@ -302,9 +337,10 @@ const normalizeTikTokStatus = (status) => {
   if (["ON_HOLD"].includes(value)) return "Platform Processing";
   if (["AWAITING_PAYMENT", "AWAITING_SHIPMENT", "UNPAID"].includes(value)) return "To Ship";
   if (["AWAITING_COLLECTION"].includes(value)) return "Processed";
-  if (["IN_TRANSIT", "DELIVERED"].includes(value)) return "Shipping";
+  if (["DELIVERED"].includes(value)) return "Shipped";
+  if (["IN_TRANSIT"].includes(value)) return "Shipping";
   if (["COMPLETED"].includes(value)) return "Completed";
-  if (["CANCELLED"].includes(value)) return "Cancelled";
+  if (["CANCEL", "CANCELLED"].includes(value)) return "Cancelled";
   return status || "-";
 };
 
@@ -545,12 +581,13 @@ const getPlatformStatuses = ({ platform, pageType = "all", tab }) => {
   const status = getPlatformStatus({ platform: normalized, pageType, tab });
 
   if (pageType === "canceled" && (!status || tab === "All")) {
-    return normalized === "tiktok" ? ["CANCELLED"] : ["IN_CANCEL", "CANCELLED"];
+    return normalized === "tiktok" ? ["CANCEL"] : ["IN_CANCEL", "CANCELLED"];
   }
+
+  if (normalized === "shopee" && !status) return SHOPEE_ORDER_STATUSES;
 
   if (normalized === "tiktok") {
     if (!status) return TIKTOK_ORDER_STATUSES;
-    if (status === "IN_TRANSIT") return ["IN_TRANSIT", "DELIVERED"];
   }
 
   return [status];
@@ -562,17 +599,16 @@ export const fetchShopeeOrders = async ({ context, pageType, tab, dateRange, pag
 
   const statuses = getPlatformStatuses({ platform: "shopee", pageType, tab });
   const serverPaginated = pagination?.serverPaginated === true;
+  const detailPaginated = pagination?.detailPaginated === true;
   const pageSize = serverPaginated ? pagination?.pageSize || 10 : 50;
-  const windows = serverPaginated ? getShopeeDateWindows(dateRange) : [getShopeeDateRange(dateRange)];
+  const windows = getShopeeDateWindows(dateRange);
   let { statusIndex, windowIndex, cursor } = serverPaginated
     ? parseShopeeCursor(pagination?.cursor)
     : { statusIndex: 0, windowIndex: 0, cursor: "" };
-  let hasMore = true;
   let orders = [];
   let nextCursor = "";
 
   while (
-    hasMore &&
     statusIndex < statuses.length &&
     windowIndex < windows.length &&
     (!serverPaginated || orders.length < pageSize)
@@ -594,19 +630,15 @@ export const fetchShopeeOrders = async ({ context, pageType, tab, dateRange, pag
 
     const list = res?.response?.order_list || [];
     orders = [...orders, ...list];
-    hasMore = res?.response?.more === true;
+    const hasMore = res?.response?.more === true;
     const responseCursor = res?.response?.next_cursor || "";
-
-    if (!serverPaginated) {
-      cursor = responseCursor;
-      if (!cursor) hasMore = false;
-      continue;
-    }
 
     if (hasMore && responseCursor) {
       cursor = responseCursor;
-      nextCursor = stringifyShopeeCursor({ statusIndex, windowIndex, cursor });
-      if (orders.length >= pageSize) break;
+      if (serverPaginated) {
+        nextCursor = stringifyShopeeCursor({ statusIndex, windowIndex, cursor });
+        if (orders.length >= pageSize) break;
+      }
       continue;
     }
 
@@ -621,14 +653,22 @@ export const fetchShopeeOrders = async ({ context, pageType, tab, dateRange, pag
       nextCursor = statusIndex < statuses.length
         ? stringifyShopeeCursor({ statusIndex, windowIndex, cursor: "" })
         : "";
-      hasMore = statusIndex < statuses.length;
-      continue;
     }
-
-    if (!responseCursor) hasMore = false;
   }
 
-  const orderSnList = orders.map((order) => order.order_sn).filter(Boolean);
+  const rowsForPage =
+    pageType === "shipped"
+      ? orders.filter((order) => String(order?.order_status || "").toUpperCase() === "TO_CONFIRM_RECEIVE")
+      : pageType === "pickup"
+        ? orders.filter((order) => String(order?.order_status || "").toUpperCase() !== "TO_CONFIRM_RECEIVE")
+      : orders;
+  const detailRows = detailPaginated
+    ? rowsForPage.slice(
+        ((Number(pagination?.page) || 1) - 1) * (Number(pagination?.pageSize) || 10),
+        (Number(pagination?.page) || 1) * (Number(pagination?.pageSize) || 10)
+      )
+    : rowsForPage;
+  const orderSnList = detailRows.map((order) => order.order_sn).filter(Boolean);
   let details = [];
 
   try {
@@ -639,7 +679,7 @@ export const fetchShopeeOrders = async ({ context, pageType, tab, dateRange, pag
 
   const detailMap = new Map(details.map((order) => [order.order_sn, order]));
 
-  const normalizedOrders = orders.map((order) => normalizeShopeeOrder(detailMap.get(order.order_sn) || order, context));
+  const normalizedOrders = rowsForPage.map((order) => normalizeShopeeOrder(detailMap.get(order.order_sn) || order, context));
 
   if (serverPaginated) {
     return {
@@ -919,7 +959,9 @@ export const fetchOrders = async ({ context, pageType = "all", tab, search, skuT
 export const fetchOrderDetail = async ({ platform, orderId, context, cachedOrder }) => {
   const normalizedPlatform = normalizePlatform(platform);
 
-  if (cachedOrder?.raw) return cachedOrder;
+  if (cachedOrder?.raw && (normalizedPlatform !== "shopee" || cachedOrder?.items?.length > 0)) {
+    return cachedOrder;
+  }
 
   if (normalizedPlatform === "shopee") {
     const details = await fetchShopeeOrderDetails({ context, orderSnList: [orderId] });
@@ -990,6 +1032,375 @@ export const runOrderAction = ({ action, orders }) =>
       })),
     })
     .then((res) => res.data ?? res);
+
+const readJsonStorage = (key, fallback) => {
+  if (typeof localStorage === "undefined") return fallback;
+  try {
+    const value = localStorage.getItem(key);
+    return value ? JSON.parse(value) : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const writeJsonStorage = (key, value) => {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(key, JSON.stringify(value));
+};
+
+const getShopeeShopId = (context) =>
+  getContextValue(context, ["shop_id", "external_store_id", "store_shop_id"]) ||
+  (typeof localStorage !== "undefined" ? localStorage.getItem("shopeeAuthShopId") : "");
+
+const getPreferredPickup = (shippingParamData) => {
+  const pickupList = shippingParamData?.body?.response?.pickup?.address_list || [];
+
+  for (const address of pickupList) {
+    const recommendedSlot = address?.time_slot_list?.find((slot) =>
+      slot?.flags?.includes("recommended")
+    );
+
+    if (recommendedSlot) {
+      return {
+        addressId: address.address_id || null,
+        pickupTimeId: recommendedSlot.pickup_time_id || "",
+      };
+    }
+  }
+
+  return {
+    addressId: pickupList[0]?.address_id || null,
+    pickupTimeId: pickupList[0]?.time_slot_list?.[0]?.pickup_time_id || "",
+  };
+};
+
+export const packShopeeOrders = async ({ context, orders = [] }) => {
+  const shopId = getShopeeShopId(context);
+  if (!shopId) throw new Error("Shopee shop ID is missing");
+
+  const selectedShopeeDeliveryType =
+    (typeof localStorage !== "undefined" && localStorage.getItem("shopeeDeliveryType")) || "pickup";
+
+  if (typeof localStorage !== "undefined" && !localStorage.getItem("shopeeDeliveryType")) {
+    localStorage.setItem("shopeeDeliveryType", "pickup");
+  }
+
+  const successfulIds = [];
+  const failedOrders = [];
+
+  for (const order of orders) {
+    const orderSn = order?.rawId || order?.order_sn || order?.orderId || order?.orderNo;
+    if (!orderSn) continue;
+
+    try {
+      const shippingParamData = await fetchJson("/shopee-open-shop/api/dev/logistics/get-shipping-parameter", {
+        params: {
+          shopId,
+          orderSn,
+        },
+      });
+
+      if (shippingParamData?.body?.error) {
+        failedOrders.push({
+          orderId: orderSn,
+          reason: shippingParamData?.body?.message || shippingParamData?.body?.error,
+        });
+        continue;
+      }
+
+      const dropoff = shippingParamData?.body?.response?.dropoff;
+      let requestBody;
+
+      if (selectedShopeeDeliveryType === "dropoff") {
+        requestBody = {
+          order_sn: orderSn,
+          package_number: "",
+          dropoff,
+        };
+      } else {
+        const { addressId, pickupTimeId } = getPreferredPickup(shippingParamData);
+
+        if (!addressId) {
+          failedOrders.push({
+            orderId: orderSn,
+            reason: "Missing address_id",
+          });
+          continue;
+        }
+
+        requestBody = {
+          order_sn: orderSn,
+          package_number: "",
+          pickup: {
+            address_id: addressId,
+            pickup_time_id: pickupTimeId || "",
+            tracking_number: "",
+          },
+        };
+      }
+
+      const shipData = await fetchJson("/shopee-open-shop/api/dev/logistics/ship-order", {
+        method: "POST",
+        params: {
+          shopId,
+        },
+        body: requestBody,
+      });
+
+      if (!shipData?.body?.error) {
+        successfulIds.push(orderSn);
+
+        const stored = readJsonStorage("ShopeePackaging", []);
+        if (!stored.includes(orderSn)) {
+          writeJsonStorage("ShopeePackaging", [...stored, orderSn]);
+        }
+      } else {
+        failedOrders.push({
+          orderId: orderSn,
+          reason: shipData?.body?.message || shipData?.body?.error || "Unknown error",
+        });
+      }
+    } catch (error) {
+      failedOrders.push({
+        orderId: orderSn,
+        reason: error?.message || "API request failed",
+      });
+    }
+  }
+
+  return {
+    successfulIds,
+    failedOrders,
+  };
+};
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const base64ToPdfUrl = (base64) => {
+  const cleanBase64 = String(base64 || "").replace(/^data:application\/pdf;base64,/, "");
+  if (!isValidBase64(cleanBase64)) {
+    throw new Error("Invalid PDF response");
+  }
+
+  const byteChars = atob(cleanBase64);
+  const byteNumbers = new Array(byteChars.length);
+
+  for (let i = 0; i < byteChars.length; i += 1) {
+    byteNumbers[i] = byteChars.charCodeAt(i);
+  }
+
+  const byteArray = new Uint8Array(byteNumbers);
+  const pdfBlob = new Blob([byteArray], { type: "application/pdf" });
+  return URL.createObjectURL(pdfBlob);
+};
+
+const isValidBase64 = (value) => {
+  const text = String(value || "").trim();
+  if (!text || text.length % 4 !== 0) return false;
+  return /^[A-Za-z0-9+/]+={0,2}$/.test(text);
+};
+
+const safeAtob = (value) => {
+  const text = String(value || "").trim();
+  if (!isValidBase64(text)) return "";
+  try {
+    return atob(text);
+  } catch {
+    return "";
+  }
+};
+
+const parsePdfBase64FromText = (text) => {
+  try {
+    const json = JSON.parse(text);
+    if (json?.body) return json.body;
+  } catch {
+    // Keep trying other response shapes below.
+  }
+
+  const decoded = safeAtob(text);
+  if (decoded) {
+    try {
+      const json = JSON.parse(decoded);
+      if (json?.body) return json.body;
+    } catch {
+      // Some environments return the PDF itself instead of a JSON wrapper.
+    }
+  }
+
+  return "";
+};
+
+const blobToBase64 = (blob) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(String(reader.result || "").split(",")[1] || "");
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+
+const getDownloadedPdfBase64 = async (blob) => {
+  const clonedBlob = blob.slice(0, blob.size, blob.type);
+  const text = await clonedBlob.text();
+  const parsedFromText = parsePdfBase64FromText(text);
+  if (parsedFromText) return parsedFromText;
+
+  const blobBase64 = await blobToBase64(blob);
+  const parsedFromBase64 = parsePdfBase64FromText(blobBase64);
+  return parsedFromBase64 || blobBase64;
+};
+
+const getCurrentUserEmail = () => {
+  const storedUser = readJsonStorage("warehouseUser", {});
+  const authUser = readJsonStorage("auth-storage", {});
+  return (
+    storedUser?.email ||
+    storedUser?.userEmail ||
+    authUser?.state?.user?.email ||
+    authUser?.state?.token?.email ||
+    ""
+  );
+};
+
+export const generateShopeeAwbPdf = async ({ context, orders = [], fromStatus = "" }) => {
+  const shopId = getShopeeShopId(context);
+  if (!shopId) throw new Error("Shopee shop ID is missing");
+
+  const status = String(fromStatus || "").toUpperCase();
+  const skipStatuses = ["PROCESSED_PRINTED", "SHIPPED", "READY_TO_SHIP", "COMPLETED"];
+  const pdfBase64Array = [];
+  const printedOrderIds = [];
+  const failedOrders = [];
+
+  try {
+    await fetchJson("/shopee-open-shop/api/dev/logistics/get-channel-list", {
+      params: {
+        shopId,
+      },
+    });
+  } catch {
+    // Channel list is not required for the current preview UI.
+  }
+
+  for (const order of orders) {
+    const orderSn = order?.rawId || order?.order_sn || order?.orderId || order?.orderNo;
+    if (!orderSn) continue;
+
+    try {
+      const docTypeData = await fetchJson("/shopee-open-shop/api/dev/logistics/get-shipping-document-parameter", {
+        method: "POST",
+        params: {
+          shopId,
+        },
+        body: {
+          order_list: [{ order_sn: orderSn }],
+        },
+      });
+
+      const shippingDocType =
+        docTypeData?.body?.response?.result_list?.[0]?.suggest_shipping_document_type ||
+        "THERMAL_AIR_WAYBILL";
+
+      if (!skipStatuses.includes(status)) {
+        const trackingData = await fetchJson("/shopee-open-shop/api/dev/logistics/get-tracking-number", {
+          params: {
+            shopId,
+            orderSn,
+            packageNumber: "-",
+            responseOptionalFields: "first_mile_tracking_number",
+          },
+        });
+
+        const trackingNumber = trackingData?.body?.response?.tracking_number || "";
+
+        await fetchJson("/shopee-open-shop/api/dev/logistics/create-shipping-document", {
+          method: "POST",
+          params: {
+            shopId,
+          },
+          body: {
+            order_list: [
+              {
+                order_sn: orderSn,
+                package_number: order?.raw?.package_list?.[0]?.package_number || "",
+                shipping_document_type: shippingDocType,
+                tracking_number: trackingNumber,
+              },
+            ],
+          },
+        });
+
+        await delay(1000);
+      }
+
+      const pdfBlob = await fetchBlob("/shopee-open-shop/api/dev/logistics/download-shipping-document", {
+        method: "POST",
+        params: {
+          shopId,
+        },
+        body: {
+          shipping_document_type: shippingDocType,
+          order_list: [{ order_sn: orderSn }],
+        },
+      });
+
+      const pdfBase64 = await getDownloadedPdfBase64(pdfBlob);
+      if (isValidBase64(pdfBase64)) {
+        pdfBase64Array.push(pdfBase64);
+        printedOrderIds.push(orderSn);
+      } else {
+        failedOrders.push({
+          orderId: orderSn,
+          reason: "Invalid PDF response",
+        });
+      }
+    } catch (error) {
+      failedOrders.push({
+        orderId: orderSn,
+        reason: error?.message || "Failed to process Shopee order",
+      });
+    }
+  }
+
+  if (pdfBase64Array.length === 0) {
+    return { pdfUrl: "", printedOrderIds, failedOrders };
+  }
+
+  let pdfUrl = "";
+
+  if (pdfBase64Array.length === 1) {
+    pdfUrl = base64ToPdfUrl(pdfBase64Array[0]);
+  } else {
+    const mergeRes = await fetch(`${getMergeApiBase()}/tht/merge-pdfs-base64`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pdfs: pdfBase64Array }),
+    });
+    const mergeData = await mergeRes.json();
+    pdfUrl = base64ToPdfUrl(mergeData?.pdfBase64 || "");
+  }
+
+  if (!skipStatuses.includes(status)) {
+    const email = getCurrentUserEmail();
+    await Promise.all(
+      printedOrderIds.map((orderSn) => {
+        const params = new URLSearchParams({
+          shopeePrintedId: orderSn,
+          email,
+        });
+        return fetch(`${getPlatformApiBase()}/tiktokshop-print/api/dev/shopee/printedIds/add?${params.toString()}`, {
+          method: "POST",
+        }).catch(() => null);
+      })
+    );
+  }
+
+  return {
+    pdfUrl,
+    printedOrderIds,
+    failedOrders,
+  };
+};
 
 export const createManualOrder = (payload) =>
   platformApi.post("/manual_order", payload).then((res) => res.data ?? res);

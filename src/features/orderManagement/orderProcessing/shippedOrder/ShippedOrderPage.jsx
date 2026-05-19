@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import Topbar from "../../../../components/layout/Topbar";
 import OrderProcessingFilterBar from "../../shared/components/OrderProcessingFilterBar";
 import OrderTable from "../../shared/components/OrderTable";
@@ -7,12 +7,16 @@ import { useOrderList } from "../../shared/hooks/useOrderList";
 
 export default function ShippedOrder() {
   const navigate = useNavigate();
+  const location = useLocation();
   const list = useOrderList({ pageType: "shipped" });
 
   const handleDetails = (order) => {
     list.cacheOrderForDetail(order);
-    navigate(`/warehouse_management/orders/detail/${encodeURIComponent(order.id)}`, { state: { order } });
+    navigate(`/warehouse_management/orders/detail/${encodeURIComponent(order.id)}`, {
+      state: { order, fromPath: location.pathname },
+    });
   };
+console.log(list.orders);
 
   return (
     <div className="space-y-4 font-body">

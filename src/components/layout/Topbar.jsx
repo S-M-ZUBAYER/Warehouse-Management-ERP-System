@@ -273,11 +273,11 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, ChevronRight, User, KeyRound, Lock, LogOut, X } from 'lucide-react';
+import { ArrowLeft, Bell, ChevronRight, User, KeyRound, Lock, LogOut, X } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 
 const parseJson = (value) => {
-    try { return value ? JSON.parse(value) : null; } catch (_) { return null; }
+    try { return value ? JSON.parse(value) : null; } catch { return null; }
 };
 
 const getFirstValue = (...values) => values.find((value) => value !== undefined && value !== null && String(value).trim() !== '');
@@ -289,7 +289,7 @@ const normalizeImageSrc = (image) => {
     return `data:image/jpeg;base64,${src}`;
 };
 
-export default function Topbar({ PageTitle }) {
+export default function Topbar({ PageTitle, showBack = false, onBack }) {
     const navigate = useNavigate();
     const [showDropdown, setShowDropdown] = useState(false);
     const [showProfileModal, setShowProfileModal] = useState(false);
@@ -448,9 +448,27 @@ export default function Topbar({ PageTitle }) {
     return (
         <header className="flex items-center justify-between flex-shrink-0" style={{ height: '64px' }}>
             {PageTitle && (
-                <h1 className="text-[26px] font-semibold font-display text-primary-text">
-                    {PageTitle}
-                </h1>
+                <div className="flex items-center gap-3">
+                    {showBack ? (
+                        <button
+                            type="button"
+                            onClick={onBack}
+                            className="group flex items-center gap-3 rounded-lg text-primary-text transition-colors hover:text-primary"
+                            aria-label={PageTitle}
+                        >
+                            <span className="flex h-9 w-9 items-center justify-center rounded-full border border-surface-border bg-white text-slate-600 transition-colors group-hover:bg-surface-card group-hover:text-primary">
+                                <ArrowLeft size={18} />
+                            </span>
+                            <span className="text-[26px] font-semibold font-display">
+                                {PageTitle}
+                            </span>
+                        </button>
+                    ) : (
+                        <h1 className="text-[26px] font-semibold font-display text-primary-text">
+                            {PageTitle}
+                        </h1>
+                    )}
+                </div>
             )}
 
             <div className="flex items-center gap-3 ml-auto">
@@ -492,17 +510,17 @@ export default function Topbar({ PageTitle }) {
                             className="absolute right-0 top-full mt-2 rounded-2xl py-2 z-50"
                             style={{ width: '180px', background: '#FFFFFF', boxShadow: '0 8px 30px rgba(0,0,0,0.12)', border: '1px solid #F1F5F9' }}
                         >
-                            {dropdownItems.map(({ icon: Icon, label, onClick, danger }) => (
+                            {dropdownItems.map((item) => (
                                 <button
-                                    key={label}
-                                    onClick={onClick}
+                                    key={item.label}
+                                    onClick={item.onClick}
                                     className="flex items-center gap-3 w-full px-4 py-2.5 font-body text-sm transition-colors"
-                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: danger ? '#EF4444' : '#374151', textAlign: 'left' }}
-                                    onMouseEnter={(e) => (e.currentTarget.style.background = danger ? '#FEF2F2' : '#F8FAFC')}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: item.danger ? '#EF4444' : '#374151', textAlign: 'left' }}
+                                    onMouseEnter={(e) => (e.currentTarget.style.background = item.danger ? '#FEF2F2' : '#F8FAFC')}
                                     onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
                                 >
-                                    <Icon size={14} strokeWidth={1.8} />
-                                    {label}
+                                    <item.icon size={14} strokeWidth={1.8} />
+                                    {item.label}
                                 </button>
                             ))}
                         </div>
