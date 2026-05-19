@@ -183,9 +183,11 @@ export default function OrderTable({
                               ? "text-indigo-600"
                               : order.status === "Completed"
                                 ? "text-emerald-600"
-                                : order.status === "Cancelled"
-                                  ? "text-red-500"
-                                  : "text-primary-text"
+                                : order.status === "Shipped"
+                                  ? "text-emerald-600"
+                                  : order.status === "Cancelled"
+                                    ? "text-red-500"
+                                    : "text-primary-text"
                       }`}
                     >
                       {order.status}

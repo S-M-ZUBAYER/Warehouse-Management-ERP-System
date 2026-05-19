@@ -3,8 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   fetchOrders,
+  generateShopeeAwbPdf,
   getStoredOrderContext,
   getStoredSearchContext,
+  packShopeeOrders,
   runOrderAction,
   setCachedOrderDetail,
   setStoredOrderContext,
@@ -40,11 +42,23 @@ export function useOrderList({ pageType = "all", activeTab = "", dateRange } = {
   const [page, setPage] = useState(1);
   const [pageCursors, setPageCursors] = useState({ 1: "" });
   const [showSearchTypeDropdown, setShowSearchTypeDropdown] = useState(false);
+  const [pendingShopeePackRows, setPendingShopeePackRows] = useState([]);
+  const [failedShopeePackOrders, setFailedShopeePackOrders] = useState([]);
+  const [pendingShopeePrintRows, setPendingShopeePrintRows] = useState([]);
+  const [shopeePrintStatus, setShopeePrintStatus] = useState("");
+  const [shopeeNoItemsModalOpen, setShopeeNoItemsModalOpen] = useState(false);
+  const [shopeeAwbModalOpen, setShopeeAwbModalOpen] = useState(false);
+  const [shopeeAwbPdfUrl, setShopeeAwbPdfUrl] = useState("");
+  const [failedShopeePrintOrders, setFailedShopeePrintOrders] = useState([]);
   const platformValue = String(storeContext?.platform || "").toLowerCase();
-  const serverPaginatedPageTypes = ["all", "completed", "canceled"];
+  const serverPaginatedPageTypes = ["completed"];
   const serverPaginated =
     serverPaginatedPageTypes.includes(pageType) &&
     (platformValue.includes("shopee") || platformValue.includes("tik"));
+  const detailPaginated =
+    !serverPaginated &&
+    ["all", "canceled"].includes(pageType) &&
+    platformValue.includes("shopee");
 
   useEffect(() => {
     setSelectedIds([]);
@@ -67,9 +81,15 @@ export function useOrderList({ pageType = "all", activeTab = "", dateRange } = {
             pageSize: ORDER_PAGE_SIZE,
             cursor: pageCursors[page] || "",
           }
+        : detailPaginated
+          ? {
+              detailPaginated: true,
+              page,
+              pageSize: ORDER_PAGE_SIZE,
+            }
         : undefined,
     }),
-    [activeTab, appliedSearch, dateRange, page, pageCursors, pageType, serverPaginated, skuType, storeContext]
+    [activeTab, appliedSearch, dateRange, detailPaginated, page, pageCursors, pageType, serverPaginated, skuType, storeContext]
   );
 
   const hasStore = pageType === "manual" || Boolean(storeContext?.platform && storeContext?.platform_store_id);
@@ -157,6 +177,64 @@ export function useOrderList({ pageType = "all", activeTab = "", dateRange } = {
     },
   });
 
+  const removeOrdersFromCurrentList = (successfulIds = []) => {
+    if (!successfulIds.length) return;
+    const successfulSet = new Set(successfulIds.map(String));
+
+    queryClient.setQueryData(ORDER_LIST_KEYS.list(queryParams), (current) => {
+      const keepOrder = (order) => {
+        const orderSn = order?.rawId || order?.order_sn || order?.orderId || order?.orderNo;
+        return !successfulSet.has(String(orderSn));
+      };
+
+      if (Array.isArray(current)) return current.filter(keepOrder);
+      if (current && Array.isArray(current.orders)) {
+        return {
+          ...current,
+          orders: current.orders.filter(keepOrder),
+        };
+      }
+      return current;
+    });
+  };
+
+  const shopeePackMutation = useMutation({
+    mutationFn: (orders) => packShopeeOrders({ context: storeContext, orders }),
+    onSuccess: ({ successfulIds = [], failedOrders = [] }) => {
+      removeOrdersFromCurrentList(successfulIds);
+      setSelectedIds([]);
+      setPendingShopeePackRows([]);
+      setFailedShopeePackOrders(failedOrders);
+
+      if (failedOrders.length > 0) {
+        toast.error(`${failedOrders.length} Shopee order(s) failed to pack`);
+      } else {
+        toast.success("All selected orders shipped successfully!");
+      }
+    },
+    onError: (err) => {
+      toast.error(err?.message || "Shopee package action failed");
+    },
+  });
+
+  const shopeePrintMutation = useMutation({
+    mutationFn: ({ orders, fromStatus }) =>
+      generateShopeeAwbPdf({ context: storeContext, orders, fromStatus }),
+    onSuccess: ({ pdfUrl = "", failedOrders = [] }) => {
+      setShopeeAwbPdfUrl(pdfUrl);
+      setFailedShopeePrintOrders(failedOrders);
+
+      if (failedOrders.length > 0) {
+        toast.error(`${failedOrders.length} Shopee AWB order(s) failed`);
+      } else if (pdfUrl) {
+        toast.success("Shopee AWB is ready to print");
+      }
+    },
+    onError: (err) => {
+      toast.error(err?.message || "Shopee AWB print failed");
+    },
+  });
+
   const toggleSelect = (id) =>
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
@@ -199,10 +277,87 @@ export function useOrderList({ pageType = "all", activeTab = "", dateRange } = {
 
   const runAction = (action, rows = selectedRows) => {
     if (!rows.length) {
-      toast.error("Please select at least one order");
+      const isShopeeAction =
+        ["pack", "push"].includes(action) &&
+        String(storeContext?.platform || "").toLowerCase().includes("shopee");
+
+      if (isShopeeAction) {
+        setShopeeNoItemsModalOpen(true);
+      } else {
+        toast.error(action === "pack" ? "No Items Selected" : "Please select at least one order");
+      }
       return;
     }
+
+    const isShopeePack =
+      action === "pack" &&
+      rows.some((order) => String(order?.platform || "").toLowerCase() === "shopee");
+
+    if (isShopeePack) {
+      const invalidRows = rows.filter((order) => String(order?.rawStatus || "").toUpperCase() !== "READY_TO_SHIP");
+      if (invalidRows.length > 0) {
+        toast.error("Pack is only available for READY_TO_SHIP Shopee orders");
+        return;
+      }
+
+      setPendingShopeePackRows(rows);
+      return;
+    }
+
+    const isShopeePush =
+      action === "push" &&
+      rows.some((order) => String(order?.platform || "").toLowerCase() === "shopee");
+
+    if (isShopeePush) {
+      const allowedStatuses = ["PROCESSED", "SHIPPED", "PROCESSED_PRINTED"];
+      const invalidRows = rows.filter((order) => !allowedStatuses.includes(String(order?.rawStatus || "").toUpperCase()));
+      if (invalidRows.length > 0) {
+        toast.error("Push is only available for PROCESSED, SHIPPED, or PROCESSED_PRINTED Shopee orders");
+        return;
+      }
+
+      setPendingShopeePrintRows(rows);
+      setShopeePrintStatus(String(rows[0]?.rawStatus || "").toUpperCase());
+      setShopeeAwbPdfUrl("");
+      setFailedShopeePrintOrders([]);
+      return;
+    }
+
     actionMutation.mutate({ action, orders: rows });
+  };
+
+  const cancelShopeePack = () => {
+    if (shopeePackMutation.isPending) return;
+    setPendingShopeePackRows([]);
+  };
+
+  const confirmShopeePack = () => {
+    if (!pendingShopeePackRows.length) return;
+    shopeePackMutation.mutate(pendingShopeePackRows);
+  };
+
+  const cancelShopeePrint = () => {
+    if (shopeePrintMutation.isPending) return;
+    setPendingShopeePrintRows([]);
+    setShopeePrintStatus("");
+  };
+
+  const confirmShopeePrint = () => {
+    if (!pendingShopeePrintRows.length) return;
+    setShopeeAwbModalOpen(true);
+    const rows = pendingShopeePrintRows;
+    const fromStatus = shopeePrintStatus;
+    setPendingShopeePrintRows([]);
+    shopeePrintMutation.mutate({ orders: rows, fromStatus });
+  };
+
+  const closeShopeeAwbModal = () => {
+    if (shopeePrintMutation.isPending) return;
+    if (shopeeAwbPdfUrl) URL.revokeObjectURL(shopeeAwbPdfUrl);
+    setShopeeAwbModalOpen(false);
+    setShopeeAwbPdfUrl("");
+    setFailedShopeePrintOrders([]);
+    setShopeePrintStatus("");
   };
 
   return {
@@ -246,8 +401,29 @@ export function useOrderList({ pageType = "all", activeTab = "", dateRange } = {
 
     // actions
     runAction,
-    actionLoading: actionMutation.isPending,
+    actionLoading: actionMutation.isPending || shopeePackMutation.isPending || shopeePrintMutation.isPending,
     cacheOrderForDetail,
+    shopeeNoItemsModalOpen,
+    closeShopeeNoItemsModal: () => setShopeeNoItemsModalOpen(false),
+    shopeePackConfirmOpen: pendingShopeePackRows.length > 0,
+    shopeePackConfirmCount: pendingShopeePackRows.length,
+    confirmShopeePack,
+    cancelShopeePack,
+    shopeePackLoading: shopeePackMutation.isPending,
+    failedShopeePackOrders,
+    closeFailedShopeePackOrders: () => setFailedShopeePackOrders([]),
+    shopeePrintConfirmOpen: pendingShopeePrintRows.length > 0,
+    shopeePrintConfirmMessage:
+      shopeePrintStatus === "PROCESSED"
+        ? "Are you sure to print for ready to ship?"
+        : "Do you want print AWB again?",
+    confirmShopeePrint,
+    cancelShopeePrint,
+    shopeeAwbModalOpen,
+    shopeeAwbLoading: shopeePrintMutation.isPending,
+    shopeeAwbPdfUrl,
+    closeShopeeAwbModal,
+    failedShopeePrintOrders,
 
     // options
     platforms: DEFAULT_PLATFORMS,

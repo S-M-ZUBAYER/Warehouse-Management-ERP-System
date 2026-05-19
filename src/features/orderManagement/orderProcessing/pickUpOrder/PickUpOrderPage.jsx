@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import Topbar from "../../../../components/layout/Topbar";
 import OrderProcessingFilterBar from "../../shared/components/OrderProcessingFilterBar";
 import OrderTable from "../../shared/components/OrderTable";
@@ -7,11 +7,14 @@ import { useOrderList } from "../../shared/hooks/useOrderList";
 
 export default function PickUpOrder() {
   const navigate = useNavigate();
+  const location = useLocation();
   const list = useOrderList({ pageType: "pickup" });
 
   const handleDetails = (order) => {
     list.cacheOrderForDetail(order);
-    navigate(`/warehouse_management/orders/detail/${encodeURIComponent(order.id)}`, { state: { order } });
+    navigate(`/warehouse_management/orders/detail/${encodeURIComponent(order.id)}`, {
+      state: { order, fromPath: location.pathname },
+    });
   };
 
   return (

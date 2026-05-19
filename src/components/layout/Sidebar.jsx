@@ -242,6 +242,13 @@ function hasActiveDescendant(item, pathname) {
   return false;
 }
 
+function getEffectiveNavPath(location) {
+  if (location.pathname.startsWith("/warehouse_management/orders/detail/")) {
+    return location.state?.fromPath || location.state?.orderListPath || location.pathname;
+  }
+  return location.pathname;
+}
+
 // ── Accordion Context ──────────────────────────────────────────────────────
 // Key = parentPath (unique per group of siblings), value = open child label.
 // This ensures siblings within the SAME parent group close each other,
@@ -452,9 +459,10 @@ function NavItem({
 }) {
   const location = useLocation();
   const accordion = useContext(AccordionContext);
+  const effectivePathname = getEffectiveNavPath(location);
 
   const isAnyChildActive = item.children
-    ? item.children.some((c) => hasActiveDescendant(c, location.pathname))
+    ? item.children.some((c) => hasActiveDescendant(c, effectivePathname))
     : false;
 
   // This item's group key (used when THIS item is a parent rendering its children)
@@ -487,17 +495,20 @@ function NavItem({
         title={collapsed ? item.label : undefined}
         style={!collapsed ? { paddingLeft: `${indentPx}px` } : {}}
         className={({ isActive }) =>
-          `flex items-center gap-3 pr-3 py-2.5 rounded-lg transition-all duration-150
+          {
+            const effectiveActive = item.to && effectivePathname.startsWith(item.to);
+            return `flex items-center gap-3 pr-3 py-2.5 rounded-lg transition-all duration-150
           ${collapsed ? "px-3 justify-center" : ""}
           ${
             depth > 0
-              ? isActive
+              ? isActive || effectiveActive
                 ? "text-[#004368] font-semibold"
                 : "text-[#6B8299] hover:text-[#004368]"
-              : isActive
+              : isActive || effectiveActive
                 ? "bg-[#004368] text-white font-semibold"
                 : "text-[#4A6380] hover:bg-[#EAF1F8] hover:text-[#004368]"
-          }`
+          }`;
+          }
         }
       >
         {() => (
