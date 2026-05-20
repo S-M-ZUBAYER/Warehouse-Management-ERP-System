@@ -33,4 +33,4 @@ export const MOCK_ALL_ORDERS = [
 export const PLATFORMS = ["Platform Name Here", "Shopee", "TikTok"];
 export const STORES = ["Store Name Here", "Store A", "Store B", "Store C"];
 export const SEARCH_TYPES = ["Single Search", "Batch Search"];
-export const SKU_TYPES = ["SKU", "Order Number", "Tracking Number"];
+export const SKU_TYPES = ["SKU", "Package Number", "Order Number", "Tracking Number"];

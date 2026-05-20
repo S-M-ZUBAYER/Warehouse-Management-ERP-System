@@ -14,6 +14,18 @@ export const ORDER_DETAIL_KEYS = {
   merchantSkus: (params) => ["order-management", "merchant-skus", params],
 };
 
+const cleanSku = (value) =>
+  String(value || "")
+    .trim()
+    .replace(/^SKU-/i, "")
+    .toLowerCase();
+
+const sameWarehouse = (sku, warehouse) => {
+  if (!warehouse?.id && !warehouse?.name) return true;
+  if (warehouse.id && String(sku?.warehouseId || "") === String(warehouse.id)) return true;
+  return Boolean(warehouse.name && sku?.warehouseName && String(sku.warehouseName) === String(warehouse.name));
+};
+
 export function useOrderDetail({ platform, orderId, initialOrder }) {
   const queryClient = useQueryClient();
   const [showMappingModal, setShowMappingModal] = useState(false);
@@ -36,14 +48,48 @@ export function useOrderDetail({ platform, orderId, initialOrder }) {
   const order = detailQuery.data || cachedOrder;
 
   const skusQuery = useQuery({
-    queryKey: ORDER_DETAIL_KEYS.merchantSkus({ appliedMappingSearch, mappingSearchType }),
-    queryFn: () => searchMerchantSkus({ search: appliedMappingSearch, searchType: mappingSearchType }),
-    enabled: showMappingModal,
+    queryKey: ORDER_DETAIL_KEYS.merchantSkus({
+      appliedMappingSearch,
+      mappingSearchType,
+      targetSku: mappingTargetItem?.sku,
+    }),
+    queryFn: async () => {
+      const targetSku = mappingTargetItem?.sku || "";
+      const targetMatches = targetSku
+        ? await searchMerchantSkus({ search: targetSku, searchType: "sku_name", limit: 20 })
+        : [];
+      const targetMerchantSku =
+        targetMatches.find((sku) => cleanSku(sku.sku) === cleanSku(targetSku)) ||
+        targetMatches[0] ||
+        null;
+      const mappingWarehouse = targetMerchantSku
+        ? {
+            id: targetMerchantSku.warehouseId,
+            name: targetMerchantSku.warehouseName,
+          }
+        : null;
+
+      const merchantSkus = await searchMerchantSkus({
+        search: appliedMappingSearch,
+        searchType: mappingSearchType,
+        warehouseId: mappingWarehouse?.id,
+        limit: 100,
+      });
+
+      return {
+        merchantSkus: merchantSkus.filter((sku) => sameWarehouse(sku, mappingWarehouse)),
+        mappingWarehouse,
+      };
+    },
+    enabled: showMappingModal && Boolean(mappingTargetItem),
     staleTime: 1000 * 60,
     placeholderData: (previous) => previous,
   });
 
-  const merchantSkus = skusQuery.data || [];
+  const merchantSkus = Array.isArray(skusQuery.data)
+    ? skusQuery.data
+    : skusQuery.data?.merchantSkus || [];
+  const mappingWarehouse = Array.isArray(skusQuery.data) ? null : skusQuery.data?.mappingWarehouse || null;
   const selectedMerchantSku = useMemo(
     () => merchantSkus.find((sku) => String(sku.id) === String(selectedSkuId)),
     [merchantSkus, selectedSkuId]
@@ -98,6 +144,7 @@ export function useOrderDetail({ platform, orderId, initialOrder }) {
     setMappingSearchType,
     handleMappingSearch,
     merchantSkus,
+    mappingWarehouse,
     merchantSkusLoading: skusQuery.isLoading || skusQuery.isFetching,
     selectedSkuId,
     setSelectedSkuId,

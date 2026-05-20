@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import Topbar from "../../../../components/layout/Topbar";
@@ -8,6 +9,7 @@ import OrderFooter from "../../shared/components/OrderFooter";
 import WaybillPrintModal from "../../shared/components/WaybillPrintModal";
 import OrderActionModals from "../../shared/components/OrderActionModals";
 import { useOrderList } from "../../shared/hooks/useOrderList";
+import { fetchProcessedOrderTabCounts } from "../../shared/utils/orderApi";
 
 const SUB_TABS = ["Pushing", "Pushed Successful", "Withdraw"];
 
@@ -20,13 +22,36 @@ export default function ProcessedOrderPage() {
   const isWithdrawTab = activeTab === "Withdraw";
   const isPushedSuccessfulTab = activeTab === "Pushed Successful";
   const isShopee = String(list.storeContext?.platform || "").toLowerCase().includes("shopee");
+  const isTikTok = String(list.storeContext?.platform || "").toLowerCase().includes("tik");
   const shopeePrintLabel = isPushedSuccessfulTab ? "Print AWB Again" : "Push";
+  const tikTokPrintLabel = isPushedSuccessfulTab ? "Print AWB Again" : "Push";
   const topActionName = isWithdrawTab ? "pack" : "push";
-  const topActionLabel = isShopee && topActionName === "push" ? shopeePrintLabel : isWithdrawTab ? "Pack" : "Push";
-  const rowActionName = isShopee && !isWithdrawTab ? "push" : isWithdrawTab ? "pack" : "withdraw";
-  const rowActionLabel = isShopee && rowActionName === "push" ? shopeePrintLabel : isWithdrawTab ? "Pack" : "Withdraw";
+  const topActionLabel = isShopee && topActionName === "push" ? shopeePrintLabel : isTikTok && topActionName === "push" ? tikTokPrintLabel : isWithdrawTab ? "Pack" : "Push";
+  const rowActionName = (isShopee || isTikTok) && !isWithdrawTab ? "push" : isWithdrawTab ? "pack" : "withdraw";
+  const rowActionLabel = isShopee && rowActionName === "push" ? shopeePrintLabel : isTikTok && rowActionName === "push" ? tikTokPrintLabel : isWithdrawTab ? "Pack" : "Withdraw";
   const showTopActionButton = !isShopee || topActionName !== "pack";
-  const showRowActions = isShopee ? rowActionName === "push" : !isPushedSuccessfulTab;
+  const showRowActions = isShopee || isTikTok ? rowActionName === "push" : !isPushedSuccessfulTab;
+  const hasPushingRowMenu = activeTab === "Pushing" && (isShopee || isTikTok);
+  const { data: tabCounts = {} } = useQuery({
+    queryKey: [
+      "order-management",
+      "processed-order-tab-counts",
+      list.storeContext,
+      list.appliedSearch,
+      list.appliedSearchType,
+      list.appliedSkuType,
+    ],
+    queryFn: () =>
+      fetchProcessedOrderTabCounts({
+        context: list.storeContext,
+        search: list.appliedSearch,
+        searchType: list.appliedSearchType,
+        skuType: list.appliedSkuType,
+        tabs: SUB_TABS,
+      }),
+    enabled: list.hasStore,
+    staleTime: 1000 * 30,
+  });
 
   const handleDetails = (order) => {
     list.cacheOrderForDetail(order);
@@ -76,7 +101,7 @@ export default function ProcessedOrderPage() {
                     : "text-slate-500 hover:text-slate-700"
                 }`}
               >
-                {tab}
+                {tab} ({formatCount(tabCounts[tab])})
               </button>
             ))}
           </div>
@@ -97,7 +122,15 @@ export default function ProcessedOrderPage() {
           page={list.page}
           setPage={list.setPage}
           showActionsCol={showRowActions}
-          actionLabel={rowActionLabel}
+          actionLabel={hasPushingRowMenu ? "Actions" : rowActionLabel}
+          rowActions={
+            hasPushingRowMenu
+              ? [
+                  { label: "Push", onClick: (order) => list.runAction("push", [order]) },
+                  { label: "Withdraw", onClick: (order) => list.markWithdraw([order]) },
+                ]
+              : undefined
+          }
           compact
           onAction={(order) => list.runAction(rowActionName, [order])}
           onDetails={handleDetails}
@@ -115,6 +148,11 @@ export default function ProcessedOrderPage() {
       <OrderActionModals list={list} />
     </div>
   );
+}
+
+function formatCount(value) {
+  const count = Number(value || 0);
+  return String(Number.isFinite(count) ? count : 0).padStart(2, "0");
 }
 
 function OrderStateMessage({ list }) {
