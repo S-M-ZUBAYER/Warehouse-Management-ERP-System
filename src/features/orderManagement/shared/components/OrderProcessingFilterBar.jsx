@@ -203,7 +203,7 @@ export default function OrderProcessingFilterBar({
   return (
     <div className="bg-white rounded-xl border border-surface-border p-4 font-body">
       <div className="grid grid-cols-12 items-end gap-3 xl:grid-cols-[repeat(24,minmax(0,1fr))]">
-        <div className="col-span-12 md:col-span-6 xl:col-span-5">
+        <div className="col-span-12 md:col-span-6 xl:col-span-4">
           <p className="mb-1.5 text-xs font-semibold text-slate-600">Select Platform</p>
           <SelectBox
             value={activePlatform}
@@ -226,7 +226,7 @@ export default function OrderProcessingFilterBar({
           />
         </div>
 
-        <div className="relative col-span-12 md:col-span-5 xl:col-span-5" ref={searchTypeRef}>
+        <div className="relative col-span-12 md:col-span-5 xl:col-span-4" ref={searchTypeRef}>
           <p className="mb-1.5 text-xs font-semibold text-slate-600">Select Search Type</p>
           <button
             type="button"
@@ -260,20 +260,30 @@ export default function OrderProcessingFilterBar({
           )}
         </div>
 
-        <div className="col-span-4 md:col-span-2 xl:col-span-2">
+        <div className="col-span-4 md:col-span-2 xl:col-span-3">
           <SelectBox value={skuType} onChange={setSkuType} options={skuTypes} />
         </div>
 
-        <div className="relative col-span-8 md:col-span-4 xl:col-span-5">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            onKeyDown={(event) => event.key === "Enter" && onSearchClick()}
-            className="w-full rounded-lg border border-surface-border bg-white py-2 pl-9 pr-3 text-sm text-slate-700 outline-none transition-all placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/10"
-          />
+        <div className="relative col-span-8 md:col-span-4 xl:col-span-6">
+          <Search size={14} className="absolute left-3 top-3 text-slate-400" />
+          {searchType === "Batch Search" ? (
+            <textarea
+              rows={2}
+              placeholder="Search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="min-h-10 w-full resize-y rounded-lg border border-surface-border bg-white py-2 pl-9 pr-3 text-sm text-slate-700 outline-none transition-all placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/10"
+            />
+          ) : (
+            <input
+              type="text"
+              placeholder="Search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              onKeyDown={(event) => event.key === "Enter" && onSearchClick()}
+              className="h-10 w-full rounded-lg border border-surface-border bg-white py-2 pl-9 pr-3 text-sm text-slate-700 outline-none transition-all placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/10"
+            />
+          )}
         </div>
 
         <button

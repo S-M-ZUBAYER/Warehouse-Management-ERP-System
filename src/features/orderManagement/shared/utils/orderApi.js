@@ -1,12 +1,12 @@
+import api from "../../../../lib/api";
 import platformApi from "../../../../lib/platformApi";
 
 export const ORDER_STORE_CONTEXT_KEY = "order-store-context";
 export const ORDER_SEARCH_CONTEXT_KEY = "order-search-context";
 export const ORDER_DETAIL_CACHE_KEY = "order-detail-cache";
 
-// const DEFAULT_PLATFORM_HOST = "https://grozziie.zjweiting.com:3091";
-// const DEFAULT_PLATFORM_HOST = "http://192.168.1.222:8080/";
-const DEFAULT_PLATFORM_HOST = "https://grozziie.zjweiting.com:3091/";
+const DEFAULT_PLATFORM_HOST = "http://192.168.1.222:8080/";
+// const DEFAULT_PLATFORM_HOST = "https://grozziie.zjweiting.com:3091/";
 const DEFAULT_MERGE_HOST = "https://grozziieget.zjweiting.com:8033";
 const DEFAULT_IMAGE = "https://placehold.co/36x36/E6ECF0/004368?text=?";
 
@@ -65,8 +65,8 @@ const SHOOPEE_TAB_STATUS = {
   "Out Of Stock": "READY_TO_SHIP",
   "Platform Processing": "PENDING",
   "Pushing": "PROCESSED",
-  "Pushed Successful": "SHIPPED",
-  "Withdraw": "PROCESSED",
+  "Pushed Successful": "PROCESSED",
+  "Withdraw": "READY_TO_SHIP",
   "All": "",
   "Cancelation Request": "IN_CANCEL",
   "Cancelled": "CANCELLED",
@@ -80,15 +80,16 @@ const TIKTOK_TAB_STATUS = {
   "Out Of Stock": "AWAITING_SHIPMENT",
   "Platform Processing": "ON_HOLD",
   "Pushing": "AWAITING_COLLECTION",
-  "Pushed Successful": "IN_TRANSIT",
+  "Pushed Successful": "AWAITING_COLLECTION",
   "Withdraw": "AWAITING_SHIPMENT",
   "All": "",
-  "Cancelation Request": "CANCEL",
-  "Cancelled": "CANCEL",
+  "Cancelation Request": "CANCELLED",
+  "Cancelled": "CANCELLED",
 };
 
 export const SEARCH_FIELD_MAP = {
   SKU: "sku",
+  "Package Number": "pkgNo",
   "Order Number": "orderNo",
   "Tracking Number": "trackingNo",
 };
@@ -236,7 +237,7 @@ const TIKTOK_ORDER_STATUSES = [
   "IN_TRANSIT",
   "DELIVERED",
   "COMPLETED",
-  "CANCEL",
+  "CANCELLED",
   "ON_HOLD"
 ];
 
@@ -489,6 +490,10 @@ export const normalizeTikTokOrder = (order, context = {}) => {
     orderTime: formatDateTime(order?.createTime || order?.create_time),
     status: normalizeTikTokStatus(order?.status),
     rawStatus: order?.status || "",
+    shippingProviderId: order?.shippingProviderId || order?.shipping_provider_id || order?.shippingProvider?.id || order?.shipping_provider?.id || "",
+    warehouseId: order?.warehouseId || order?.warehouse_id || order?.warehouse?.id || order?.fulfillment?.warehouseId || "",
+    deliveryOptionId: order?.deliveryOptionId || order?.delivery_option_id || order?.deliveryOption?.id || "",
+    lineItems: items,
     image: firstItem.image || DEFAULT_IMAGE,
     items,
     logistics: {
@@ -521,6 +526,217 @@ export const normalizeTikTokOrder = (order, context = {}) => {
 
 const getContextValue = (context, keys) =>
   keys.map((key) => context?.[key]).find((value) => value !== undefined && value !== null && value !== "");
+
+const getCurrentCompanyId = () => {
+  const storedUser = readJsonStorage("warehouseUser", {});
+  const authUser = readJsonStorage("auth-storage", {});
+  return (
+    storedUser?.companyId ||
+    storedUser?.company_id ||
+    storedUser?.company?.id ||
+    storedUser?.companyName ||
+    storedUser?.id ||
+    storedUser?.userId ||
+    authUser?.state?.user?.companyId ||
+    authUser?.state?.user?.id ||
+    storedUser?.email ||
+    storedUser?.userEmail ||
+    ""
+  );
+};
+
+const getStoreScopeId = (context) =>
+  getContextValue(context, ["platform_store_id", "store_id", "shop_id", "external_store_id", "store_shop_id"]) || "";
+
+export const getFailedPackOrderIds = async ({ context, platform }) => {
+  const companyId = getCurrentCompanyId();
+  const normalizedPlatform = normalizePlatform(platform || context?.platform);
+
+  if (!companyId || !normalizedPlatform) return [];
+
+  try {
+    const res = await api.get("/order-management/pack-failed-orders", {
+      params: {
+        companyId,
+        platform: normalizedPlatform,
+        storeId: getStoreScopeId(context),
+      },
+    });
+    const rows = res?.data || res?.orders || res?.items || res || [];
+    return rows
+      .map((item) => item?.orderId || item?.order_id || item?.rawId || item)
+      .filter(Boolean)
+      .map(String);
+  } catch (error) {
+    if (error?.response?.status !== 404) {
+      console.warn("Failed pack order IDs could not be loaded.", error);
+    }
+    return [];
+  }
+};
+
+export const saveFailedPackOrders = async ({ context, platform, failedOrders = [] }) => {
+  const companyId = getCurrentCompanyId();
+  const normalizedPlatform = normalizePlatform(platform || context?.platform);
+  const orderIds = [...new Set(failedOrders.map((order) => order?.orderId).filter(Boolean).map(String))];
+
+  if (!companyId || !normalizedPlatform || orderIds.length === 0) return null;
+
+  return api
+    .post("/order-management/pack-failed-orders", {
+      companyId,
+      platform: normalizedPlatform,
+      storeId: getStoreScopeId(context),
+      orders: failedOrders
+        .filter((order) => order?.orderId)
+        .map((order) => ({
+          orderId: String(order.orderId),
+          reason: order.reason || "",
+        })),
+    })
+    .catch((error) => {
+      console.warn("Failed pack orders could not be saved.", error);
+      return null;
+    });
+};
+
+export const removeFailedPackOrders = async ({ context, platform, orderIds = [] }) => {
+  const companyId = getCurrentCompanyId();
+  const normalizedPlatform = normalizePlatform(platform || context?.platform);
+  const ids = [...new Set(orderIds.filter(Boolean).map(String))];
+
+  if (!companyId || !normalizedPlatform || ids.length === 0) return null;
+
+  return api
+    .delete("/order-management/pack-failed-orders", {
+      data: {
+        companyId,
+        platform: normalizedPlatform,
+        storeId: getStoreScopeId(context),
+        orderIds: ids,
+      },
+    })
+    .catch((error) => {
+      console.warn("Packed orders could not be removed from failed list.", error);
+      return null;
+    });
+};
+
+export const getPushSuccessfulOrderIds = async ({ context, platform }) => {
+  const companyId = getCurrentCompanyId();
+  const normalizedPlatform = normalizePlatform(platform || context?.platform);
+
+  if (!companyId || !normalizedPlatform) return [];
+
+  try {
+    const res = await api.get("/order-management/push-successful-orders", {
+      params: {
+        companyId,
+        platform: normalizedPlatform,
+        storeId: getStoreScopeId(context),
+      },
+    });
+    const rows = res?.data || res?.orders || res?.items || res || [];
+    return rows
+      .map((item) => item?.orderId || item?.order_id || item?.rawId || item)
+      .filter(Boolean)
+      .map(String);
+  } catch (error) {
+    if (error?.response?.status !== 404) {
+      console.warn("Push successful order IDs could not be loaded.", error);
+    }
+    return [];
+  }
+};
+
+export const savePushSuccessfulOrders = async ({ context, platform, orderIds = [] }) => {
+  const companyId = getCurrentCompanyId();
+  const normalizedPlatform = normalizePlatform(platform || context?.platform);
+  const ids = [...new Set(orderIds.filter(Boolean).map(String))];
+
+  if (!companyId || !normalizedPlatform || ids.length === 0) return null;
+
+  return api
+    .post("/order-management/push-successful-orders", {
+      companyId,
+      platform: normalizedPlatform,
+      storeId: getStoreScopeId(context),
+      orders: ids.map((orderId) => ({ orderId })),
+    })
+    .catch((error) => {
+      console.warn("Push successful orders could not be saved.", error);
+      return null;
+    });
+};
+
+export const getWithdrawOrderIds = async ({ context, platform }) => {
+  const companyId = getCurrentCompanyId();
+  const normalizedPlatform = normalizePlatform(platform || context?.platform);
+
+  if (!companyId || !normalizedPlatform) return [];
+
+  try {
+    const res = await api.get("/order-management/withdraw-orders", {
+      params: {
+        companyId,
+        platform: normalizedPlatform,
+        storeId: getStoreScopeId(context),
+      },
+    });
+    const rows = res?.data || res?.orders || res?.items || res || [];
+    return rows
+      .map((item) => item?.orderId || item?.order_id || item?.rawId || item)
+      .filter(Boolean)
+      .map(String);
+  } catch (error) {
+    if (error?.response?.status !== 404) {
+      console.warn("Withdraw order IDs could not be loaded.", error);
+    }
+    return [];
+  }
+};
+
+export const saveWithdrawOrders = async ({ context, platform, orderIds = [] }) => {
+  const companyId = getCurrentCompanyId();
+  const normalizedPlatform = normalizePlatform(platform || context?.platform);
+  const ids = [...new Set(orderIds.filter(Boolean).map(String))];
+
+  if (!companyId || !normalizedPlatform || ids.length === 0) return null;
+
+  return api
+    .post("/order-management/withdraw-orders", {
+      companyId,
+      platform: normalizedPlatform,
+      storeId: getStoreScopeId(context),
+      orders: ids.map((orderId) => ({ orderId })),
+    })
+    .catch((error) => {
+      console.warn("Withdraw orders could not be saved.", error);
+      return null;
+    });
+};
+
+export const removeWithdrawOrders = async ({ context, platform, orderIds = [] }) => {
+  const companyId = getCurrentCompanyId();
+  const normalizedPlatform = normalizePlatform(platform || context?.platform);
+  const ids = [...new Set(orderIds.filter(Boolean).map(String))];
+
+  if (!companyId || !normalizedPlatform || ids.length === 0) return null;
+
+  return api
+    .delete("/order-management/withdraw-orders", {
+      data: {
+        companyId,
+        platform: normalizedPlatform,
+        storeId: getStoreScopeId(context),
+        orderIds: ids,
+      },
+    })
+    .catch((error) => {
+      console.warn("Withdraw orders could not be removed.", error);
+      return null;
+    });
+};
 
 const getRawDateRange = (dateRange, fallbackDays = 7) => {
   const fallback = getUnixDateRange(fallbackDays);
@@ -581,7 +797,7 @@ const getPlatformStatuses = ({ platform, pageType = "all", tab }) => {
   const status = getPlatformStatus({ platform: normalized, pageType, tab });
 
   if (pageType === "canceled" && (!status || tab === "All")) {
-    return normalized === "tiktok" ? ["CANCEL"] : ["IN_CANCEL", "CANCELLED"];
+    return normalized === "tiktok" ? ["CANCELLED"] : ["IN_CANCEL", "CANCELLED"];
   }
 
   if (normalized === "shopee" && !status) return SHOPEE_ORDER_STATUSES;
@@ -591,6 +807,16 @@ const getPlatformStatuses = ({ platform, pageType = "all", tab }) => {
   }
 
   return [status];
+};
+
+const getTikTokBuyerCancelValues = ({ pageType, tab }) => {
+  if (pageType === "all" || pageType === "canceled") {
+    if (tab === "Cancelation Request") return [true];
+    if (tab === "All" || !tab) return [false, true];
+    return [false];
+  }
+  if (tab === "Cancelation Request") return [true];
+  return [false];
 };
 
 export const fetchShopeeOrders = async ({ context, pageType, tab, dateRange, pagination }) => {
@@ -660,7 +886,7 @@ export const fetchShopeeOrders = async ({ context, pageType, tab, dateRange, pag
     pageType === "shipped"
       ? orders.filter((order) => String(order?.order_status || "").toUpperCase() === "TO_CONFIRM_RECEIVE")
       : pageType === "pickup"
-        ? orders.filter((order) => String(order?.order_status || "").toUpperCase() !== "TO_CONFIRM_RECEIVE")
+        ? orders.filter((order) => String(order?.order_status || "").toUpperCase() === "SHIPPED")
       : orders;
   const detailRows = detailPaginated
     ? rowsForPage.slice(
@@ -769,6 +995,7 @@ export const fetchTikTokOrders = async ({ context, pageType, tab, dateRange, pag
   const range = getTikTokDateRange(dateRange);
   let orders = [];
   const statuses = getPlatformStatuses({ platform: "tiktok", pageType, tab });
+  const buyerCancelValues = getTikTokBuyerCancelValues({ pageType, tab });
 
   if (serverPaginated) {
     const pageSize = pagination?.pageSize || 10;
@@ -777,6 +1004,7 @@ export const fetchTikTokOrders = async ({ context, pageType, tab, dateRange, pag
     let nextCursor = "";
     const countedStatuses = new Set();
     let totalCount = 0;
+    const buyerCancelValue = buyerCancelValues[0] || false;
 
     while (statusIndex < statuses.length && remaining > 0) {
       const orderStatus = statuses[statusIndex];
@@ -791,7 +1019,7 @@ export const fetchTikTokOrders = async ({ context, pageType, tab, dateRange, pag
           updateTimeGe: range.start,
           updateTimeLt: range.end,
           orderStatus,
-          isBuyerRequestCancel: false,
+          isBuyerRequestCancel: buyerCancelValue,
           shippingType: "TIKTOK",
           sortField: "create_time",
           sortOrder: "DESC",
@@ -835,7 +1063,7 @@ export const fetchTikTokOrders = async ({ context, pageType, tab, dateRange, pag
           updateTimeGe: range.start,
           updateTimeLt: range.end,
           orderStatus,
-          isBuyerRequestCancel: false,
+          isBuyerRequestCancel: buyerCancelValue,
           shippingType: "TIKTOK",
           sortField: "create_time",
           sortOrder: "DESC",
@@ -856,48 +1084,98 @@ export const fetchTikTokOrders = async ({ context, pageType, tab, dateRange, pag
   }
 
   for (const orderStatus of statuses) {
-    let pageToken = "";
+    for (const isBuyerRequestCancel of buyerCancelValues) {
+      let pageToken = "";
 
-    do {
-      const res = await fetchJson("/tiktokshop-partner/api/dev/order/list/filter", {
-        method: "POST",
-        params: {
-          pageSize: 50,
-          cipher,
-          openId,
-          createTimeGe: range.start,
-          createTimeLt: range.end,
-          updateTimeGe: range.start,
-          updateTimeLt: range.end,
-          orderStatus,
-          isBuyerRequestCancel: false,
-          shippingType: "TIKTOK",
-          sortField: "create_time",
-          sortOrder: "DESC",
-          pageToken,
-        },
-      });
+      do {
+        const res = await fetchJson("/tiktokshop-partner/api/dev/order/list/filter", {
+          method: "POST",
+          params: {
+            pageSize: 50,
+            cipher,
+            openId,
+            createTimeGe: range.start,
+            createTimeLt: range.end,
+            updateTimeGe: range.start,
+            updateTimeLt: range.end,
+            orderStatus,
+            isBuyerRequestCancel,
+            shippingType: "TIKTOK",
+            sortField: "create_time",
+            sortOrder: "DESC",
+            pageToken,
+          },
+        });
 
-      const payload = res?.data || res?.body?.data || res;
-      const pageOrders = payload?.orders || [];
-      orders = [...orders, ...pageOrders];
-      pageToken = payload?.nextPageToken || payload?.next_page_token || "";
-    } while (pageToken);
+        const payload = res?.data || res?.body?.data || res;
+        const pageOrders = payload?.orders || [];
+        orders = [...orders, ...pageOrders];
+        pageToken = payload?.nextPageToken || payload?.next_page_token || "";
+      } while (pageToken);
+    }
   }
 
   return orders.map((order) => normalizeTikTokOrder(order, context));
 };
 
-const filterOrders = (orders, { search, skuType }) => {
+const getSearchTerms = (search, searchType) => {
+  const query = String(search || "").trim().toLowerCase();
+  if (!query) return [];
+  if (searchType !== "Batch Search") return [query];
+  return query.split(/[\s,]+/).map((item) => item.trim()).filter(Boolean);
+};
+
+const filterOrders = (orders, { search, searchType, skuType }) => {
   const q = String(search || "").trim().toLowerCase();
   if (!q) return orders;
   const field = SEARCH_FIELD_MAP[skuType] || "sku";
+  const terms = getSearchTerms(search, searchType);
 
-  return orders.filter((order) => String(order?.[field] || "").toLowerCase().includes(q));
+  return orders.filter((order) => {
+    const value = String(order?.[field] || "").toLowerCase();
+    return terms.some((term) => value.includes(term));
+  });
+};
+
+const getOrderIdentity = (order) =>
+  String(order?.rawId || order?.orderNo || order?.order_sn || order?.id || "");
+
+const filterByFailedPackIds = (rows, failedOrderIds = [], { includeFailed }) => {
+  const failedOrderSet = new Set(failedOrderIds.map(String));
+  const keepOrder = (order) => {
+    const isFailed = failedOrderSet.has(getOrderIdentity(order));
+    return includeFailed ? isFailed : !isFailed;
+  };
+
+  if (rows && !Array.isArray(rows) && Array.isArray(rows.orders)) {
+    return {
+      ...rows,
+      orders: rows.orders.filter(keepOrder),
+    };
+  }
+
+  return Array.isArray(rows) ? rows.filter(keepOrder) : rows;
+};
+
+const filterByTrackedOrderIds = (rows, orderIds = [], { includeTracked }) => {
+  const orderSet = new Set(orderIds.map(String));
+  const keepOrder = (order) => {
+    const isTracked = orderSet.has(getOrderIdentity(order));
+    return includeTracked ? isTracked : !isTracked;
+  };
+
+  if (rows && !Array.isArray(rows) && Array.isArray(rows.orders)) {
+    return {
+      ...rows,
+      orders: rows.orders.filter(keepOrder),
+    };
+  }
+
+  return Array.isArray(rows) ? rows.filter(keepOrder) : rows;
 };
 
 
-export const fetchManualOrders = async ({ search, skuType }) => {
+export const fetchManualOrders = async ({ search, searchType, skuType }) => {
   const res = await platformApi.get("/manual_order");
   const rows = unwrapApiData(res);
   const normalized = rows.map((order, index) => {
@@ -927,15 +1205,20 @@ export const fetchManualOrders = async ({ search, skuType }) => {
     };
   });
 
-  return filterOrders(normalized, { search, skuType });
+  return filterOrders(normalized, { search, searchType, skuType });
 };
 
-export const fetchOrders = async ({ context, pageType = "all", tab, search, skuType, dateRange, pagination }) => {
+export const fetchOrders = async ({ context, pageType = "all", tab, search, searchType, skuType, dateRange, pagination }) => {
   if (pageType === "manual") {
-    return fetchManualOrders({ search, skuType });
+    return fetchManualOrders({ search, searchType, skuType });
   }
 
   const platform = normalizePlatform(context?.platform);
+  const isPackFailedTab = pageType === "new" && tab === "Pack Failed";
+  const isToPackTab = pageType === "new" && tab === "To Pack";
+  const isPushingTab = pageType === "processed" && tab === "Pushing";
+  const isPushedSuccessfulTab = pageType === "processed" && tab === "Pushed Successful";
+  const isWithdrawTab = pageType === "processed" && tab === "Withdraw";
   let rows = [];
 
   if (platform === "shopee") {
@@ -946,14 +1229,129 @@ export const fetchOrders = async ({ context, pageType = "all", tab, search, skuT
     return [];
   }
 
+  if (isPackFailedTab || isToPackTab) {
+    const failedOrderIds = await getFailedPackOrderIds({ context, platform });
+    rows = filterByFailedPackIds(rows, failedOrderIds, { includeFailed: isPackFailedTab });
+  }
+
+  if (isPushingTab || isPushedSuccessfulTab) {
+    const pushedOrderIds = await getPushSuccessfulOrderIds({ context, platform });
+    rows = filterByTrackedOrderIds(rows, pushedOrderIds, { includeTracked: isPushedSuccessfulTab });
+  }
+
+  if (isWithdrawTab) {
+    const withdrawOrderIds = await getWithdrawOrderIds({ context, platform });
+    rows = filterByTrackedOrderIds(rows, withdrawOrderIds, { includeTracked: true });
+  }
+
   if (rows && !Array.isArray(rows) && Array.isArray(rows.orders)) {
     return {
       ...rows,
-      orders: filterOrders(rows.orders, { search, skuType }),
+      orders: filterOrders(rows.orders, { search, searchType, skuType }),
     };
   }
 
-  return filterOrders(rows, { search, skuType });
+  return filterOrders(rows, { search, searchType, skuType });
+};
+
+const getRowsLength = (rows) => {
+  if (rows && !Array.isArray(rows) && Array.isArray(rows.orders)) return rows.orders.length;
+  return Array.isArray(rows) ? rows.length : 0;
+};
+
+export const fetchNewOrderTabCounts = async ({ context, search, searchType, skuType, dateRange, tabs = [] }) => {
+  const platform = normalizePlatform(context?.platform);
+  const countTabs = tabs.length
+    ? tabs
+    : ["To Pack", "Packed Successfully", "Pack Failed", "Out Of Stock", "Platform Processing"];
+
+  if (!platform) {
+    return countTabs.reduce((counts, tab) => ({ ...counts, [tab]: 0 }), {});
+  }
+
+  const entries = await Promise.all(
+    countTabs.map(async (tab) => {
+      try {
+        const rows = await fetchOrders({
+          context,
+          pageType: "new",
+          tab,
+          search,
+          searchType,
+          skuType,
+          dateRange,
+        });
+        return [tab, getRowsLength(rows)];
+      } catch (error) {
+        console.warn(`New order count could not be loaded for ${tab}.`, error);
+        return [tab, 0];
+      }
+    })
+  );
+
+  return Object.fromEntries(entries);
+};
+
+export const fetchProcessedOrderTabCounts = async ({ context, search, searchType, skuType, dateRange, tabs = [] }) => {
+  const platform = normalizePlatform(context?.platform);
+  const countTabs = tabs.length ? tabs : ["Pushing", "Pushed Successful", "Withdraw"];
+
+  if (!platform) {
+    return countTabs.reduce((counts, tab) => ({ ...counts, [tab]: 0 }), {});
+  }
+
+  const entries = await Promise.all(
+    countTabs.map(async (tab) => {
+      try {
+        const rows = await fetchOrders({
+          context,
+          pageType: "processed",
+          tab,
+          search,
+          searchType,
+          skuType,
+          dateRange,
+        });
+        return [tab, getRowsLength(rows)];
+      } catch (error) {
+        console.warn(`Processed order count could not be loaded for ${tab}.`, error);
+        return [tab, 0];
+      }
+    })
+  );
+
+  return Object.fromEntries(entries);
+};
+
+export const fetchCanceledOrderTabCounts = async ({ context, search, searchType, skuType, dateRange, tabs = [] }) => {
+  const platform = normalizePlatform(context?.platform);
+  const countTabs = tabs.length ? tabs : ["All", "Cancelation Request", "Cancelled"];
+
+  if (!platform) {
+    return countTabs.reduce((counts, tab) => ({ ...counts, [tab]: 0 }), {});
+  }
+
+  const entries = await Promise.all(
+    countTabs.map(async (tab) => {
+      try {
+        const rows = await fetchOrders({
+          context,
+          pageType: "canceled",
+          tab,
+          search,
+          searchType,
+          skuType,
+          dateRange,
+        });
+        return [tab, getRowsLength(rows)];
+      } catch (error) {
+        console.warn(`Canceled order count could not be loaded for ${tab}.`, error);
+        return [tab, 0];
+      }
+    })
+  );
+
+  return Object.fromEntries(entries);
 };
 
 export const fetchOrderDetail = async ({ platform, orderId, context, cachedOrder }) => {
@@ -985,14 +1383,15 @@ const unwrapApiData = (res) => {
   return res?.data?.data || [];
 };
 
-export const searchMerchantSkus = async ({ search, searchType = "sku_name" }) => {
+export const searchMerchantSkus = async ({ search, searchType = "sku_name", warehouseId, limit = 50 }) => {
   const qs = new URLSearchParams();
   qs.set("page", "1");
-  qs.set("limit", "50");
+  qs.set("limit", String(limit));
   if (search?.trim()) qs.set("search", search.trim());
   if (searchType) qs.set("skuType", searchType);
+  if (warehouseId) qs.set("warehouseId", String(warehouseId));
 
-  const res = await platformApi.get(`/sku-mapping/by-merchant?${qs.toString()}`);
+  const res = await api.get(`/sku-mapping/by-merchant?${qs.toString()}`);
   const rows = unwrapApiData(res);
 
   return rows.map((sku, index) => ({
@@ -1002,6 +1401,8 @@ export const searchMerchantSkus = async ({ search, searchType = "sku_name" }) =>
     onHand: Number(sku.on_hand ?? sku.onHand ?? sku.total_inventory ?? 0),
     allocated: Number(sku.allocated ?? sku.allocated_inventory ?? 0),
     available: Number(sku.available_inventory ?? sku.available ?? sku.stock ?? 0),
+    warehouseId: sku.warehouse_id || sku.warehouseId || sku.warehouse?.id || sku.stock_warehouse_id || "",
+    warehouseName: sku.warehouse?.name || sku.warehouse_name || sku.warehouseName || sku.stock_warehouse_name || "-",
     image: sku.image_url || sku.image || DEFAULT_IMAGE,
     raw: sku,
   }));
@@ -1167,6 +1568,121 @@ export const packShopeeOrders = async ({ context, orders = [] }) => {
       });
     }
   }
+
+  return {
+    successfulIds,
+    failedOrders,
+  };
+};
+
+const getTikTokOpenId = (context) =>
+  getContextValue(context, [
+    "platform_open_id",
+    "open_id",
+    "openId",
+    "store_open_id",
+    "tiktokOpenId",
+    "external_store_name",
+  ]) ||
+  (typeof localStorage !== "undefined" ? localStorage.getItem("tiktokOpenId") : "");
+
+const getTikTokCipher = (context) =>
+  getContextValue(context, [
+    "cipher",
+    "store_cipher",
+    "auth_cipher",
+    "tiktokAuthCipher",
+    "external_store_id",
+  ]) ||
+  (typeof localStorage !== "undefined" ? localStorage.getItem("tiktokAuthCipher") : "");
+
+const getTikTokOrderPackageId = (order) =>
+  order?.lineItems?.[0]?.packageId ||
+  order?.items?.[0]?.packageId ||
+  order?.raw?.lineItems?.[0]?.packageId ||
+  order?.raw?.line_items?.[0]?.package_id ||
+  order?.raw?.packageId ||
+  order?.pkgNo;
+
+const getTikTokShippingProviderId = (order) =>
+  order?.shippingProviderId ||
+  order?.raw?.shippingProviderId ||
+  order?.raw?.shipping_provider_id ||
+  order?.raw?.shippingProvider?.id ||
+  order?.raw?.shipping_provider?.id ||
+  "";
+
+const isTikTokShipSuccess = (result) => {
+  const code = result?.code ?? result?.data?.code ?? result?.body?.code;
+  const error = result?.error ?? result?.data?.error ?? result?.body?.error;
+  const message = String(result?.message || result?.data?.message || result?.body?.message || "").toLowerCase();
+
+  if (error) return false;
+  if (code !== undefined && ![0, "0", "success", "SUCCESS", "OK"].includes(code)) return false;
+  if (message.includes("error") || message.includes("fail")) return false;
+  return true;
+};
+
+export const packTikTokOrders = async ({ context, orders = [] }) => {
+  const openId = getTikTokOpenId(context);
+  const cipher = getTikTokCipher(context);
+
+  if (!openId) throw new Error("TikTok open ID is missing");
+  if (!cipher) throw new Error("TikTok auth cipher is missing");
+
+  const selectedTikTokDeliveryType =
+    (typeof localStorage !== "undefined" && localStorage.getItem("tikTokDeliveryType")) || "pickup";
+
+  const successfulIds = [];
+  const failedOrders = [];
+
+  await Promise.all(
+    orders.map(async (order) => {
+      const orderId = order?.rawId || order?.id || order?.orderNo;
+      const packageId = getTikTokOrderPackageId(order);
+      const shippingProviderId = getTikTokShippingProviderId(order);
+
+      if (!packageId || packageId === "-") {
+        failedOrders.push({
+          orderId,
+          reason: "Missing packageId",
+        });
+        return;
+      }
+
+      try {
+        const result = await fetchJson("/tiktokshop-partner/api/dev/package/ship-package-new", {
+          method: "POST",
+          params: {
+            cipher,
+            openId,
+          },
+          body: {
+            packageId,
+            trackingNumber: `TEST-${Date.now()}`,
+            shippingProviderId,
+            pickupStartTime: 0,
+            pickupEndTime: 0,
+            handoverMethod: selectedTikTokDeliveryType === "dropoff" ? "DROP_OFF" : "PICKUP",
+          },
+        });
+
+        if (isTikTokShipSuccess(result)) {
+          successfulIds.push(orderId);
+        } else {
+          failedOrders.push({
+            orderId,
+            reason: result?.message || result?.error || result?.body?.message || "TikTok package API failed",
+          });
+        }
+      } catch (error) {
+        failedOrders.push({
+          orderId,
+          reason: error?.message || "TikTok package API failed",
+        });
+      }
+    })
+  );
 
   return {
     successfulIds,
@@ -1402,6 +1918,117 @@ export const generateShopeeAwbPdf = async ({ context, orders = [], fromStatus = 
   };
 };
 
+const getTikTokPrintPreference = () => {
+  const saved =
+    typeof localStorage !== "undefined" ? localStorage.getItem("tiktokPrintingLebel") : "";
+
+  if (!saved) return "SHIPPING_LABEL";
+
+  try {
+    const parsed = JSON.parse(saved);
+    if (parsed === 3) return "SHIPPING_LABEL_AND_PACKING_SLIP";
+    if (parsed === 2) return "PACKING_SLIP";
+  } catch {
+    // Fall back to the default label below.
+  }
+
+  return "SHIPPING_LABEL";
+};
+
+export const generateTikTokAwbPdf = async ({ context, orders = [], fromStatus = "" }) => {
+  const openId = getTikTokOpenId(context);
+  const cipher = getTikTokCipher(context);
+
+  if (!openId) throw new Error("TikTok open ID is missing");
+  if (!cipher) throw new Error("TikTok auth cipher is missing");
+
+  const documentType = getTikTokPrintPreference();
+  const failedOrders = [];
+  const printedOrderIds = [];
+  const status = String(fromStatus || "").toUpperCase();
+
+  const docUrls = await Promise.all(
+    orders.map(async (order) => {
+      const orderId = order?.rawId || order?.id || order?.orderNo;
+      const packageId = getTikTokOrderPackageId(order);
+
+      if (!packageId || packageId === "-") {
+        failedOrders.push({
+          orderId,
+          reason: "Missing packageId",
+        });
+        return null;
+      }
+
+      try {
+        const data = await fetchJson("/tiktokshop-partner/api/dev/package/ship-doc/new", {
+          params: {
+            openId,
+            cipher,
+            packageId,
+            documentType,
+            documentSize: "A6",
+            documentFormat: "PDF",
+          },
+        });
+
+        const docUrl = data?.data?.docUrl || data?.body?.data?.docUrl || data?.docUrl || "";
+
+        if (!docUrl) {
+          failedOrders.push({
+            orderId,
+            reason: data?.message || "No valid label URL returned",
+          });
+          return null;
+        }
+
+        if (status === "AWAITING_COLLECTION") {
+          const email = getCurrentUserEmail();
+          const params = new URLSearchParams({
+            tikTokPrintedId: String(orderId || ""),
+            email,
+          });
+
+          await fetch(`${getPlatformApiBase()}/tiktokshop-print/api/dev/printedIds/add?${params.toString()}`, {
+            method: "POST",
+          }).catch(() => null);
+          printedOrderIds.push(orderId);
+        }
+
+        return docUrl;
+      } catch (error) {
+        failedOrders.push({
+          orderId,
+          reason: error?.message || "Failed to fetch TikTok shipping label",
+        });
+        return null;
+      }
+    })
+  );
+
+  const validUrls = docUrls.filter(Boolean);
+  if (validUrls.length === 0) {
+    return { pdfUrl: "", printedOrderIds, failedOrders };
+  }
+
+  const mergeRes = await fetch(`${getMergeApiBase()}/tht/merge-pdfs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ urls: validUrls }),
+  });
+
+  if (!mergeRes.ok) {
+    throw new Error("Failed to merge TikTok PDFs");
+  }
+
+  const blob = await mergeRes.blob();
+  return {
+    pdfUrl: URL.createObjectURL(blob),
+    printedOrderIds,
+    failedOrders,
+  };
+};
+
 export const createManualOrder = (payload) =>
   platformApi.post("/manual_order", payload).then((res) => res.data ?? res);
 
@@ -1411,7 +2038,7 @@ export const searchWarehouseProducts = async ({ search }) => {
   qs.set("limit", "50");
   if (search?.trim()) qs.set("search", search.trim());
 
-  const res = await platformApi.get(`/sku-mapping/by-merchant?${qs.toString()}`);
+  const res = await api.get(`/sku-mapping/by-merchant?${qs.toString()}`);
   const rows = unwrapApiData(res);
 
   return rows.map((sku, index) => ({
