@@ -17,15 +17,15 @@ function parseOrderRouteParam(param = "") {
 function InfoRow({ label, value }) {
   return (
     <div>
-      <p className="text-xs text-slate-400 mb-0.5">{label}</p>
-      <p className="text-sm font-semibold text-slate-800 break-words">{value || "-"}</p>
+      <p className="mb-1 text-[10px] text-slate-400">{label}</p>
+      <p className="text-xs font-semibold text-slate-900 break-words">{value || "-"}</p>
     </div>
   );
 }
 
 function Section({ title, children, className = "", rightSlot = null }) {
   return (
-    <div className={`bg-white rounded-xl border border-surface-border p-5 ${className}`}>
+    <div className={`bg-white rounded-lg p-5 ${className}`}>
       <div className="flex items-start justify-between mb-4">
         <h3 className="text-sm font-bold text-slate-800 font-display">{title}</h3>
         {rightSlot}
@@ -36,13 +36,30 @@ function Section({ title, children, className = "", rightSlot = null }) {
 }
 
 function RightInfoRow({ label, value }) {
+  const displayValue = label === "Address" ? truncateWords(value, 50) : value;
   return (
     <div className="flex items-center justify-between gap-4">
-      <span className="text-xs text-slate-500">{label}</span>
-      <span className="text-xs font-semibold text-slate-800 text-right break-words">{value || "-"}</span>
+      <span className="text-[11px] text-slate-500">{label}</span>
+      <span className="max-w-[64%] text-xs font-semibold text-slate-900 text-right break-words">{displayValue || "-"}</span>
     </div>
   );
 }
+
+function truncateWords(value, limit = 50) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const words = text.split(/\s+/);
+  if (words.length <= limit) return text;
+  return `${words.slice(0, limit).join(" ")}...`;
+}
+
+const getWarehouseName = (value) =>
+  value?.warehouseName ||
+  value?.warehouse?.name ||
+  value?.raw?.warehouse?.name ||
+  value?.raw?.warehouse_name ||
+  value?.raw?.warehouseName ||
+  "-";
 
 export default function OrderDetailPage() {
   const navigate = useNavigate();
@@ -64,6 +81,7 @@ export default function OrderDetailPage() {
     setMappingSearchType,
     handleMappingSearch,
     merchantSkus,
+    mappingWarehouse,
     merchantSkusLoading,
     selectedSkuId,
     setSelectedSkuId,
@@ -103,15 +121,15 @@ export default function OrderDetailPage() {
   }
 
   return (
-    <div className="space-y-4 font-body">
+    <div className="space-y-5 font-body">
       <Topbar PageTitle="Back to Order List" showBack onBack={() => navigate(-1)} />
 
       {isFetching && (
         <div className="rounded-lg bg-blue-50 px-4 py-2 text-xs text-primary">Refreshing order details...</div>
       )}
 
-      <div className="grid grid-cols-3 gap-4">
-        <div className="col-span-2 space-y-4">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[2fr_1fr]">
+        <div className="space-y-5">
           <Section title="Order Information">
             <div className="grid grid-cols-6 gap-4">
               <InfoRow label="Warehouse Package No." value={order.pkgNo} />
@@ -138,8 +156,8 @@ export default function OrderDetailPage() {
             </div>
           </Section>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white rounded-xl border border-surface-border p-5">
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[0.72fr_1.28fr]">
+            <div className="bg-white rounded-lg p-5">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-bold text-slate-800 font-display">Items</h3>
                 <span className="text-xs text-slate-400">Subtotal</span>
@@ -150,7 +168,7 @@ export default function OrderDetailPage() {
                 ) : (
                   items.map((item) => (
                     <div key={item.id} className="flex items-center gap-3">
-                      <img src={item.image} alt={item.sku} className="w-12 h-12 rounded-lg object-cover" />
+                      <img src={item.image} alt={item.sku} className="w-12 h-12 rounded object-cover" />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-semibold text-slate-700 truncate">SKU-{item.sku}</p>
                         <p className="text-xs text-slate-500 truncate">{item.name}</p>
@@ -167,8 +185,8 @@ export default function OrderDetailPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-surface-border p-5">
-              <div className="grid grid-cols-4 gap-2 text-xs font-semibold text-slate-500 mb-3">
+            <div className="bg-white rounded-lg p-5">
+              <div className="grid grid-cols-[1.7fr_0.8fr_0.8fr_0.5fr] gap-2 text-xs font-semibold text-slate-800 mb-3">
                 <span className="col-span-1">Merchant Mapping</span>
                 <span>To Allocate /Deduct</span>
                 <span>Allocate /Deduct</span>
@@ -176,9 +194,9 @@ export default function OrderDetailPage() {
               </div>
               <div className="space-y-3">
                 {(items.length ? items : [firstItem]).filter(Boolean).map((item) => (
-                  <div key={item.id} className="grid grid-cols-4 gap-2 items-center">
+                  <div key={item.id} className="grid grid-cols-[1.7fr_0.8fr_0.8fr_0.5fr] gap-2 items-center">
                     <div className="flex items-center gap-2 min-w-0">
-                      <img src={item.image} alt={item.sku} className="w-8 h-8 rounded-lg object-cover" />
+                      <img src={item.image} alt={item.sku} className="w-10 h-10 rounded object-cover" />
                       <div className="min-w-0">
                         <p className="text-xs font-medium text-slate-700 truncate">SKU-{item.sku}</p>
                         <p className="text-xs text-slate-400 truncate">Available Inventory: {item.available ?? "--"}</p>
@@ -202,7 +220,7 @@ export default function OrderDetailPage() {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl p-5" style={{ border: "1.5px dashed #004368" }}>
+          <div className="bg-white rounded-lg p-5">
             <h3 className="text-sm font-bold text-slate-800 font-display mb-5">Order Log</h3>
             <div className="flex items-center gap-0">
               <div className="flex flex-col items-center">
@@ -227,8 +245,8 @@ export default function OrderDetailPage() {
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="bg-white rounded-xl border border-surface-border p-5">
+        <div className="space-y-5">
+          <div className="bg-white rounded-lg p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-slate-800 font-display">Payment Information</h3>
               <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -244,7 +262,7 @@ export default function OrderDetailPage() {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-surface-border p-5">
+          <div className="bg-white rounded-lg p-5">
             <h3 className="text-sm font-bold text-slate-800 font-display mb-4">Customer Information</h3>
             <div className="space-y-3">
               <RightInfoRow label="User Name" value={order.customer?.userName} />
@@ -258,7 +276,7 @@ export default function OrderDetailPage() {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-surface-border p-5">
+          <div className="bg-white rounded-lg p-5">
             <h3 className="text-sm font-bold text-slate-800 font-display mb-3">Note</h3>
             <p className="text-xs text-slate-400">{order.note || "Note Here"}</p>
           </div>
@@ -268,12 +286,12 @@ export default function OrderDetailPage() {
       {showMappingModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: "rgba(200,210,220,0.55)", backdropFilter: "blur(3px)" }}
+          style={{ background: "rgba(15,23,42,0.28)", backdropFilter: "blur(5px)" }}
           onClick={(e) => e.target === e.currentTarget && setShowMappingModal(false)}
         >
-          <div className="bg-white rounded-2xl shadow-xl w-full font-body overflow-hidden" style={{ maxWidth: "860px", animation: "popIn 0.18s ease both" }}>
-            <div className="px-8 py-5 border-b border-surface-border flex items-center justify-between">
-              <h2 className="text-base font-bold text-slate-800 font-display">
+          <div className="bg-white rounded-[24px] shadow-2xl w-full font-body overflow-hidden" style={{ maxWidth: "980px", animation: "popIn 0.18s ease both" }}>
+            <div className="px-6 pt-6 pb-4 flex items-center justify-between">
+              <h2 className="text-sm font-bold text-slate-800 font-display">
                 Change Mapping _ Warehouse Package No: {order.pkgNo}
               </h2>
               <button onClick={() => setShowMappingModal(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
@@ -281,26 +299,29 @@ export default function OrderDetailPage() {
               </button>
             </div>
 
-            <div className="px-8 py-4 border-b border-surface-border">
-              <div className="flex items-center gap-3">
-                <img src={mappingTargetItem?.image || firstItem?.image} alt="item" className="w-13 h-13 rounded-xl object-cover" />
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">{mappingTargetItem?.name || firstItem?.name}</p>
-                  <p className="text-xs text-slate-500 mt-0.5 font-mono">{mappingTargetItem?.sku || firstItem?.sku}</p>
+            <div className="mx-6 rounded-lg border border-surface-border px-4 py-4">
+              <div className="flex items-center gap-4">
+                <img src={mappingTargetItem?.image || firstItem?.image} alt="item" className="h-12 w-12 rounded object-cover" />
+                <div className="min-w-0">
+                  <p className="max-w-[340px] truncate text-xs font-medium text-slate-800">{mappingTargetItem?.name || firstItem?.name}</p>
+                  <p className="mt-1 text-xs text-slate-700 font-mono">{mappingTargetItem?.sku || firstItem?.sku}</p>
+                  <p className="mt-1 text-[11px] font-medium text-slate-500">
+                    ERP Warehouse: {mappingWarehouse?.name || getWarehouseName(mappingTargetItem || firstItem)}
+                  </p>
                 </div>
               </div>
             </div>
 
-            <div className="px-8 py-4 border-b border-surface-border flex items-center gap-3">
+            <div className="mx-6 mt-5 rounded-lg border border-surface-border px-4 py-4 flex items-center gap-3">
               <select
                 value={mappingSearchType}
                 onChange={(e) => setMappingSearchType(e.target.value)}
-                className="px-3 py-2 text-sm border border-surface-border rounded-lg bg-white text-slate-600 outline-none"
+                className="h-9 w-24 rounded border border-surface-border bg-white px-3 text-xs text-slate-500 outline-none"
               >
                 <option value="sku_name">SKU Name</option>
                 <option value="product_name">Product Name</option>
               </select>
-              <div className="relative flex-1">
+              <div className="relative w-56">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
@@ -308,30 +329,30 @@ export default function OrderDetailPage() {
                   value={mappingSearch}
                   onChange={(e) => setMappingSearch(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleMappingSearch()}
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-surface-border rounded-lg text-slate-700 placeholder-slate-400 outline-none focus:border-primary"
+                  className="h-9 w-full rounded border border-surface-border pl-9 pr-3 text-xs text-slate-700 placeholder-slate-400 outline-none focus:border-primary"
                 />
               </div>
-              <button onClick={handleMappingSearch} className="px-5 py-2 text-sm font-semibold bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors">
+              <button onClick={handleMappingSearch} className="h-9 rounded bg-primary px-5 text-xs font-semibold text-white transition-colors hover:bg-primary-dark">
                 Search
               </button>
             </div>
 
-            <div className="px-8 py-4">
-              <h3 className="text-sm font-bold text-slate-800 font-display mb-3">Select Merchant SKU</h3>
-              <div className="overflow-auto" style={{ maxHeight: "280px" }}>
+            <div className="mx-6 mt-5 rounded-lg border border-surface-border px-4 py-5">
+              <h3 className="text-sm font-bold text-slate-800 font-display mb-6">Select Merchant SKU</h3>
+              <div className="overflow-auto" style={{ maxHeight: "260px" }}>
                 <table className="w-full text-sm">
                   <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                     <tr className="border-b border-surface-border">
-                      {["Select", "Image", "Product Name", "SKU", "On Hand", "Allocated", "Available"].map((h) => (
+                      {["Select", "Image", "Product Name", "SKU", "Warehouse", "On Hand", "Allocated", "Available"].map((h) => (
                         <th key={h} className="py-2.5 text-left text-xs font-semibold text-slate-600 pr-4">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-surface-border">
                     {merchantSkusLoading ? (
-                      <tr><td colSpan={7} className="py-8 text-center text-xs text-slate-400">Loading merchant SKUs...</td></tr>
+                      <tr><td colSpan={8} className="py-8 text-center text-xs text-slate-400">Loading merchant SKUs...</td></tr>
                     ) : merchantSkus.length === 0 ? (
-                      <tr><td colSpan={7} className="py-8 text-center text-xs text-slate-400">No merchant SKU found</td></tr>
+                      <tr><td colSpan={8} className="py-8 text-center text-xs text-slate-400">No merchant SKU found</td></tr>
                     ) : (
                       merchantSkus.map((sku) => (
                         <tr key={sku.id} className="hover:bg-surface/50 transition-colors">
@@ -343,12 +364,13 @@ export default function OrderDetailPage() {
                               className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
                             />
                           </td>
-                          <td className="py-2.5 pr-4"><img src={sku.image} alt={sku.name} className="w-8 h-8 rounded-lg object-cover" /></td>
-                          <td className="py-2.5 pr-4 text-slate-700">{sku.name}</td>
+                          <td className="py-2.5 pr-4"><img src={sku.image} alt={sku.name} className="w-8 h-8 rounded object-cover" /></td>
+                          <td className="py-2.5 pr-4 text-xs text-slate-700"><span className="block max-w-44 truncate">{sku.name}</span></td>
                           <td className="py-2.5 pr-4 font-mono text-xs text-slate-600">{sku.sku}</td>
-                          <td className="py-2.5 pr-4 text-slate-600">{sku.onHand}</td>
-                          <td className="py-2.5 pr-4 text-slate-600">{sku.allocated}</td>
-                          <td className="py-2.5 pr-4 text-slate-600">{sku.available} units</td>
+                          <td className="py-2.5 pr-4 text-xs text-slate-600"><span className="block max-w-36 truncate">{sku.warehouseName}</span></td>
+                          <td className="py-2.5 pr-4 text-xs text-slate-600">{sku.onHand}</td>
+                          <td className="py-2.5 pr-4 text-xs text-slate-600">{sku.allocated}</td>
+                          <td className="py-2.5 pr-4 text-xs text-slate-600">{sku.available} units</td>
                         </tr>
                       ))
                     )}
@@ -357,14 +379,14 @@ export default function OrderDetailPage() {
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 px-8 py-5 border-t border-surface-border">
-              <button onClick={() => setShowMappingModal(false)} className="px-7 py-2.5 text-sm font-semibold border border-surface-border rounded-xl text-slate-700 bg-white hover:bg-surface-card transition-colors">
+            <div className="flex justify-end gap-3 px-6 py-5">
+              <button onClick={() => setShowMappingModal(false)} className="h-10 min-w-32 rounded-lg border border-surface-border bg-white px-7 text-sm font-semibold text-slate-700 transition-colors hover:bg-surface-card">
                 Cancel
               </button>
               <button
                 onClick={confirmMapping}
                 disabled={mappingSaving}
-                className="px-7 py-2.5 text-sm font-semibold bg-primary hover:bg-primary-dark text-white rounded-xl transition-colors disabled:opacity-60"
+                className="h-10 min-w-32 rounded-lg bg-primary px-7 text-sm font-semibold text-white transition-colors hover:bg-primary-dark disabled:opacity-60"
               >
                 {mappingSaving ? "Saving..." : "Confirm"}
               </button>

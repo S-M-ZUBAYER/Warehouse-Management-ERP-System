@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Calendar, X } from "lucide-react";
 import { useMemo } from "react";
@@ -7,11 +8,12 @@ import OrderProcessingFilterBar from "../../shared/components/OrderProcessingFil
 import OrderTable from "../../shared/components/OrderTable";
 import OrderFooter from "../../shared/components/OrderFooter";
 import { useOrderList } from "../../shared/hooks/useOrderList";
+import { fetchCanceledOrderTabCounts } from "../../shared/utils/orderApi";
 
 const SUB_TABS = [
-  { label: "All", count: "--" },
-  { label: "Cancelation Request", count: "--" },
-  { label: "Cancelled", count: "--" },
+  { label: "All", count: "00" },
+  { label: "Cancelation Request", count: "00" },
+  { label: "Cancelled", count: "00" },
 ];
 
 const SECONDS_IN_DAY = 24 * 60 * 60;
@@ -57,31 +59,29 @@ export default function CanceledOrder() {
   const [customStart, setCustomStart] = useState(() => formatDateInput(dateRange.start));
   const [customEnd, setCustomEnd] = useState(() => formatDateInput(dateRange.end));
   const list = useOrderList({ pageType: "canceled", activeTab, dateRange });
-
-  const tabCounts = useMemo(() => {
-    if (activeTab !== "All") {
-      return {
-        All: "--",
-        "Cancelation Request": activeTab === "Cancelation Request" ? list.pagination.total : "--",
-        Cancelled: activeTab === "Cancelled" ? list.pagination.total : "--",
-      };
-    }
-
-    return list.allOrders.reduce(
-      (counts, order) => {
-        const status = String(order.rawStatus || order.status || "").toUpperCase();
-        if (status === "IN_CANCEL") counts["Cancelation Request"] += 1;
-        if (status === "CANCELLED") counts.Cancelled += 1;
-        counts.All += 1;
-        return counts;
-      },
-      {
-        All: 0,
-        "Cancelation Request": 0,
-        Cancelled: 0,
-      }
-    );
-  }, [activeTab, list.allOrders, list.pagination.total]);
+  const { data: tabCounts = {} } = useQuery({
+    queryKey: [
+      "order-management",
+      "canceled-order-tab-counts",
+      list.storeContext,
+      list.appliedSearch,
+      list.appliedSearchType,
+      list.appliedSkuType,
+      dateRange.start,
+      dateRange.end,
+    ],
+    queryFn: () =>
+      fetchCanceledOrderTabCounts({
+        context: list.storeContext,
+        search: list.appliedSearch,
+        searchType: list.appliedSearchType,
+        skuType: list.appliedSkuType,
+        dateRange,
+        tabs: SUB_TABS.map((tab) => tab.label),
+      }),
+    enabled: list.hasStore,
+    staleTime: 1000 * 30,
+  });
 
   const dateLabel = useMemo(() => {
     if (datePreset === "today") return "Today";
@@ -214,7 +214,7 @@ export default function CanceledOrder() {
                     : "text-slate-500 hover:text-slate-700"
                 }`}
               >
-                {label} ({tabCounts[label] ?? count})
+                {label} ({formatCount(tabCounts[label] ?? count)})
               </button>
             ))}
           </div>
@@ -243,6 +243,11 @@ export default function CanceledOrder() {
       </div>
     </div>
   );
+}
+
+function formatCount(value) {
+  const count = Number(value || 0);
+  return String(Number.isFinite(count) ? count : 0).padStart(2, "0");
 }
 
 function OrderStateMessage({ list }) {

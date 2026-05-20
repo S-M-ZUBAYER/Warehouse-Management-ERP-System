@@ -1,4 +1,4 @@
-import { Loader2, Search } from "lucide-react";
+import { Loader2, MoreHorizontal, Search } from "lucide-react";
 import { useState } from "react";
 import RecordDetailModal from "../../../../components/shared/RecordDetailModal";
 
@@ -27,6 +27,7 @@ export default function OrderTable({
   setPage,
   actionLabel,
   onAction,
+  rowActions,
   onDetails,
   statusLabel = "Status",
   showActionsCol = true,
@@ -35,6 +36,7 @@ export default function OrderTable({
   const someSelected =
     orders.some((o) => selectedIds.includes(o.id)) && !allSelected;
   const [detailOrder, setDetailOrder] = useState(null);
+  const [openMenuId, setOpenMenuId] = useState(null);
   const tableTextClass = compact ? "text-sm font-body" : "text-sm";
   const headerTextClass = compact
     ? "text-sm font-bold text-slate-800"
@@ -206,13 +208,43 @@ export default function OrderTable({
 
                   {/* Action */}
                   {showActionsCol && actionLabel && (
-                    <td className="py-3 pr-5">
-                      <button
-                        onClick={() => onAction?.(order)}
-                        className={`${smallCellTextClass} font-semibold text-primary hover:underline transition-colors`}
-                      >
-                        {actionLabel}
-                      </button>
+                    <td className="relative py-3 pr-5">
+                      {rowActions?.length ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setOpenMenuId((current) => (current === order.id ? null : order.id))}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-surface-border text-slate-600 transition-colors hover:bg-surface-card"
+                          >
+                            <MoreHorizontal size={16} />
+                          </button>
+
+                          {openMenuId === order.id && (
+                            <div className="absolute right-5 top-10 z-20 min-w-32 overflow-hidden rounded-lg border border-surface-border bg-white py-1 shadow-lg">
+                              {rowActions.map((action) => (
+                                <button
+                                  key={action.label}
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenMenuId(null);
+                                    action.onClick?.(order);
+                                  }}
+                                  className="block w-full px-3 py-2 text-left text-xs font-semibold text-slate-700 transition-colors hover:bg-surface-card"
+                                >
+                                  {action.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => onAction?.(order)}
+                          className={`${smallCellTextClass} font-semibold text-primary hover:underline transition-colors`}
+                        >
+                          {actionLabel}
+                        </button>
+                      )}
                     </td>
                   )}
                 </tr>

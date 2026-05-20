@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import Topbar from "../../../../components/layout/Topbar";
 import OrderProcessingFilterBar from "../../shared/components/OrderProcessingFilterBar";
@@ -6,6 +7,7 @@ import OrderTable from "../../shared/components/OrderTable";
 import OrderFooter from "../../shared/components/OrderFooter";
 import OrderActionModals from "../../shared/components/OrderActionModals";
 import { useOrderList } from "../../shared/hooks/useOrderList";
+import { fetchNewOrderTabCounts } from "../../shared/utils/orderApi";
 
 const SUB_TABS = ["To Pack", "Packed Successfully", "Pack Failed", "Out Of Stock", "Platform Processing"];
 const SHOPEE_READY_TO_SHIP_TABS = ["To Pack", "Pack Failed", "Out Of Stock"];
@@ -19,6 +21,26 @@ export default function NewOrder() {
   const actionLabel = activeTab === "Packed Successfully" ? "Push" : "Pack";
   const isShopee = String(list.storeContext?.platform || "").toLowerCase().includes("shopee");
   const showActionButton = !isShopee || actionName !== "pack" || SHOPEE_READY_TO_SHIP_TABS.includes(activeTab);
+  const { data: tabCounts = {} } = useQuery({
+    queryKey: [
+      "order-management",
+      "new-order-tab-counts",
+      list.storeContext,
+      list.appliedSearch,
+      list.appliedSearchType,
+      list.appliedSkuType,
+    ],
+    queryFn: () =>
+      fetchNewOrderTabCounts({
+        context: list.storeContext,
+        search: list.appliedSearch,
+        searchType: list.appliedSearchType,
+        skuType: list.appliedSkuType,
+        tabs: SUB_TABS,
+      }),
+    enabled: list.hasStore,
+    staleTime: 1000 * 30,
+  });
 
   const handleDetails = (order) => {
     list.cacheOrderForDetail(order);
@@ -59,7 +81,7 @@ export default function NewOrder() {
                     : "text-slate-500 hover:text-slate-700"
                 }`}
               >
-                {tab}
+                {tab} ({formatCount(tabCounts[tab])})
               </button>
             ))}
           </div>
@@ -92,6 +114,11 @@ export default function NewOrder() {
       <OrderActionModals list={list} />
     </div>
   );
+}
+
+function formatCount(value) {
+  const count = Number(value || 0);
+  return String(Number.isFinite(count) ? count : 0).padStart(2, "0");
 }
 
 function OrderStateMessage({ list }) {

@@ -4,7 +4,9 @@ import ConfirmActionModal from "../../../../components/shared/ConfirmActionModal
 
 export default function OrderActionModals({ list }) {
   const failedOrders = list.failedShopeePackOrders || [];
+  const failedTikTokOrders = list.failedTikTokPackOrders || [];
   const failedPrintOrders = list.failedShopeePrintOrders || [];
+  const failedTikTokPrintOrders = list.failedTikTokPrintOrders || [];
   const iframeRef = useRef(null);
 
   const handlePrintAll = () => {
@@ -46,6 +48,26 @@ export default function OrderActionModals({ list }) {
         onConfirm={list.confirmShopeePrint}
       />
 
+      <ConfirmActionModal
+        open={list.tikTokPackConfirmOpen}
+        title="Order Accepted & Packages"
+        message={`Are you sure you have completed packaging ${list.tikTokPackConfirmCount || 0} TikTok order(s)?`}
+        confirmLabel="Confirm"
+        loading={list.tikTokPackLoading}
+        onCancel={list.cancelTikTokPack}
+        onConfirm={list.confirmTikTokPack}
+      />
+
+      <ConfirmActionModal
+        open={list.tikTokPrintConfirmOpen}
+        title="TikTok AWB Print"
+        message={list.tikTokPrintConfirmMessage}
+        confirmLabel="Confirm"
+        loading={list.tikTokAwbLoading}
+        onCancel={list.cancelTikTokPrint}
+        onConfirm={list.confirmTikTokPrint}
+      />
+
       {failedOrders.length > 0 && (
         <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
           <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
@@ -78,6 +100,47 @@ export default function OrderActionModals({ list }) {
               <button
                 type="button"
                 onClick={list.closeFailedShopeePackOrders}
+                className="rounded-xl bg-primary px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-dark"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {failedTikTokOrders.length > 0 && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+          <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between border-b border-surface-border px-6 py-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-800 font-display">Failed TikTok Orders</h3>
+                <p className="mt-1 text-xs text-slate-500">These orders could not be accepted and packaged.</p>
+              </div>
+              <button
+                type="button"
+                onClick={list.closeFailedTikTokPackOrders}
+                className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X size={17} />
+              </button>
+            </div>
+
+            <div className="max-h-80 overflow-auto px-6 py-4">
+              <div className="space-y-3">
+                {failedTikTokOrders.map((order) => (
+                  <div key={order.orderId} className="rounded-xl border border-red-100 bg-red-50 px-4 py-3">
+                    <p className="text-sm font-semibold text-red-700">{order.orderId}</p>
+                    <p className="mt-1 text-xs text-red-600">{order.reason || "Unknown error"}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end border-t border-surface-border px-6 py-4">
+              <button
+                type="button"
+                onClick={list.closeFailedTikTokPackOrders}
                 className="rounded-xl bg-primary px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-dark"
               >
                 Close
@@ -173,6 +236,101 @@ export default function OrderActionModals({ list }) {
                 type="button"
                 onClick={list.closeShopeeAwbModal}
                 disabled={list.shopeeAwbLoading}
+                className="rounded-xl border border-surface-border px-5 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-surface-card disabled:opacity-50"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {list.tikTokAwbModalOpen && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+          <div className="w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between border-b border-surface-border px-6 py-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-800 font-display">TikTok AWB Printing</h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  {list.tikTokAwbLoading ? "Preparing shipping document..." : "Preview the shipping document before printing."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={list.closeTikTokAwbModal}
+                disabled={list.tikTokAwbLoading}
+                className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+              >
+                <X size={17} />
+              </button>
+            </div>
+
+            <div className="grid gap-4 p-6 lg:grid-cols-[420px_1fr]">
+              <div className="flex h-[570px] items-center justify-center overflow-hidden rounded-xl border border-surface-border bg-slate-50 shadow-sm">
+                {list.tikTokAwbLoading ? (
+                  <div className="text-sm font-semibold text-slate-500">Loading AWB PDF...</div>
+                ) : list.tikTokAwbPdfUrl ? (
+                  <iframe
+                    ref={iframeRef}
+                    src={list.tikTokAwbPdfUrl}
+                    title="TikTok AWB Preview"
+                    className="h-full w-full"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="text-sm font-semibold text-slate-500">No PDF Loaded</div>
+                )}
+              </div>
+
+              <div className="flex flex-col">
+                <div className="rounded-xl border border-surface-border p-4">
+                  <p className="text-sm font-bold text-slate-800">Print Actions</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Use Print All Pages after the AWB preview loads.
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={handlePrintAll}
+                      disabled={!list.tikTokAwbPdfUrl || list.tikTokAwbLoading}
+                      className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Print All Pages
+                    </button>
+                    {list.tikTokAwbPdfUrl && (
+                      <a
+                        href={list.tikTokAwbPdfUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-lg border border-surface-border px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-surface-card"
+                      >
+                        Open PDF
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                {failedTikTokPrintOrders.length > 0 && (
+                  <div className="mt-4 min-h-0 flex-1 overflow-auto rounded-xl border border-red-100 bg-red-50 p-4">
+                    <p className="text-sm font-bold text-red-700">Failed Orders</p>
+                    <div className="mt-3 space-y-2">
+                      {failedTikTokPrintOrders.map((order) => (
+                        <div key={order.orderId} className="rounded-lg bg-white px-3 py-2">
+                          <p className="text-xs font-semibold text-red-700">{order.orderId}</p>
+                          <p className="mt-1 text-xs text-red-600">{order.reason || "Unknown error"}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end border-t border-surface-border px-6 py-4">
+              <button
+                type="button"
+                onClick={list.closeTikTokAwbModal}
+                disabled={list.tikTokAwbLoading}
                 className="rounded-xl border border-surface-border px-5 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-surface-card disabled:opacity-50"
               >
                 Close
