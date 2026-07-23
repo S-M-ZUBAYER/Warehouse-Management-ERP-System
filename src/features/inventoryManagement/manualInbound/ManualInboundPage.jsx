@@ -1004,11 +1004,16 @@ function ManualInboundListView({ onCreateClick }) {
     isError,
     refetch,
     selectedIds,
+    selectedItems: selectedManualInboundItems,
+    selectionLoading,
     toggleSelect,
     toggleAll,
   } = useManualInboundList();
 
   const { warehouseOptions, isLoading: warehouseLoading } = useInboundDropdowns();
+  const selectedItems = selectedManualInboundItems.length === selectedIds.length
+    ? selectedManualInboundItems
+    : items.filter((item) => selectedIds.includes(item.id));
   return (
     <div className="p-5 font-body space-y-4">
       <Topbar PageTitle="Manual Inbound" />
@@ -1047,6 +1052,7 @@ function ManualInboundListView({ onCreateClick }) {
         <ManualInboundTable
           items={items}
           selectedIds={selectedIds}
+          selectionLoading={selectionLoading}
           onToggleSelect={toggleSelect}
           onToggleAll={toggleAll}
           actionItems={[]}
@@ -1061,11 +1067,11 @@ function ManualInboundListView({ onCreateClick }) {
         <div className="flex justify-end gap-2.5 px-5 py-3.5 border-t border-surface-border">
           <ExportMenu
             className="flex items-center gap-2 px-14 py-2.5 text-base font-semibold border border-surface-border rounded-lg text-slate-700 bg-white hover:bg-surface-card transition-colors"
-            onExportCsv={() => exportRowsToCsv(buildInboundOutputRows(items), inboundOutputColumns, "manual-inbounds.csv", "manual inbound")}
-            onExportXlsx={() => exportRowsToXlsx(buildInboundOutputRows(items), inboundOutputColumns, "manual-inbounds.xlsx", "manual inbound")}
+            onExportCsv={() => exportRowsToCsv(buildInboundOutputRows(selectedItems), inboundOutputColumns, "manual-inbounds.csv", "manual inbound")}
+            onExportXlsx={() => exportRowsToXlsx(buildInboundOutputRows(selectedItems), inboundOutputColumns, "manual-inbounds.xlsx", "manual inbound")}
           />
           <button
-            onClick={() => printRows(buildInboundOutputRows(items), inboundOutputColumns, "Manual Inbounds", "manual inbound")}
+            onClick={() => printRows(buildInboundOutputRows(selectedItems), inboundOutputColumns, "Manual Inbounds", "manual inbound")}
             className="px-16 py-2.5 text-base font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors"
           >
              Print

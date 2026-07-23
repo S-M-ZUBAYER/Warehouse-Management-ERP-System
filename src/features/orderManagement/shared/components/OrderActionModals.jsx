@@ -1,6 +1,25 @@
 import { X } from "lucide-react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import ConfirmActionModal from "../../../../components/shared/ConfirmActionModal";
+
+const TIKTOK_PRINTING_LABEL_LIST = [
+  { id: 1, lebel: "SHIPPING_LABEL", name: "Shipping Label" },
+  { id: 2, lebel: "PACKING_SLIP", name: "Packing Label" },
+];
+
+const getInitialCheckedLabelItems = () => {
+  if (typeof localStorage === "undefined") return [1];
+
+  try {
+    const parsed = JSON.parse(localStorage.getItem("tiktokPrintingLebel"));
+    if (parsed === 3) return [1, 2];
+    if (parsed === 2) return [2];
+  } catch {
+    // Fall back to the default shipping label below.
+  }
+
+  return [1];
+};
 
 export default function OrderActionModals({ list }) {
   const failedOrders = list.failedShopeePackOrders || [];
@@ -8,12 +27,38 @@ export default function OrderActionModals({ list }) {
   const failedPrintOrders = list.failedShopeePrintOrders || [];
   const failedTikTokPrintOrders = list.failedTikTokPrintOrders || [];
   const iframeRef = useRef(null);
+  const [checkedLabelItems, setCheckedLabelItems] = useState(getInitialCheckedLabelItems);
 
   const handlePrintAll = () => {
     if (iframeRef.current?.contentWindow) {
       iframeRef.current.contentWindow.focus();
       iframeRef.current.contentWindow.print();
     }
+  };
+
+  const handleTikTokLabelCheck = (id) => {
+    const next = checkedLabelItems.includes(id)
+      ? checkedLabelItems.filter((itemId) => itemId !== id)
+      : [...checkedLabelItems, id];
+    const checkedItems = next.length ? next : [1];
+    let selectedTikTokPrintLabel = 1;
+
+    if (checkedItems.includes(1) && checkedItems.includes(2)) {
+      selectedTikTokPrintLabel = 3;
+    } else if (checkedItems.includes(2)) {
+      selectedTikTokPrintLabel = 2;
+    }
+
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem("tiktokPrintingLebel", JSON.stringify(selectedTikTokPrintLabel));
+    }
+
+    setCheckedLabelItems(checkedItems);
+  };
+
+  const handleTikTokLabelChange = (id) => {
+    handleTikTokLabelCheck(id);
+    window.setTimeout(() => list.refreshTikTokAwbPdf?.(), 0);
   };
 
   return (
@@ -283,6 +328,26 @@ export default function OrderActionModals({ list }) {
               </div>
 
               <div className="flex flex-col">
+                <div className="mb-4 rounded-xl border border-surface-border bg-[#004368]/[0.05] p-4">
+                  <p className="text-sm font-bold text-slate-800">Label Waybill List</p>
+                  <div className="mt-3 space-y-2">
+                    {TIKTOK_PRINTING_LABEL_LIST.map((item) => (
+                      <label
+                        key={item.id}
+                        className="flex cursor-pointer items-center gap-3 rounded px-2 py-1.5"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checkedLabelItems.includes(item.id)}
+                          onChange={() => handleTikTokLabelChange(item.id)}
+                          className="h-4 w-4 cursor-pointer accent-primary"
+                        />
+                        <span className="text-sm font-medium text-slate-700">{item.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="rounded-xl border border-surface-border p-4">
                   <p className="text-sm font-bold text-slate-800">Print Actions</p>
                   <p className="mt-1 text-xs text-slate-500">

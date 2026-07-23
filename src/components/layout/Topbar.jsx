@@ -272,9 +272,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Bell, ChevronRight, User, KeyRound, Lock, LogOut, X } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
+import LanguageSelector from '../shared/LanguageSelector';
+import { getPageTitleKey } from '../../i18n';
 
 const parseJson = (value) => {
     try { return value ? JSON.parse(value) : null; } catch { return null; }
@@ -282,15 +285,29 @@ const parseJson = (value) => {
 
 const getFirstValue = (...values) => values.find((value) => value !== undefined && value !== null && String(value).trim() !== '');
 
+const getAuthAssetOrigin = () => {
+    const configured = String(import.meta.env.VITE_AUTH_BASE_URL || window.location.origin || '').trim();
+    try {
+        const url = new URL(configured, window.location.origin);
+        return url.origin;
+    } catch {
+        return configured.replace(/\/api\/v\d+\/?$/i, '').replace(/\/+$/, '');
+    }
+};
+
 const normalizeImageSrc = (image) => {
     if (!image) return '';
-    const src = String(image);
+    const src = String(image).trim();
     if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('data:image')) return src;
+    if (src.startsWith('/uploads/') || src.startsWith('uploads/')) {
+        return `${getAuthAssetOrigin()}${src.startsWith('/') ? src : `/${src}`}`;
+    }
     return `data:image/jpeg;base64,${src}`;
 };
 
 export default function Topbar({ PageTitle, showBack = false, onBack }) {
     const navigate = useNavigate();
+    const { t } = useTranslation();
     const [showDropdown, setShowDropdown] = useState(false);
     const [showProfileModal, setShowProfileModal] = useState(false);
     const dropdownRef = useRef(null);
@@ -316,7 +333,7 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
             storedWarehouseUser.userName,
             storedWarehouseUser.name,
             email,
-            'User'
+            t('topbar.user')
         );
 
         const image = getFirstValue(
@@ -393,7 +410,7 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
             designation,
             warehouse,
         };
-    }, [authUser, authTokenData]);
+    }, [authUser, authTokenData, t]);
 
     useEffect(() => {
         const handler = (e) => {
@@ -419,19 +436,19 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
         .slice(0, 2) || 'U';
 
     const profileRows = [
-        ['Name', profile.fullName],
-        ['Email', profile.email],
-        ['Account ID', profile.accountId],
-        ['Role', profile.role],
-        ['Phone', profile.phone],
-        ['Department', profile.department],
-        ['Designation', profile.designation],
-        ['Warehouse', profile.warehouse],
+        [t('topbar.name'), profile.fullName],
+        [t('topbar.email'), profile.email],
+        [t('topbar.accountId'), profile.accountId],
+        [t('topbar.role'), profile.role],
+        [t('topbar.phone'), profile.phone],
+        [t('topbar.department'), profile.department],
+        [t('topbar.designation'), profile.designation],
+        [t('topbar.warehouse'), profile.warehouse],
     ];
 
     const dropdownItems = [
         {
-            icon: User, label: 'Profile Info',
+            icon: User, label: t('topbar.profileInfo'),
             onClick: () => { setShowProfileModal(true); setShowDropdown(false); },
         },
         // {
@@ -442,8 +459,12 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
         //     icon: Lock, label: 'Set Password',
         //     onClick: () => { navigate('/warehouse_management/settings/password'); setShowDropdown(false); },
         // },
-        { icon: LogOut, label: 'Log Out', onClick: handleLogout, danger: true },
+        { icon: LogOut, label: t('topbar.logOut'), onClick: handleLogout, danger: true },
     ];
+    const translatedPageTitle = typeof PageTitle === 'string'
+        ? t(getPageTitleKey(PageTitle), { defaultValue: PageTitle })
+        : PageTitle;
+    const pageTitleAriaLabel = typeof translatedPageTitle === 'string' ? translatedPageTitle : undefined;
 
     return (
         <header className="flex items-center justify-between flex-shrink-0" style={{ height: '64px' }}>
@@ -454,27 +475,28 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
                             type="button"
                             onClick={onBack}
                             className="group flex items-center gap-3 rounded-lg text-primary-text transition-colors hover:text-primary"
-                            aria-label={PageTitle}
+                            aria-label={pageTitleAriaLabel}
                         >
                             <span className="flex h-9 w-9 items-center justify-center rounded-full border border-surface-border bg-white text-slate-600 transition-colors group-hover:bg-surface-card group-hover:text-primary">
                                 <ArrowLeft size={18} />
                             </span>
                             <span className="text-[26px] font-semibold font-display">
-                                {PageTitle}
+                                {translatedPageTitle}
                             </span>
                         </button>
                     ) : (
                         <h1 className="text-[26px] font-semibold font-display text-primary-text">
-                            {PageTitle}
+                            {translatedPageTitle}
                         </h1>
                     )}
                 </div>
             )}
 
             <div className="flex items-center gap-3 ml-auto">
-                <button className="relative w-11 h-11 flex items-center justify-center rounded-full transition-colors bg-white cursor-pointer hover:bg-slate-200">
+                <LanguageSelector />
+                {/* <button className="relative w-11 h-11 flex items-center justify-center rounded-full transition-colors bg-white cursor-pointer hover:bg-slate-200">
                     <Bell size={18} className="text-primary" strokeWidth={1.8} />
-                </button>
+                </button> */}
 
                 <div className="relative bg-white rounded-3xl" ref={dropdownRef}>
                     <button
@@ -532,8 +554,8 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
                     <div className="w-full max-w-xl bg-white rounded-2xl shadow-2xl overflow-hidden">
                         <div className="flex items-start justify-between px-6 py-4 border-b border-surface-border">
                             <div>
-                                <h2 className="text-lg font-bold text-slate-800 font-display">Profile Info</h2>
-                                <p className="text-xs text-slate-500 mt-1">Signed-in account details</p>
+                                <h2 className="text-lg font-bold text-slate-800 font-display">{t('topbar.profileInfo')}</h2>
+                                <p className="text-xs text-slate-500 mt-1">{t('topbar.signedInAccountDetails')}</p>
                             </div>
                             <button
                                 onClick={() => setShowProfileModal(false)}
@@ -557,7 +579,7 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
                                 </div>
                                 <div className="min-w-0">
                                     <p className="text-base font-bold text-slate-800 truncate">{profile.fullName}</p>
-                                    <p className="text-xs text-slate-500 truncate">{profile.email || 'No email found'}</p>
+                                    <p className="text-xs text-slate-500 truncate">{profile.email || t('topbar.noEmailFound')}</p>
                                 </div>
                             </div>
 
@@ -576,7 +598,7 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
                                 onClick={() => setShowProfileModal(false)}
                                 className="px-5 py-2 text-sm font-semibold rounded-lg bg-primary text-white hover:bg-primary-dark"
                             >
-                                Close
+                                {t('topbar.close')}
                             </button>
                         </div>
                     </div>

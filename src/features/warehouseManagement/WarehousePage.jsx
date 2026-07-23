@@ -47,6 +47,10 @@ export default function WarehousePage() {
     closeDeleteModal,
     confirmDelete,
     deleting,
+    warehouseLoading,
+    isWarehouseError,
+    warehouseError,
+    refetchWarehouses,
   } = useWarehouse();
 
   const visibleWarehouses = useMemo(() => {
@@ -168,6 +172,10 @@ export default function WarehousePage() {
         <div className="px-5">
           <WarehouseTable
             warehouses={visibleWarehouses}
+            loading={warehouseLoading}
+            isError={isWarehouseError}
+            errorMessage={warehouseError?.response?.data?.message || warehouseError?.message || "Failed to load warehouses"}
+            onRetry={refetchWarehouses}
             onToggleDefault={toggleDefault}
             onDetails={setDetailWarehouse}
             onEdit={openEditModal}

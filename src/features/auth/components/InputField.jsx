@@ -1,3 +1,6 @@
+import { useTranslation } from "react-i18next";
+import { translateStaticText } from "../../../i18nDomTranslator";
+
 export default function InputField({
   icon: Icon,
   label,
@@ -6,11 +9,22 @@ export default function InputField({
   className = "",
   ...props
 }) {
+  const { i18n } = useTranslation();
+  const translate = (value) =>
+    typeof value === "string"
+      ? translateStaticText(value, i18n.resolvedLanguage || i18n.language)
+      : value;
+  const translatedProps = {
+    ...props,
+    placeholder: translate(props.placeholder),
+    "aria-label": translate(props["aria-label"]),
+  };
+
   return (
     <div className="mb-5">
       {label && (
         <label className="block text-sm font-semibold mb-1.5 text-primary font-body">
-          {label}
+          {translate(label)}
         </label>
       )}
       <div className="relative">
@@ -23,7 +37,7 @@ export default function InputField({
           </div>
         )}
         <input
-          {...props}
+          {...translatedProps}
           className={`w-full font-body rounded-xl text-sm transition-all duration-200 ${className}`}
           style={{
             padding: `12px ${rightElement ? "44px" : "14px"} 12px ${Icon ? "42px" : "14px"}`,
@@ -48,7 +62,7 @@ export default function InputField({
       </div>
       {error && (
         <p className="text-xs mt-1.5 font-medium" style={{ color: "#EF4444" }}>
-          {error}
+          {translate(error)}
         </p>
       )}
     </div>

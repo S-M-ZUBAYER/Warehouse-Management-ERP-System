@@ -10,6 +10,7 @@ import {
     X,
     Plus,
     Trash2,
+    RefreshCw,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -67,12 +68,14 @@ export default function ByMerchantSKUMappingsPage() {
         page, setPage,
         merchantSkus, pagination,
         counts,
-        isLoading, isFetching, isError, error,
-        selectedIds, toggleSelect, toggleAll,
+        isLoading, isFetching, isError, error, refetch,
+        selectedIds, selectedMerchantSkus, selectionLoading, toggleSelect, toggleAll,
         allSelected, someSelected,
         expandedIds, toggleExpand,
     } = useByMerchantMapping();
-    const selectedRows = merchantSkus.filter((sku) => selectedIds.includes(sku.id));
+    const selectedRows = selectedMerchantSkus.length === selectedIds.length
+        ? selectedMerchantSkus
+        : merchantSkus.filter((sku) => selectedIds.includes(sku.id));
     const outputColumns = [
         { label: 'Merchant SKU', key: 'sku_name' },
         { label: 'SKU Title', key: 'sku_title' },
@@ -414,10 +417,15 @@ export default function ByMerchantSKUMappingsPage() {
                     {isLoading ? (
                         <TableSkeleton cols={7} rows={5} />
                     ) : isError ? (
-                        <div className="flex flex-col items-center py-16 gap-3 text-slate-400">
-                            <AlertCircle size={28} className="text-red-400" />
-                            <p className="text-sm">{error?.response?.data?.message ?? 'Failed to load merchant SKUs'}</p>
-                            <button onClick={() => setPage(1)} className="text-xs text-primary hover:underline">Retry</button>
+                        <div className="flex flex-col items-center justify-center py-20 gap-3">
+                            <AlertCircle size={36} className="text-red-400 opacity-70" />
+                            <p className="text-sm font-medium text-slate-700">{error?.response?.data?.message ?? 'Failed to load merchant SKUs'}</p>
+                            <button onClick={() => {
+                                setPage(1);
+                                refetch?.();
+                            }} className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-primary border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors">
+                                <RefreshCw size={12} /> Retry
+                            </button>
                         </div>
                     ) : (
                         <table className="w-full text-sm font-body">
@@ -425,13 +433,17 @@ export default function ByMerchantSKUMappingsPage() {
                                 <tr className="border-b border-surface-border">
                                     <th className="py-3 pl-5 w-28 text-left">
                                         <label className="flex items-center gap-2 cursor-pointer select-none">
-                                            <input
-                                                type="checkbox"
-                                                checked={allSelected}
-                                                ref={(el) => { if (el) el.indeterminate = someSelected && !allSelected; }}
-                                                onChange={toggleAll}
-                                                className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
-                                            />
+                                            {selectionLoading ? (
+                                                <Loader2 size={16} className="text-primary animate-spin" />
+                                            ) : (
+                                                <input
+                                                    type="checkbox"
+                                                    checked={allSelected}
+                                                    ref={(el) => { if (el) el.indeterminate = someSelected && !allSelected; }}
+                                                    onChange={toggleAll}
+                                                    className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
+                                                />
+                                            )}
                                             <span className="text-sm font-bold text-slate-800">Select All</span>
                                         </label>
                                     </th>
@@ -595,7 +607,15 @@ export default function ByMerchantSKUMappingsPage() {
                     )}
                 </div>
 
-                <Pagination page={page} totalPages={pagination.totalPages} total={pagination.total} limit={pagination.limit} onPageChange={setPage} />
+                <Pagination
+                    page={page}
+                    totalPages={pagination.totalPages}
+                    total={pagination.total}
+                    limit={pagination.limit}
+                    itemLabel="merchant SKUs"
+                    showWhenSinglePage
+                    onPageChange={setPage}
+                />
                 <div className="flex justify-end gap-3 px-5 py-4 border-t border-surface-border">
                     <ExportMenu
                         onExportCsv={() => exportRowsToCsv(selectedRows, outputColumns, 'sku-mapping-by-merchant.csv', 'SKU mapping')}

@@ -341,7 +341,6 @@ export default function SelectMerchantSKUModal({
         background: "rgba(180,195,210,0.55)",
         backdropFilter: "blur(3px)",
       }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
         className="bg-white rounded-2xl shadow-2xl w-full font-body"

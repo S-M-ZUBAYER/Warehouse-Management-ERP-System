@@ -181,7 +181,10 @@ export default function ProductTable({
   listFetching,
   isListError,
   listError,
+  onRetry,
   selectedIds,
+  selectedProducts = [],
+  selectionLoading = false,
   toggleSelect,
   toggleAll,
   allSelected,
@@ -200,7 +203,10 @@ export default function ProductTable({
   handleStockAlertOpen,
 }) {
   const [detailProduct, setDetailProduct] = useState(null);
-  const selectedRows = products.filter((product) => selectedIds.includes(product.id));
+  const selectedRows =
+    selectedProducts.length === selectedIds.length
+      ? selectedProducts
+      : products.filter((product) => selectedIds.includes(product.id));
   const exportColumns = [
     { label: "SKU", key: "sku_name" },
     { label: "Product Name", key: "sku_title" },
@@ -315,7 +321,10 @@ export default function ProductTable({
               listError?.message ??
               "Failed to load products"
             }
-            onRetry={() => setPage(1)}
+            onRetry={() => {
+              setPage(1);
+              onRetry?.();
+            }}
           />
         ) : (
           <table className="w-full text-lg font-body">
@@ -323,15 +332,19 @@ export default function ProductTable({
               <tr className="border-b border-surface-border bg-white">
                 <th className="py-3 pl-5 w-36 text-left">
                   <label className="flex items-center gap-2 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={allSelected}
-                      ref={(el) => {
-                        if (el) el.indeterminate = someSelected && !allSelected;
-                      }}
-                      onChange={toggleAll}
-                      className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
-                    />
+                    {selectionLoading ? (
+                      <Loader2 size={16} className="text-primary animate-spin" />
+                    ) : (
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = someSelected && !allSelected;
+                        }}
+                        onChange={() => toggleAll({ allPages: true })}
+                        className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
+                      />
+                    )}
                     <span className="pl-2 text-base font-semibold text-primary-text">
                       Select All
                     </span>
@@ -474,7 +487,13 @@ export default function ProductTable({
             {Array.from(
               { length: Math.min(5, pagination.totalPages) },
               (_, i) => {
-                const p = i + 1;
+                const totalPages = pagination.totalPages || 1;
+                const visibleCount = Math.min(5, totalPages);
+                const startPage = Math.min(
+                  Math.max(1, page - Math.floor(visibleCount / 2)),
+                  Math.max(1, totalPages - visibleCount + 1),
+                );
+                const p = startPage + i;
                 return (
                   <button
                     key={p}

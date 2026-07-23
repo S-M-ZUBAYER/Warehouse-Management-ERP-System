@@ -20,6 +20,8 @@ import CompletedPage from "../features/orderManagement/orderProcessing/completed
 import AllOrderPage from "../features/orderManagement/orderProcessing/allOrder/AllOrderpage";
 import CanceledOrderPage from "../features/orderManagement/orderProcessing/canceledOrder/CanceledOrderPage";
 import ManualOrderPage from "../features/orderManagement/manualOrder/ManualOrderPage";
+import PlatformManualOrderPage from "../features/orderManagement/platformManualOrder/PlatformManualOrderPage";
+import ManualOrderAftershipPage from "../features/orderManagement/manualOrderAftership/ManualOrderAftershipPage";
 import InventoryListPage from "../features/inventoryManagement/inventoryList/InventoryListPage";
 import ManualInboundPage from "../features/inventoryManagement/manualInbound/ManualInboundPage";
 import OutboundOrderPage from "../features/inventoryManagement/outboundOrder/OutboundOrderPage";
@@ -32,6 +34,9 @@ import MerchantSKUPage from "../features/inventoryManagement/merchantSKU/Merchan
 import InboundCompletedPage from "../features/inventoryManagement/Inbound/completed/InboundCompletedPage";
 import InboundOnTheWayPage from "../features/inventoryManagement/Inbound/onTheWay/InboundOnTheWayPage";
 import InboundDraftPage from "../features/inventoryManagement/Inbound/draft/InboundDraftPage";
+import OutboundCompletedPage from "../features/inventoryManagement/Outbound/completed/OutboundCompletedPage";
+import OutboundOnTheWayPage from "../features/inventoryManagement/Outbound/onTheWay/OutboundOnTheWayPage";
+import OutboundDraftPage from "../features/inventoryManagement/Outbound/draft/OutboundDraftPage";
 
 export const routes = [
   {
@@ -93,6 +98,18 @@ export const routes = [
         element: <InboundCompletedPage />,
       },
       {
+        path: "/warehouse_management/inventory/outbound/draft",
+        element: <OutboundDraftPage />,
+      },
+      {
+        path: "/warehouse_management/inventory/outbound/onTheWay",
+        element: <OutboundOnTheWayPage />,
+      },
+      {
+        path: "/warehouse_management/inventory/outbound/completed",
+        element: <OutboundCompletedPage />,
+      },
+      {
         path: "/warehouse_management/inventory/outbound_order",
         element: <OutboundOrderPage />,
       },
@@ -133,6 +150,14 @@ export const routes = [
       {
         path: "/warehouse_management/orders/manual_order",
         element: <ManualOrderPage />,
+      },
+      {
+        path: "/warehouse_management/orders/platform_manual_order",
+        element: <PlatformManualOrderPage />,
+      },
+      {
+        path: "/warehouse_management/orders/aftership_manual_order",
+        element: <ManualOrderAftershipPage />,
       },
       {
         path: "/warehouse_management/orders/detail/:id",

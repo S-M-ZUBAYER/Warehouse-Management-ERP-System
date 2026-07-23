@@ -51,6 +51,8 @@ export const routePermissionMap = [
   ['/warehouse_management/orders/processing/completed', 'completed_order'],
   ['/warehouse_management/orders/processing/all_order', 'all_order'],
   ['/warehouse_management/orders/processing/canceled', 'canceled_order'],
+  ['/warehouse_management/orders/aftership_manual_order', 'manual_order'],
+  ['/warehouse_management/orders/platform_manual_order', 'manual_order'],
   ['/warehouse_management/orders/manual_order', 'manual_order'],
   ['/warehouse_management/warehouse', 'warehouse_management'],
   ['/warehouse_management/config/store_authorization', 'store_authorization'],
@@ -60,7 +62,7 @@ export const routePermissionMap = [
 
 export const getStoredWarehouseUser = () => {
   try { return JSON.parse(localStorage.getItem('warehouseUser') || '{}') || {}; }
-  catch (_) { return {}; }
+  catch { return {}; }
 };
 
 export const isOwnerUser = (user) => String(user?.role || '').toLowerCase() === 'owner' || user?.isOwner === true || user?.is_owner === true;

@@ -4,8 +4,12 @@ import { useVerifyEmail } from "../hooks/useVerifyEmail";
 import AuthLayout from "../components/AuthLayout";
 import PrimaryButton from "../components/PrimaryButton";
 import { SuccessAlert } from "../components/Alerts";
+import { useTranslation } from "react-i18next";
+import { translateStaticText } from "../../../i18nDomTranslator";
 
 export default function VerifyEmail() {
+  const { i18n } = useTranslation();
+  const translate = (value) => translateStaticText(value, i18n.resolvedLanguage || i18n.language);
   const {
     codes,
     inputRefs,
@@ -32,15 +36,15 @@ export default function VerifyEmail() {
         </div>
 
         <h1 className="text-3xl font-bold mb-2 text-primary font-display">
-          Verify Your Email
+          {translate("Verify Your Email")}
         </h1>
         <p
           className="text-sm leading-relaxed mb-8"
           style={{ color: "#64748B" }}
         >
-          We've sent a{" "}
-          <strong className=" text-primary">6-character code</strong> to your
-          email address. Enter it below to confirm your account.
+          {translate("We've sent a")}{" "}
+          <strong className=" text-primary">{translate("6-character code")}</strong>{" "}
+          {translate("to your email address. Enter it below to confirm your account.")}
         </p>
 
         {/* ── OTP Boxes ── */}
@@ -91,7 +95,7 @@ export default function VerifyEmail() {
         {/* Error message */}
         {error && (
           <p className="text-sm font-medium mb-4" style={{ color: "#EF4444" }}>
-            {error}
+            {translate(error)}
           </p>
         )}
 

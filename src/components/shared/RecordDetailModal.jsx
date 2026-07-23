@@ -1,10 +1,16 @@
 import { X } from "lucide-react";
 
+const normalizeLabelAcronyms = (label) =>
+  String(label)
+    .replace(/\bSku\b/g, "SKU")
+    .replace(/\bId\b/g, "ID")
+    .replace(/\bGtin\b/g, "GTIN");
+
 const formatLabel = (key) =>
-  String(key)
+  normalizeLabelAcronyms(String(key)
     .replace(/[_-]/g, " ")
     .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+    .replace(/\b\w/g, (c) => c.toUpperCase()));
 
 const isEmpty = (value) =>
   value === null || value === undefined || value === "" ||
@@ -45,7 +51,7 @@ export default function RecordDetailModal({ open, title = "Details", subtitle, r
     .map((field) => {
       const key = field.key || field;
       const value = field.render ? field.render(record) : record[key];
-      return { label: field.label || formatLabel(key), value, fullWidth: field.fullWidth };
+      return { label: normalizeLabelAcronyms(field.label || formatLabel(key)), value, fullWidth: field.fullWidth };
     });
 
   return (

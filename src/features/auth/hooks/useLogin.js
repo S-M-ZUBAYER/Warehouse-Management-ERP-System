@@ -95,16 +95,17 @@ export function useLogin() {
             } else {
                 // ── Step 2 failed — register via new API then store tokens ──────
                 console.warn("New login API failed, attempting auto-register...");
+            
                 try {
                     const registerRes = await api.post("/auth/register", {
                         userName: res.data.userName,
                         userEmail: formData.email,
                         userPassword: formData.password,
-                        companyName: res.data.designation || undefined,
-                        phone: res.data.phone || undefined,
-                        timezone: res.data.timezone || undefined,
-                        currency: res.data.currency || undefined,
-                        avatar: res.data.photo || undefined,
+                        companyName: res.data.designation || "",
+                        phone: res.data.phone || "",
+                        timezone: res.data.timezone || "",
+                        currency: res.data.currency || "",
+                        avatar: res.data.photo || "",
                     });
 
                     const regData = registerRes.data || registerRes;

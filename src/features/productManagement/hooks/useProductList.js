@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../../../lib/api";
 import useDebounce from "../../../hooks/useDebounce";
@@ -61,6 +61,22 @@ const fetchMerchantSkus = async (params) => {
             totalPages: 1,
         },
     };
+};
+
+const fetchAllMerchantSkus = async (params, knownTotal = 0) => {
+    const pageLimit = Math.max(100, Number(knownTotal) || 100);
+    const first = await fetchMerchantSkus({ ...params, page: 1, limit: pageLimit });
+    const totalPages = first?.pagination?.totalPages ?? 1;
+
+    if (totalPages <= 1) return first?.data ?? [];
+
+    const rest = await Promise.all(
+        Array.from({ length: totalPages - 1 }, (_, index) =>
+            fetchMerchantSkus({ ...params, page: index + 2, limit: pageLimit })
+        )
+    );
+
+    return [...(first?.data ?? []), ...rest.flatMap((response) => response?.data ?? [])];
 };
 
 /** Convert file → base64 string (strips the data:...;base64, prefix for API) */
@@ -438,6 +454,8 @@ export function useProductList() {
 
     // ── Selection state ───────────────────────────────────────────────────────
     const [selectedIds, setSelectedIds] = useState([]);
+    const [selectedProducts, setSelectedProducts] = useState([]);
+    const [selectionLoading, setSelectionLoading] = useState(false);
 
     // ── Add modal state ───────────────────────────────────────────────────────
     const [showAddModal, setShowAddModal] = useState(false);
@@ -565,6 +583,7 @@ export function useProductList() {
         isFetching: listFetching,
         isError: isListError,
         error: listError,
+        refetch: refetchList,
     } = useQuery({
         queryKey: MERCHANT_SKU_KEYS.list(listFilters),
         queryFn: () => fetchMerchantSkus(listFilters),
@@ -574,7 +593,17 @@ export function useProductList() {
     });
 
     const products = useMemo(() => listData?.data ?? [], [listData?.data]);
-    const pagination = listData?.pagination ?? { total: 0, totalPages: 1, page: 1, limit: 20 };
+    const pagination = listData?.pagination ?? { total: 0, totalPages: 1, page: 1, limit: 10 };
+
+    useEffect(() => {
+        setSelectedProducts((prev) => {
+            const rowById = new Map(prev.map((product) => [product.id, product]));
+            products.forEach((product) => {
+                if (selectedIds.includes(product.id)) rowById.set(product.id, product);
+            });
+            return selectedIds.map((id) => rowById.get(id)).filter(Boolean);
+        });
+    }, [products, selectedIds]);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Mutation: create merchant SKU
@@ -890,11 +919,39 @@ export function useProductList() {
         );
     }, []);
 
-    const toggleAll = useCallback(() => {
-        const ids = products.map((p) => p.id);
-        const allSel = ids.every((id) => selectedIds.includes(id));
-        setSelectedIds(allSel ? [] : ids);
-    }, [products, selectedIds]);
+    const toggleAll = useCallback(async ({ allPages = false } = {}) => {
+        setSelectionLoading(true);
+        if (!allPages) {
+            const ids = products.map((p) => p.id);
+            const allSel = ids.every((id) => selectedIds.includes(id));
+            setSelectedIds(allSel ? [] : ids);
+            setSelectionLoading(false);
+            return;
+        }
+
+        const pageIds = products.map((p) => p.id);
+        const allFilteredSelected =
+            pagination.total > 0 &&
+            selectedIds.length >= pagination.total &&
+            pageIds.every((id) => selectedIds.includes(id));
+
+        if (allFilteredSelected) {
+            setSelectedIds([]);
+            setSelectedProducts([]);
+            setSelectionLoading(false);
+            return;
+        }
+
+        try {
+            const allProducts = await fetchAllMerchantSkus(listFilters, pagination.total);
+            setSelectedProducts(allProducts);
+            setSelectedIds(allProducts.map((product) => product.id));
+        } catch (err) {
+            toast.error(err?.response?.data?.message ?? err?.message ?? "Failed to select all products");
+        } finally {
+            setSelectionLoading(false);
+        }
+    }, [products, selectedIds, pagination.total, listFilters]);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Filter helpers
@@ -955,9 +1012,12 @@ export function useProductList() {
         listFetching,
         isListError,
         listError,
+        refetchList,
 
         // ── selection ────────────────────────────────────────────────────────
         selectedIds,
+        selectedProducts,
+        selectionLoading,
         toggleSelect,
         toggleAll,
         allSelected: products.length > 0 && products.every((p) => selectedIds.includes(p.id)),

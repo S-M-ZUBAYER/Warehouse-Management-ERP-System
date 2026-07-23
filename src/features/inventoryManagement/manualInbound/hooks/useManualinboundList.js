@@ -1,5 +1,6 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import api from '../../../../lib/api';
 import useDebounce from '../../../../hooks/useDebounce';
 import {
@@ -7,6 +8,23 @@ import {
     getInboundDateField,
     getInboundSearchField,
 } from '../../shared/inboundFilterUtils';
+import { isManualInboundNote } from '../manualInboundConstants';
+
+const COMPLETED_STATUSES = ['completed', 'complete', 'received'];
+
+const isManualInboundItem = (item) => {
+    const type = String(item?.inbound_type ?? item?.inboundType ?? item?.type ?? '').toLowerCase();
+    return (
+        isManualInboundNote(item?.notes ?? item?.note) ||
+        type === 'manual' ||
+        type === 'manual_inbound'
+    );
+};
+
+const isCompletedInboundItem = (item) => {
+    const status = String(item?.status ?? item?.inbound_status ?? item?.inboundStatus ?? '').toLowerCase();
+    return COMPLETED_STATUSES.includes(status) || Boolean(item?.arrived_at ?? item?.received_at ?? item?.completed_at);
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Query keys
@@ -35,6 +53,22 @@ const fetchManualInboundList = (params) => {
     return api.get(`/inbound/manual?${qs.toString()}`).then((r) => r);
 };
 
+const fetchAllManualInboundList = async (params, knownTotal = 0) => {
+    const pageLimit = Math.max(100, Number(knownTotal) || Number(params.limit) || 100);
+    const first = await fetchManualInboundList({ ...params, page: 1, limit: pageLimit });
+    const totalPages = Number(first?.pagination?.totalPages) || 1;
+
+    if (totalPages <= 1) return first?.data ?? [];
+
+    const rest = await Promise.all(
+        Array.from({ length: totalPages - 1 }, (_, index) =>
+            fetchManualInboundList({ ...params, page: index + 2, limit: pageLimit })
+        )
+    );
+
+    return [...(first?.data ?? []), ...rest.flatMap((response) => response?.data ?? [])];
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Hook — mirrors useInboundList pattern, scoped to /inbound/manual
 // ─────────────────────────────────────────────────────────────────────────────
@@ -48,6 +82,8 @@ export function useManualInboundList() {
     const [dateTo,      setDateTo]      = useState('');
     const [page,        setPage]        = useState(1);
     const [selectedIds, setSelectedIds] = useState([]);
+    const [selectedItems, setSelectedItems] = useState([]);
+    const [selectionLoading, setSelectionLoading] = useState(false);
 
     const debouncedSearch = useDebounce(search, 350);
     const serverSearch = inboundType === 'Inbound No.' ? debouncedSearch : '';
@@ -56,6 +92,7 @@ export function useManualInboundList() {
     const resetList = useCallback(() => {
         setPage(1);
         setSelectedIds([]);
+        setSelectedItems([]);
     }, []);
 
     const updateWarehouseId = useCallback((value) => {
@@ -117,7 +154,10 @@ export function useManualInboundList() {
         placeholderData: (prev) => prev,
     });
 
-    const rawItems = useMemo(() => listData?.data ?? [], [listData]);
+    const rawItems = useMemo(
+        () => (listData?.data ?? []).filter((item) => isManualInboundItem(item) && isCompletedInboundItem(item)),
+        [listData],
+    );
     const items = useMemo(
         () => filterInboundItems(rawItems, {
             warehouseId,
@@ -134,16 +174,57 @@ export function useManualInboundList() {
         ? apiPagination
         : { ...apiPagination, total: items.length, totalPages: 1, page: 1 };
 
+    useEffect(() => {
+        setSelectedItems((prev) => {
+            const rowById = new Map(prev.map((item) => [item.id, item]));
+            items.forEach((item) => {
+                if (selectedIds.includes(item.id)) rowById.set(item.id, item);
+            });
+            return selectedIds.map((id) => rowById.get(id)).filter(Boolean);
+        });
+    }, [items, selectedIds]);
+
     // ── Selection ─────────────────────────────────────────────────────────────
     const toggleSelect = useCallback((id) => {
         setSelectedIds((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
     }, []);
 
-    const toggleAll = useCallback(() => {
-        const ids = items.map((i) => i.id);
-        const allSel = ids.every((id) => selectedIds.includes(id));
-        setSelectedIds(allSel ? [] : ids);
-    }, [items, selectedIds]);
+    const toggleAll = useCallback(async () => {
+        setSelectionLoading(true);
+        const pageIds = items.map((i) => i.id);
+        const allFilteredSelected =
+            pagination.total > 0 &&
+            selectedIds.length >= pagination.total &&
+            pageIds.every((id) => selectedIds.includes(id));
+
+        if (allFilteredSelected) {
+            setSelectedIds([]);
+            setSelectedItems([]);
+            setSelectionLoading(false);
+            return;
+        }
+
+        try {
+            const allRows = await fetchAllManualInboundList(listParams, pagination.total);
+            const filteredRows = filterInboundItems(
+                allRows.filter((item) => isManualInboundItem(item) && isCompletedInboundItem(item)),
+                {
+                    warehouseId,
+                    search: debouncedSearch,
+                    inboundType,
+                    timeType,
+                    dateFrom,
+                    dateTo,
+                }
+            );
+            setSelectedItems(filteredRows);
+            setSelectedIds(filteredRows.map((item) => item.id));
+        } catch (err) {
+            toast.error(err?.response?.data?.message ?? err?.message ?? 'Failed to select all manual inbound orders');
+        } finally {
+            setSelectionLoading(false);
+        }
+    }, [items, selectedIds, pagination.total, listParams, warehouseId, debouncedSearch, inboundType, timeType, dateFrom, dateTo]);
 
     return {
         // filter state — same shape as useInboundList so InboundFilterBar works as-is
@@ -166,6 +247,8 @@ export function useManualInboundList() {
 
         // selection
         selectedIds,
+        selectedItems,
+        selectionLoading,
         toggleSelect,
         toggleAll,
         allSelected:  items.length > 0 && items.every((i) => selectedIds.includes(i.id)),

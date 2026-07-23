@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import api from "../../../lib/api";
@@ -29,6 +29,22 @@ const fetchCombineSkus = (params) => {
     return api.get(`/combine-skus?${qs.toString()}`).then((r) => r);
 };
 
+const fetchAllCombineSkus = async (params, knownTotal = 0) => {
+    const pageLimit = Math.max(100, Number(knownTotal) || 100);
+    const first = await fetchCombineSkus({ ...params, page: 1, limit: pageLimit });
+    const totalPages = first?.pagination?.totalPages ?? 1;
+
+    if (totalPages <= 1) return first?.data ?? [];
+
+    const rest = await Promise.all(
+        Array.from({ length: totalPages - 1 }, (_, index) =>
+            fetchCombineSkus({ ...params, page: index + 2, limit: pageLimit })
+        )
+    );
+
+    return [...(first?.data ?? []), ...rest.flatMap((response) => response?.data ?? [])];
+};
+
 const deleteCombineSku = (id) => api.delete(`/combine-skus/${id}`).then((r) => r.data);
 const bulkDeleteCombineSkus = async (ids) => {
     await Promise.all(ids.map((id) => deleteCombineSku(id)));
@@ -42,6 +58,8 @@ export function useCombineSKUList() {
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(1);
     const [selectedIds, setSelectedIds] = useState([]);
+    const [selectedBundles, setSelectedBundles] = useState([]);
+    const [selectionLoading, setSelectionLoading] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState(null);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
@@ -64,6 +82,7 @@ export function useCombineSKUList() {
         isFetching,
         isError,
         error,
+        refetch,
     } = useQuery({
         queryKey: COMBINE_SKU_KEYS.list(listFilters),
         queryFn: () => fetchCombineSkus(listFilters),
@@ -75,6 +94,16 @@ export function useCombineSKUList() {
     const bundles = listData?.data ?? [];
     const pagination = listData?.pagination ?? { total: 0, totalPages: 1, page: 1, limit: 10 };
 
+    useEffect(() => {
+        setSelectedBundles((prev) => {
+            const rowById = new Map(prev.map((bundle) => [bundle.id, bundle]));
+            bundles.forEach((bundle) => {
+                if (selectedIds.includes(bundle.id)) rowById.set(bundle.id, bundle);
+            });
+            return selectedIds.map((id) => rowById.get(id)).filter(Boolean);
+        });
+    }, [bundles, selectedIds]);
+
     // ── Delete single ─────────────────────────────────────────────────────────
     const deleteMutation = useMutation({
         mutationFn: deleteCombineSku,
@@ -83,6 +112,7 @@ export function useCombineSKUList() {
             setShowDeleteModal(false);
             setDeleteTarget(null);
             setSelectedIds((p) => p.filter((id) => id !== deleteTarget?.id));
+            setSelectedBundles((p) => p.filter((bundle) => bundle.id !== deleteTarget?.id));
             queryClient.invalidateQueries({ queryKey: COMBINE_SKU_KEYS.all() });
         },
         onError: (err) => {
@@ -96,6 +126,7 @@ export function useCombineSKUList() {
         onSuccess: () => {
             toast.success(`${selectedIds.length} Combine SKU(s) deleted`);
             setSelectedIds([]);
+            setSelectedBundles([]);
             setBulkDeleteConfirm(false);
             queryClient.invalidateQueries({ queryKey: COMBINE_SKU_KEYS.all() });
         },
@@ -109,11 +140,31 @@ export function useCombineSKUList() {
         setSelectedIds((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
     }, []);
 
-    const toggleAll = useCallback(() => {
-        const ids = bundles.map((b) => b.id);
-        const allSel = ids.every((id) => selectedIds.includes(id));
-        setSelectedIds(allSel ? [] : ids);
-    }, [bundles, selectedIds]);
+    const toggleAll = useCallback(async () => {
+        setSelectionLoading(true);
+        const pageIds = bundles.map((b) => b.id);
+        const allFilteredSelected =
+            pagination.total > 0 &&
+            selectedIds.length >= pagination.total &&
+            pageIds.every((id) => selectedIds.includes(id));
+
+        if (allFilteredSelected) {
+            setSelectedIds([]);
+            setSelectedBundles([]);
+            setSelectionLoading(false);
+            return;
+        }
+
+        try {
+            const allBundles = await fetchAllCombineSkus(listFilters, pagination.total);
+            setSelectedBundles(allBundles);
+            setSelectedIds(allBundles.map((bundle) => bundle.id));
+        } catch (err) {
+            toast.error(err?.response?.data?.message ?? err?.message ?? "Failed to select all Combine SKUs");
+        } finally {
+            setSelectionLoading(false);
+        }
+    }, [bundles, selectedIds, pagination.total, listFilters]);
 
     // ── Delete helpers ────────────────────────────────────────────────────────
     const openDeleteModal = useCallback((bundle) => {
@@ -143,9 +194,10 @@ export function useCombineSKUList() {
         isFetching,
         isError,
         error,
+        refetch,
 
         // selection
-        selectedIds, toggleSelect, toggleAll,
+        selectedIds, selectedBundles, selectionLoading, toggleSelect, toggleAll,
         allSelected: bundles.length > 0 && bundles.every((b) => selectedIds.includes(b.id)),
         someSelected: bundles.some((b) => selectedIds.includes(b.id)),
 

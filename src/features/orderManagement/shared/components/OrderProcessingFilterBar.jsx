@@ -1,74 +1,46 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, Search } from "lucide-react";
-import api from "../../../../lib/api";
 import {
-  ORDER_STORE_CONTEXT_KEY,
+  ALL_PLATFORM_VALUE,
+  ALL_STORE_VALUE,
+  ALL_PLATFORM_LABEL,
+  ALL_STORE_LABEL,
+  fetchAllOrderPlatformStores,
+  getOrderStoreContext,
+  getPlatformStoreValue,
+  platformLabel,
   setStoredOrderContext,
   setStoredSearchContext,
   SUPPORTED_PLATFORMS,
 } from "../utils/orderApi";
 
-const PAGE_LIMIT = 100;
-
-const unwrapPlatformStores = (res) => {
-  if (Array.isArray(res?.data)) return res.data;
-  if (Array.isArray(res)) return res;
-  if (Array.isArray(res?.data?.data)) return res.data.data;
-  return [];
-};
-
-const fetchPlatformStoresPage = (page) =>
-  api
-    .get("/platform-stores", { params: { page, limit: PAGE_LIMIT } })
-    .then((res) => ({
-      rows: unwrapPlatformStores(res),
-      totalPages: res?.pagination?.totalPages || res?.data?.pagination?.totalPages,
-    }));
-
-const fetchAllPlatformStores = async () => {
-  const allStores = [];
-  let page = 1;
-  let totalPages = 1;
-
-  do {
-    const { rows, totalPages: responseTotalPages } = await fetchPlatformStoresPage(page);
-    allStores.push(...rows);
-    totalPages = responseTotalPages ?? (rows.length === PAGE_LIMIT ? page + 1 : page);
-    page += 1;
-  } while (page <= totalPages && page <= 100);
-
-  return allStores.filter((store) =>
-    SUPPORTED_PLATFORMS.includes(String(store?.platform || "").toLowerCase())
-  );
-};
-
-const labelForPlatform = (platform) => {
-  const value = String(platform || "").toLowerCase();
-  if (value === "shopee") return "Shopee";
-  if (value === "tiktok") return "TikTok";
-  return value.charAt(0).toUpperCase() + value.slice(1);
-};
-
-const getStoreValue = (store) => String(store?.id ?? store?.value ?? "");
-
-const getStoreContext = (store, platform) => ({
-  platform: String(platform || store?.platform || "").toLowerCase(),
-  store: store?.store_name || store?.external_store_name || store?.label || "",
-  platform_store_id: store?.id ?? store?.value ?? "",
-  platform_open_id: store?.store_open_id ?? store?.open_id ?? store?.platform_open_id ?? "",
-  cipher: store?.store_cipher ?? store?.cipher ?? store?.platform_cipher ?? "",
-  shop_id: store?.store_shop_id ?? store?.shop_id ?? store?.external_store_id ?? "",
-  external_store_id: store?.external_store_id ?? "",
-  external_store_name: store?.external_store_name ?? "",
-  region: store?.region ?? store?.country ?? "",
+const createAllStoreContext = (platform = ALL_PLATFORM_VALUE) => ({
+  platform: platform || ALL_PLATFORM_VALUE,
+  store: ALL_STORE_LABEL,
+  platform_store_id: ALL_STORE_VALUE,
+  isAllStoreContext: true,
 });
+
+const normalizeContextList = (value) =>
+  Array.isArray(value) ? value.map(String).sort().join("|") : "";
+
+const isSameStoreContext = (left = {}, right = {}) =>
+  String(left?.platform || "") === String(right?.platform || "") &&
+  String(left?.platform_store_id || "") === String(right?.platform_store_id || "") &&
+  String(left?.store || "") === String(right?.store || "") &&
+  String(left?.shop_id || "") === String(right?.shop_id || "") &&
+  String(left?.external_store_id || "") === String(right?.external_store_id || "") &&
+  Boolean(left?.isAllStoreContext) === Boolean(right?.isAllStoreContext) &&
+  normalizeContextList(left?.selected_platforms) === normalizeContextList(right?.selected_platforms) &&
+  normalizeContextList(left?.selected_store_ids) === normalizeContextList(right?.selected_store_ids);
 
 export default function OrderProcessingFilterBar({
   platform: fallbackPlatform,
-  platforms: fallbackPlatforms = ["Shopee", "TikTok"],
+  platforms: fallbackPlatforms = [ALL_PLATFORM_LABEL, "Shopee", "TikTok"],
   store: fallbackStore,
-  stores: fallbackStores = ["Store Name Here"],
+  stores: fallbackStores = [ALL_STORE_LABEL],
+  storeContext,
   setStoreContext,
   searchType,
   setSearchType,
@@ -83,13 +55,30 @@ export default function OrderProcessingFilterBar({
   setShowSearchTypeDropdown,
 }) {
   const searchTypeRef = useRef(null);
-  const defaultSelectionApplied = useRef(false);
-  const [selectedPlatform, setSelectedPlatform] = useState("");
-  const [selectedStoreId, setSelectedStoreId] = useState("");
+  const platformSelectRef = useRef(null);
+  const storeSelectRef = useRef(null);
+  const getInitialPlatforms = () => {
+    if (Array.isArray(storeContext?.selected_platforms) && storeContext.selected_platforms.length > 0) {
+      return storeContext.selected_platforms.map((platform) => String(platform).toLowerCase());
+    }
+    const platform = storeContext?.platform || fallbackPlatform || ALL_PLATFORM_VALUE;
+    return [String(platform).toLowerCase()];
+  };
+  const getInitialStoreIds = () => {
+    if (Array.isArray(storeContext?.selected_store_ids) && storeContext.selected_store_ids.length > 0) {
+      return storeContext.selected_store_ids.map(String);
+    }
+    const storeId = storeContext?.platform_store_id || fallbackStore || ALL_STORE_VALUE;
+    return [String(storeId)];
+  };
+  const [selectedPlatforms, setSelectedPlatforms] = useState(getInitialPlatforms);
+  const [selectedStoreIds, setSelectedStoreIds] = useState(getInitialStoreIds);
+  const [showPlatformDropdown, setShowPlatformDropdown] = useState(false);
+  const [showStoreDropdown, setShowStoreDropdown] = useState(false);
 
   const { data: platformStores = [] } = useQuery({
     queryKey: ["order-processing", "platform-stores", "shopee-tiktok"],
-    queryFn: fetchAllPlatformStores,
+    queryFn: fetchAllOrderPlatformStores,
     staleTime: 1000 * 60 * 5,
   });
 
@@ -98,97 +87,123 @@ export default function OrderProcessingFilterBar({
       if (searchTypeRef.current && !searchTypeRef.current.contains(event.target)) {
         setShowSearchTypeDropdown(false);
       }
+      if (platformSelectRef.current && !platformSelectRef.current.contains(event.target)) {
+        setShowPlatformDropdown(false);
+      }
+      if (storeSelectRef.current && !storeSelectRef.current.contains(event.target)) {
+        setShowStoreDropdown(false);
+      }
     };
 
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [setShowSearchTypeDropdown]);
 
-  useEffect(() => {
-    if (platformStores.length === 0 || defaultSelectionApplied.current) return;
-
-    let savedContext = null;
-    try {
-      savedContext = JSON.parse(localStorage.getItem(ORDER_STORE_CONTEXT_KEY) || "null");
-    } catch {
-      savedContext = null;
-    }
-
-    const savedStore = platformStores.find(
-      (store) =>
-        String(store.id) === String(savedContext?.platform_store_id) &&
-        String(store.platform).toLowerCase() === String(savedContext?.platform).toLowerCase()
-    );
-
-    const defaultStore =
-      savedStore ||
-      platformStores.find((store) => String(store.platform).toLowerCase() === "shopee") ||
-      platformStores[0];
-
-    setSelectedPlatform(String(defaultStore.platform || "").toLowerCase());
-    setSelectedStoreId(getStoreValue(defaultStore));
-    defaultSelectionApplied.current = true;
-  }, [platformStores]);
-
   const platformOptions = useMemo(() => {
     const uniquePlatforms = [
       ...new Set(platformStores.map((store) => String(store.platform || "").toLowerCase()).filter(Boolean)),
     ];
 
-    if (uniquePlatforms.length > 0) {
-      return uniquePlatforms.map((platform) => ({ label: labelForPlatform(platform), value: platform }));
-    }
+    const sourcePlatforms = uniquePlatforms.length
+      ? uniquePlatforms
+      : fallbackPlatforms.map((platform) => String(platform).toLowerCase());
 
-    return fallbackPlatforms
+    const supportedOptions = sourcePlatforms
       .filter((platform) => SUPPORTED_PLATFORMS.includes(String(platform).toLowerCase()))
-      .map((platform) => ({ label: labelForPlatform(platform), value: String(platform).toLowerCase() }));
+      .map((platform) => ({ label: platformLabel(platform), value: String(platform).toLowerCase() }));
+
+    return [{ label: ALL_PLATFORM_LABEL, value: ALL_PLATFORM_VALUE }, ...supportedOptions];
   }, [fallbackPlatforms, platformStores]);
 
+  const selectedPlatformValues = useMemo(
+    () => selectedPlatforms.filter((platform) => platform !== ALL_PLATFORM_VALUE),
+    [selectedPlatforms]
+  );
+
   const storeOptions = useMemo(() => {
-    const filteredStores = selectedPlatform
-      ? platformStores.filter((store) => String(store.platform).toLowerCase() === selectedPlatform)
+    const filteredStores = selectedPlatformValues.length > 0
+      ? platformStores.filter((store) => selectedPlatformValues.includes(String(store.platform).toLowerCase()))
       : platformStores;
 
-    if (filteredStores.length > 0) {
-      return filteredStores.map((store) => ({
-        ...store,
-        label: store.store_name || store.external_store_name || `Store #${store.id}`,
-        value: getStoreValue(store),
-      }));
-    }
+    const mappedStores = filteredStores.length > 0
+      ? filteredStores.map((store) => ({
+          ...store,
+          label: store.store_name || store.external_store_name || `Store #${getPlatformStoreValue(store)}`,
+          value: getPlatformStoreValue(store),
+        }))
+      : fallbackStores
+          .filter((store) => String(store).toLowerCase() !== ALL_STORE_VALUE && store !== ALL_STORE_LABEL)
+          .map((store) => ({ id: store, label: store, value: store }));
 
-    return fallbackStores.map((store) => ({ id: store, label: store, value: store }));
-  }, [fallbackStores, platformStores, selectedPlatform]);
+    return [{ id: ALL_STORE_VALUE, label: ALL_STORE_LABEL, value: ALL_STORE_VALUE }, ...mappedStores];
+  }, [fallbackStores, platformStores, selectedPlatformValues]);
 
   useEffect(() => {
-    if (!selectedPlatform || storeOptions.length === 0) return;
+    if (selectedStoreIds.includes(ALL_STORE_VALUE)) return;
 
-    const storeStillVisible = storeOptions.some(
-      (store) => getStoreValue(store) === String(selectedStoreId)
-    );
+    const visibleStoreValues = new Set(storeOptions.map((store) => String(store.value)));
+    const visibleSelectedStores = selectedStoreIds.filter((storeId) => visibleStoreValues.has(String(storeId)));
 
-    if (!storeStillVisible) {
-      setSelectedStoreId(getStoreValue(storeOptions[0]));
+    if (visibleSelectedStores.length !== selectedStoreIds.length) {
+      setSelectedStoreIds(visibleSelectedStores.length ? visibleSelectedStores : [ALL_STORE_VALUE]);
     }
-  }, [selectedPlatform, selectedStoreId, storeOptions]);
+  }, [selectedStoreIds, storeOptions]);
 
-  const activePlatform = selectedPlatform || String(fallbackPlatform || "").toLowerCase();
-  const activeStore = selectedStoreId || fallbackStore;
+  const activePlatform = selectedPlatforms.includes(ALL_PLATFORM_VALUE)
+    ? ALL_PLATFORM_VALUE
+    : selectedPlatformValues.length === 1
+      ? selectedPlatformValues[0]
+      : ALL_PLATFORM_VALUE;
+  const selectedStoreValues = useMemo(
+    () => selectedStoreIds.filter((storeId) => storeId !== ALL_STORE_VALUE),
+    [selectedStoreIds]
+  );
+  const activeStore = selectedStoreIds.includes(ALL_STORE_VALUE)
+    ? ALL_STORE_VALUE
+    : selectedStoreValues.length === 1
+      ? selectedStoreValues[0]
+      : ALL_STORE_VALUE;
   const selectedStoreContext = useMemo(() => {
-    const store = platformStores.find((item) => getStoreValue(item) === String(activeStore));
+    const hasPlatformFilter = !selectedPlatforms.includes(ALL_PLATFORM_VALUE) && selectedPlatformValues.length > 0;
+    const hasStoreFilter = !selectedStoreIds.includes(ALL_STORE_VALUE) && selectedStoreValues.length > 0;
 
-    if (!store) {
-      return getStoreContext({ id: activeStore, store_name: activeStore }, activePlatform);
+    if (hasStoreFilter && selectedStoreValues.length === 1) {
+      const store = platformStores.find((item) => getPlatformStoreValue(item) === String(selectedStoreValues[0]));
+
+      if (!store && String(storeContext?.platform_store_id || "") === String(selectedStoreValues[0])) {
+        return storeContext;
+      }
+
+      if (!store) {
+        return getOrderStoreContext({ id: selectedStoreValues[0], store_name: selectedStoreValues[0] }, activePlatform);
+      }
+
+      return getOrderStoreContext(store, store.platform || activePlatform);
     }
 
-    return getStoreContext(store, activePlatform);
-  }, [activePlatform, activeStore, platformStores]);
+    const contextPlatform = hasPlatformFilter && selectedPlatformValues.length === 1
+      ? selectedPlatformValues[0]
+      : ALL_PLATFORM_VALUE;
+    const context = createAllStoreContext(contextPlatform);
+
+    if (hasPlatformFilter) {
+      context.selected_platforms = selectedPlatformValues;
+    }
+
+    if (hasStoreFilter) {
+      context.selected_store_ids = selectedStoreValues;
+      context.store = selectedStoreValues.length === 1 ? selectedStoreValues[0] : `${selectedStoreValues.length} selected stores`;
+    }
+
+    return context;
+  }, [activePlatform, platformStores, selectedPlatformValues, selectedPlatforms, selectedStoreIds, selectedStoreValues, storeContext]);
 
   useEffect(() => {
-    if (!selectedStoreContext?.platform_store_id) return;
     setStoredOrderContext(selectedStoreContext);
-    setStoreContext?.(selectedStoreContext);
-  }, [selectedStoreContext, setStoreContext]);
+    if (!isSameStoreContext(storeContext, selectedStoreContext)) {
+      setStoreContext?.(selectedStoreContext);
+    }
+  }, [selectedStoreContext, setStoreContext, storeContext]);
 
   const onSearchClick = () => {
     setStoredSearchContext({
@@ -205,24 +220,32 @@ export default function OrderProcessingFilterBar({
       <div className="grid grid-cols-12 items-end gap-3 xl:grid-cols-[repeat(24,minmax(0,1fr))]">
         <div className="col-span-12 md:col-span-6 xl:col-span-4">
           <p className="mb-1.5 text-xs font-semibold text-slate-600">Select Platform</p>
-          <SelectBox
-            value={activePlatform}
-            onChange={(value) => {
-              setSelectedPlatform(String(value).toLowerCase());
-              setSelectedStoreId("");
+          <CheckboxSelectBox
+            refNode={platformSelectRef}
+            values={selectedPlatforms}
+            onChange={(values) => {
+              setSelectedPlatforms(values.map((value) => String(value || ALL_PLATFORM_VALUE).toLowerCase()));
+              setSelectedStoreIds([ALL_STORE_VALUE]);
             }}
             options={platformOptions}
             placeholder="Platform Name Here"
+            open={showPlatformDropdown}
+            setOpen={setShowPlatformDropdown}
+            allValue={ALL_PLATFORM_VALUE}
           />
         </div>
 
         <div className="col-span-12 md:col-span-6 xl:col-span-5">
           <p className="mb-1.5 text-xs font-semibold text-slate-600">Select Store</p>
-          <SelectBox
-            value={activeStore}
-            onChange={(storeId) => setSelectedStoreId(String(storeId))}
+          <CheckboxSelectBox
+            refNode={storeSelectRef}
+            values={selectedStoreIds}
+            onChange={(storeIds) => setSelectedStoreIds(storeIds.map((storeId) => String(storeId || ALL_STORE_VALUE)))}
             options={storeOptions}
             placeholder="Store Name Here"
+            open={showStoreDropdown}
+            setOpen={setShowStoreDropdown}
+            allValue={ALL_STORE_VALUE}
           />
         </div>
 
@@ -294,6 +317,92 @@ export default function OrderProcessingFilterBar({
           Search
         </button>
       </div>
+    </div>
+  );
+}
+
+function CheckboxSelectBox({ refNode, values, onChange, options, placeholder, open, setOpen, allValue }) {
+  const normalizedOptions = options.map((option) =>
+    typeof option === "string"
+      ? { label: option, value: option }
+      : {
+          label: option.label ?? option.name ?? option.store_name ?? option.value,
+          value: String(option.id ?? option.value ?? option.label),
+        }
+  );
+  const selectedValues = values.length ? values.map(String) : [allValue];
+  const optionValues = normalizedOptions.map((option) => String(option.value)).filter((value) => value !== allValue);
+  const selectedWithoutAll = selectedValues.filter((value) => value !== allValue);
+  const allSelectedByItems = optionValues.length > 0 && optionValues.every((value) => selectedWithoutAll.includes(value));
+  const hasOnlyAllSelected = selectedValues.includes(allValue) && selectedWithoutAll.length === 0;
+  const isAllSelected = selectedValues.includes(allValue) || allSelectedByItems;
+  const selectedLabels = normalizedOptions
+    .filter((option) => selectedWithoutAll.includes(String(option.value)))
+    .map((option) => option.label);
+  const allLabel = normalizedOptions.find((option) => String(option.value) === allValue)?.label || placeholder;
+  const buttonLabel = isAllSelected
+    ? allLabel
+    : selectedLabels.length === 1
+      ? selectedLabels[0]
+      : selectedLabels.length > 1
+        ? `${selectedLabels.length} selected`
+        : placeholder;
+
+  const updateSelection = (value) => {
+    const nextValue = String(value);
+
+    if (nextValue === allValue) {
+      onChange([allValue]);
+      return;
+    }
+
+    const current = hasOnlyAllSelected ? [] : selectedWithoutAll;
+    const next = current.includes(nextValue)
+      ? current.filter((item) => item !== nextValue)
+      : [...current, nextValue];
+
+    onChange(next.length === 0 ? [allValue] : next.length === optionValues.length ? [allValue, ...optionValues] : next);
+  };
+
+  return (
+    <div className="relative" ref={refNode}>
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="flex h-10 w-full items-center justify-between rounded-lg border border-surface-border bg-white px-3 text-left text-sm text-slate-700 outline-none transition-colors hover:border-primary/40 focus:border-primary"
+      >
+        <span className="truncate">{buttonLabel}</span>
+        <ChevronDown
+          size={13}
+          className={`ml-2 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full z-30 mt-1 max-h-64 min-w-full overflow-y-auto rounded-xl border border-surface-border bg-white py-1 shadow-lg">
+          {normalizedOptions.map((option) => {
+            const optionValue = String(option.value);
+            const checked = optionValue === allValue
+              ? isAllSelected
+              : selectedValues.includes(optionValue);
+
+            return (
+              <label
+                key={optionValue}
+                className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-surface-card"
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => updateSelection(optionValue)}
+                  className="h-4 w-4 rounded border-surface-border text-primary focus:ring-primary/20"
+                />
+                <span className="truncate">{option.label}</span>
+              </label>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

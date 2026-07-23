@@ -419,9 +419,26 @@ const warehouseQueryKey = (search) => ["warehouses-all", search];
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Strip duplicate base64 prefixes that some image pickers produce.
+const getAuthAssetOrigin = () => {
+    const configured = String(import.meta.env.VITE_AUTH_BASE_URL || window.location.origin || "").trim();
+    try {
+        const url = new URL(configured, window.location.origin);
+        return url.origin;
+    } catch {
+        return configured.replace(/\/api\/v\d+\/?$/i, "").replace(/\/+$/, "");
+    }
+};
+
 export const cleanAvatar = (url) => {
     if (!url) return null;
-    return url.replace(/^(data:image\/\w+;base64,)+/, "data:image/jpeg;base64,");
+    const src = String(url).trim().replace(/^(data:image\/\w+;base64,)+/, "data:image/jpeg;base64,");
+
+    if (/^(https?:|data:image)/i.test(src)) return src;
+    if (src.startsWith("/uploads/") || src.startsWith("uploads/")) {
+        return `${getAuthAssetOrigin()}${src.startsWith("/") ? src : `/${src}`}`;
+    }
+
+    return `data:image/jpeg;base64,${src}`;
 };
 
 // Paginated fetcher — fetches page 1 first, then fires remaining pages in
@@ -489,6 +506,7 @@ const validateSubAccountForm = (form, isEdit) => {
     if (!form.email.trim()) e.email = "Email is required";
     if (!isEdit && !form.password.trim()) e.password = "Password is required";
     if (!form.roleId) e.roleId = "Role is required";
+    if (!form.warehouseId) e.warehouseId = "Warehouse is required";
     return e;
 };
 
@@ -625,6 +643,7 @@ export function useSubAccount() {
         data: rawAccounts = [],
         isLoading: accountLoading,
         isError: accountError,
+        refetch: refetchAccounts,
     } = useQuery({
         queryKey: SUB_ACCOUNT_QUERY_KEY,
         queryFn: fetchAllUsers,
@@ -815,7 +834,11 @@ export function useSubAccount() {
     // ── Submit ────────────────────────────────────────────────────────────────
     const handleSave = useCallback(() => {
         const e = validateSubAccountForm(form, !!editAccount);
-        if (Object.keys(e).length) { setErrors(e); return; }
+        if (Object.keys(e).length) {
+            setErrors(e);
+            toast.error("Please fill all required fields");
+            return;
+        }
 
         const payload = {
             name: form.name,
@@ -872,6 +895,7 @@ export function useSubAccount() {
         accounts: filteredAccounts,
         accountLoading,
         accountError,
+        refetchAccounts,
 
         // row selection
         selectedIds, toggleSelect,

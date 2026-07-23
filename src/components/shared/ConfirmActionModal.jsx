@@ -8,6 +8,7 @@ export default function ConfirmActionModal({
   cancelLabel = "Cancel",
   danger = false,
   loading = false,
+  loadingLabel = "Working...",
   onCancel,
   onConfirm,
 }) {
@@ -32,7 +33,7 @@ export default function ConfirmActionModal({
             {cancelLabel}
           </button>
           <button disabled={loading} onClick={onConfirm} className={`flex-1 px-4 py-2.5 rounded-xl text-white font-semibold disabled:opacity-60 ${danger ? "bg-red-500 hover:bg-red-600" : "bg-primary hover:bg-primary-dark"}`}>
-            {loading ? "Working..." : confirmLabel}
+            {loading ? loadingLabel : confirmLabel}
           </button>
         </div>
       </div>

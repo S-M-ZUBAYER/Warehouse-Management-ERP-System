@@ -1,8 +1,5 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Pagination — numbered pages with prev/next arrows
-// ─────────────────────────────────────────────────────────────────────────────
+import { useTranslation } from "react-i18next";
 
 export default function Pagination({
   currentPage,
@@ -13,17 +10,21 @@ export default function Pagination({
   total,
   pageSize,
   limit,
+  itemLabel = "results",
+  showWhenSinglePage = false,
 }) {
+  const { t } = useTranslation();
   const activePage = currentPage ?? page ?? 1;
   const totalCount = totalItems ?? total ?? 0;
   const limitCount = pageSize ?? limit ?? 10;
+  const pageCount = Math.max(1, Number(totalPages) || 1);
 
-  if (totalPages <= 1) return null;
+  if (pageCount <= 1 && !showWhenSinglePage) return null;
 
   const pages = [];
   const delta = 2;
   const left = Math.max(1, activePage - delta);
-  const right = Math.min(totalPages, activePage + delta);
+  const right = Math.min(pageCount, activePage + delta);
 
   for (let i = left; i <= right; i++) pages.push(i);
 
@@ -32,69 +33,67 @@ export default function Pagination({
 
   return (
     <div className="flex items-center justify-between px-1 mt-4">
-      {/* Count */}
       <p className="text-xs text-slate-500 font-body">
-        Showing{" "}
+        {t("common.showing")}{" "}
         <span className="font-semibold text-slate-700">
-          {start}–{end}
+          {start}-{end}
         </span>{" "}
-        of <span className="font-semibold text-slate-700">{totalCount}</span>{" "}
-        results
+        {t("common.of")} <span className="font-semibold text-slate-700">{totalCount}</span>{" "}
+        {itemLabel === "results" ? t("common.results") : itemLabel}
       </p>
 
-      {/* Pages */}
-      <div className="flex items-center gap-1">
-        {/* Prev */}
-        <button
-          onClick={() => onPageChange(activePage - 1)}
-          disabled={activePage === 1}
-          className="w-8 h-8 rounded-lg flex items-center justify-center border border-surface-border
-                     text-slate-500 hover:bg-surface-card disabled:opacity-40 disabled:cursor-not-allowed
-                     transition-colors"
-        >
-          <ChevronLeft size={14} />
-        </button>
+      {pageCount > 1 && (
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => onPageChange(activePage - 1)}
+            disabled={activePage === 1}
+            className="w-8 h-8 rounded-lg flex items-center justify-center border border-surface-border
+                       text-slate-500 hover:bg-surface-card disabled:opacity-40 disabled:cursor-not-allowed
+                       transition-colors"
+          >
+            <ChevronLeft size={14} />
+          </button>
 
-        {left > 1 && (
-          <>
-            <PageBtn page={1} current={activePage} onClick={onPageChange} />
-            {left > 2 && <span className="text-xs text-slate-400 px-1">…</span>}
-          </>
-        )}
+          {left > 1 && (
+            <>
+              <PageBtn page={1} current={activePage} onClick={onPageChange} />
+              {left > 2 && <span className="text-xs text-slate-400 px-1">...</span>}
+            </>
+          )}
 
-        {pages.map((p) => (
-          <PageBtn
-            key={p}
-            page={p}
-            current={activePage}
-            onClick={onPageChange}
-          />
-        ))}
-
-        {right < totalPages && (
-          <>
-            {right < totalPages - 1 && (
-              <span className="text-xs text-slate-400 px-1">…</span>
-            )}
+          {pages.map((p) => (
             <PageBtn
-              page={totalPages}
+              key={p}
+              page={p}
               current={activePage}
               onClick={onPageChange}
             />
-          </>
-        )}
+          ))}
 
-        {/* Next */}
-        <button
-          onClick={() => onPageChange(activePage + 1)}
-          disabled={activePage === totalPages}
-          className="w-8 h-8 rounded-lg flex items-center justify-center border border-surface-border
-                     text-slate-500 hover:bg-surface-card disabled:opacity-40 disabled:cursor-not-allowed
-                     transition-colors"
-        >
-          <ChevronRight size={14} />
-        </button>
-      </div>
+          {right < pageCount && (
+            <>
+              {right < pageCount - 1 && (
+                <span className="text-xs text-slate-400 px-1">...</span>
+              )}
+              <PageBtn
+                page={pageCount}
+                current={activePage}
+                onClick={onPageChange}
+              />
+            </>
+          )}
+
+          <button
+            onClick={() => onPageChange(activePage + 1)}
+            disabled={activePage === pageCount}
+            className="w-8 h-8 rounded-lg flex items-center justify-center border border-surface-border
+                       text-slate-500 hover:bg-surface-card disabled:opacity-40 disabled:cursor-not-allowed
+                       transition-colors"
+          >
+            <ChevronRight size={14} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -104,12 +103,11 @@ function PageBtn({ page, current, onClick }) {
   return (
     <button
       onClick={() => onClick(page)}
-      className={`w-8 h-8 rounded-lg text-xs font-semibold transition-colors
-        ${
-          isActive
-            ? "bg-primary text-white border border-primary font-body"
-            : "border border-surface-border text-slate-600 hover:bg-surface-card font-body"
-        }`}
+      className={`w-8 h-8 rounded-lg text-xs font-semibold transition-colors ${
+        isActive
+          ? "bg-primary text-white border border-primary font-body"
+          : "border border-surface-border text-slate-600 hover:bg-surface-card font-body"
+      }`}
     >
       {page}
     </button>

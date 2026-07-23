@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Eye, EyeOff, Lock, ShieldCheck, KeyRound } from "lucide-react";
 import { useForgotPassword } from "../hooks/useForgotPassword";
@@ -7,6 +8,7 @@ import PrimaryButton from "../components/PrimaryButton";
 import { SuccessAlert } from "../components/Alerts";
 
 export default function ForgotPassword() {
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const {
     formData,
     handleChange,
@@ -21,6 +23,39 @@ export default function ForgotPassword() {
     loading,
     handleResetSubmit,
   } = useForgotPassword();
+
+  const verificationCode = (formData.code || "").trim();
+  const isVerificationCodeComplete = verificationCode.length === 6;
+  const isResetting = loading || isSubmitting;
+
+  const handleSubmit = async (event) => {
+    if (!isVerificationCodeComplete) {
+      event.preventDefault();
+      event.currentTarget.reportValidity();
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await handleResetSubmit(event);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleEnterSubmit = (event) => {
+    if (event.key !== "Enter" || isResetting) return;
+
+    event.preventDefault();
+
+    if (!isVerificationCodeComplete) {
+      event.currentTarget.reportValidity();
+      return;
+    }
+
+    event.currentTarget.requestSubmit();
+  };
 
   return (
     <AuthLayout
@@ -65,7 +100,7 @@ export default function ForgotPassword() {
           </span>
         </div>
 
-        <form onSubmit={handleResetSubmit}>
+        <form onSubmit={handleSubmit} onKeyDown={handleEnterSubmit}>
           {/* ── Code input - styled differently, centered with large font ── */}
           <div className="mb-5">
             <label
@@ -78,7 +113,10 @@ export default function ForgotPassword() {
               type="text"
               name="code"
               required
+              minLength={6}
               maxLength={6}
+              pattern=".{6}"
+              title="Verification code must be exactly 6 characters"
               value={formData.code}
               onChange={handleChange}
               placeholder="A1B2C3"
@@ -173,7 +211,16 @@ export default function ForgotPassword() {
 
           <SuccessAlert message={success} />
 
-          <PrimaryButton type="submit" loading={loading}>
+          <PrimaryButton
+            type="submit"
+            loading={isResetting}
+            disabled={isResetting || !isVerificationCodeComplete}
+            style={
+              isResetting || !isVerificationCodeComplete
+                ? { opacity: 0.55, cursor: "not-allowed" }
+                : undefined
+            }
+          >
             Reset Password
           </PrimaryButton>
         </form>

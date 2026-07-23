@@ -1,15 +1,19 @@
 import { useState } from "react";
 import {
   Search,
+  AlertCircle,
   ChevronDown,
   Pencil,
   RefreshCw,
+  Loader2,
   Link,
   ShieldCheck,
+  Plus,
 } from "lucide-react";
 import Topbar from "../../../components/layout/Topbar";
 import { useStoreAuthorization } from "./hooks/useStoreAuthorization";
 import AuthStatusBadge from "./component/AuthStatusBadge";
+import AddStoreModal from "./component/AddStoreModal";
 import NicknameModal from "./component/NicknameModal";
 import SetPermissionModal from "./component/SetPermissionModal";
 import PortalActionMenu from "../../../components/shared/PortalActionMenu";
@@ -18,7 +22,6 @@ import ConfirmActionModal from "../../../components/shared/ConfirmActionModal";
 import { exportRowsToCsv, exportRowsToXlsx, printRows } from "../../../utils/tableOutput";
 import ExportMenu from "../../../components/shared/ExportMenu";
 import shopeeLogo from "../../../assets/ShopPlatform/shopee.svg";
-import lazadaLogo from "../../../assets/ShopPlatform/lazada.svg";
 import tiktokLogo from "../../../assets/ShopPlatform/tiktok.svg";
 import allCategoryLogo from "../../../assets/ShopPlatform/allCategories.svg";
 
@@ -44,12 +47,21 @@ export default function StoreAuthorizationPage() {
     error,
     reloadStores,
     selectedIds,
+    selectedStores,
+    selectionLoading,
     toggleSelect,
     toggleAll,
     allSelected,
     openActionId,
     setOpenActionId,
     nicknameModal,
+    openAddStore,
+    addStoreModal,
+    addStoreCountries,
+    closeAddStore,
+    setAddStorePlatform,
+    setAddStoreCountry,
+    submitAddStore,
     openEditStore,
     closeNickname,
     setNickname,
@@ -76,7 +88,11 @@ export default function StoreAuthorizationPage() {
 
   const [actionAnchor, setActionAnchor] = useState(null);
   const [detailStore, setDetailStore] = useState(null);
-  const selectedRows = stores.filter((store) => selectedIds.includes(store.id));
+  const selectedRows =
+    selectedStores.length === selectedIds.length &&
+    selectedIds.every((id) => selectedStores.some((store) => store.id === id))
+      ? selectedStores
+      : stores.filter((store) => selectedIds.includes(store.id));
   const outputColumns = [
     { label: "Marketplace", key: "marketplace" },
     { label: "Store Nickname", key: "nickname" },
@@ -112,7 +128,7 @@ console.log(stores,"Stores");
                            cursor-pointer pr-8"
               >
                 <option value="All">All Platforms</option>
-                {["Shopee", "Lazada", "TikTok"].map((p) => (
+                {["Shopee",  "TikTok"].map((p) => (
                   <option key={p} value={p}>{p}</option>
                 ))}
               </select>
@@ -129,7 +145,7 @@ console.log(stores,"Stores");
               Authorized Platforms
             </p>
             <div className="flex items-center gap-7">
-              {platforms.map((p) => (
+              {platforms.filter((p) => p !== "Lazada").map((p) => (
                 <label
                   key={p}
                   className="flex items-center gap-2 cursor-pointer"
@@ -150,9 +166,7 @@ console.log(stores,"Stores");
                         ? allCategoryLogo
                         : p === "Shopee"
                           ? shopeeLogo
-                          : p === "Lazada"
-                            ? lazadaLogo
-                            : tiktokLogo
+                          : tiktokLogo
                     }
                     alt="platform logo"
                   />
@@ -222,22 +236,17 @@ console.log(stores,"Stores");
             </button>
 
             {/* Add Store button */}
-            {/* <button
+            <button
+              type="button"
               onClick={openAddStore}
               className="mt-4 ml-auto flex items-center gap-2 px-4 py-2 text-sm font-semibold
                          bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors"
             >
               <Plus size={14} />
               Add Store
-            </button> */}
+            </button>
           </div>
         </div>
-
-        {error && (
-          <div className="mx-5 mb-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
-        )}
 
         {/* Table */}
         <div className="overflow-x-auto z-50">
@@ -261,17 +270,21 @@ console.log(stores,"Stores");
                   >
                     {h === "Select All" ? (
                       <div className="flex justify-start items-center w-32">
-                        <input
-                          type="checkbox"
-                          checked={allSelected}
-                          ref={(el) => {
-                            if (el) {
-                              el.indeterminate = selectedIds.length > 0 && !allSelected;
-                            }
-                          }}
-                          onChange={toggleAll}
-                          className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
-                        />
+                        {selectionLoading ? (
+                          <Loader2 size={16} className="text-primary animate-spin" />
+                        ) : (
+                          <input
+                            type="checkbox"
+                            checked={allSelected}
+                            ref={(el) => {
+                              if (el) {
+                                el.indeterminate = selectedIds.length > 0 && !allSelected;
+                              }
+                            }}
+                            onChange={toggleAll}
+                            className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
+                          />
+                        )}
                         <span className="pl-2">{h}</span>
                       </div>
                     ) : (
@@ -282,21 +295,32 @@ console.log(stores,"Stores");
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-border">
-              {loading && (
+              {loading && <StoreAuthorizationTableSkeleton />}
+              {!loading && error && (
                 <tr>
-                  <td colSpan={8} className="py-10 text-center text-sm text-slate-500">
-                    Loading platform stores...
+                  <td colSpan={8} className="py-20 text-center">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <AlertCircle size={36} className="text-red-400 opacity-70" />
+                      <p className="text-sm font-medium text-slate-700">{error}</p>
+                      <button
+                        type="button"
+                        onClick={reloadStores}
+                        className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-primary border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors"
+                      >
+                        <RefreshCw size={12} /> Retry
+                      </button>
+                    </div>
                   </td>
                 </tr>
               )}
-              {!loading && stores.length === 0 && (
+              {!loading && !error && stores.length === 0 && (
                 <tr>
                   <td colSpan={8} className="py-10 text-center text-sm text-slate-500">
                     No authorized stores found
                   </td>
                 </tr>
               )}
-              {!loading && stores.map((store) => (
+              {!loading && !error && stores.map((store) => (
                 <tr
                   key={store.id}
                   className="hover:bg-surface/50 transition-colors"
@@ -471,6 +495,15 @@ console.log(stores,"Stores");
       />
 
       {/* ── Modals ── */}
+      <AddStoreModal
+        open={addStoreModal.open}
+        modal={addStoreModal}
+        countries={addStoreCountries}
+        onClose={closeAddStore}
+        onPlatformChange={setAddStorePlatform}
+        onCountryChange={setAddStoreCountry}
+        onSubmit={submitAddStore}
+      />
       <NicknameModal
         modal={nicknameModal}
         onClose={closeNickname}
@@ -497,4 +530,35 @@ console.log(stores,"Stores");
       />
     </div>
   );
+}
+
+function StoreAuthorizationTableSkeleton() {
+  return Array.from({ length: 6 }).map((_, index) => (
+    <tr key={index} className="animate-pulse">
+      <td className="pl-5 py-3">
+        <div className="h-4 w-4 rounded bg-slate-200" />
+      </td>
+      <td className="py-3 pr-4">
+        <div className="h-4 w-20 rounded bg-slate-200" />
+      </td>
+      <td className="py-3 pr-4">
+        <div className="h-4 w-32 rounded bg-slate-200" />
+      </td>
+      <td className="py-3 pr-4">
+        <div className="h-4 w-28 rounded bg-slate-200" />
+      </td>
+      <td className="py-3 pr-4">
+        <div className="h-4 w-16 rounded bg-slate-200" />
+      </td>
+      <td className="py-3 pr-4">
+        <div className="h-5 w-24 rounded-full bg-slate-200" />
+      </td>
+      <td className="py-3 pr-4">
+        <div className="h-4 w-28 rounded bg-slate-200" />
+      </td>
+      <td className="py-3 pr-5">
+        <div className="h-8 w-8 rounded-lg bg-slate-200" />
+      </td>
+    </tr>
+  ));
 }

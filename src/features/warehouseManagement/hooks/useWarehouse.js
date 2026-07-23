@@ -252,6 +252,7 @@ export function useWarehouse() {
         isLoading: warehouseLoading,
         isError: isWarehouseError,
         error: warehouseError,
+        refetch: refetchWarehouses,
     } = useQuery({
         queryKey: WAREHOUSE_QUERY_KEY(debouncedSearch),
         queryFn: () => fetchAllWarehouses(debouncedSearch),
@@ -420,6 +421,7 @@ export function useWarehouse() {
         warehouseLoading,
         isWarehouseError,
         warehouseError,
+        refetchWarehouses,
         // platform selector
         platform,
         setPlatform,

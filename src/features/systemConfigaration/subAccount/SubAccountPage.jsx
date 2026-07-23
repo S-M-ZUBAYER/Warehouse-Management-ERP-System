@@ -361,7 +361,7 @@
 //   );
 // }
 
-import { Search, Plus, Pencil, Trash2, Eye } from "lucide-react";
+import { AlertCircle, RefreshCw, Search, Plus, Pencil, Trash2, Eye } from "lucide-react";
 import { useRef, useEffect, useState } from "react";
 import Topbar from "../../../components/layout/Topbar";
 import { useSubAccount } from "./hooks/useSubAccount";
@@ -377,6 +377,7 @@ export default function SubAccountPage() {
     accounts,
     accountLoading,
     accountError,
+    refetchAccounts,
     editAccount,
     handleEditClick,
     handleOpenAdd, // ✅ replaces () => setShowAddPage(true)
@@ -498,23 +499,28 @@ export default function SubAccountPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-border">
-              {accountLoading && (
-                <tr>
-                  <td colSpan={7} className="text-center py-8 text-slate-400">
-                    Loading accounts...
-                  </td>
-                </tr>
-              )}
+              {accountLoading && <SubAccountTableSkeleton />}
 
-              {accountError && (
+              {!accountLoading && accountError && (
                 <tr>
-                  <td colSpan={7} className="text-center py-8 text-red-400">
-                    Failed to load accounts.
+                  <td colSpan={7} className="py-20 text-center">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <AlertCircle size={36} className="text-red-400 opacity-70" />
+                      <p className="text-sm font-medium text-slate-700">Failed to load accounts.</p>
+                      <button
+                        type="button"
+                        onClick={refetchAccounts}
+                        className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-primary border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors"
+                      >
+                        <RefreshCw size={12} /> Retry
+                      </button>
+                    </div>
                   </td>
                 </tr>
               )}
 
               {!accountLoading &&
+                !accountError &&
                 accounts.map((acc) => (
                   <tr
                     key={acc.id}
@@ -734,4 +740,32 @@ export default function SubAccountPage() {
       )}
     </div>
   );
+}
+
+function SubAccountTableSkeleton() {
+  return Array.from({ length: 6 }).map((_, index) => (
+    <tr key={index} className="animate-pulse">
+      <td className="pl-5 py-2">
+        <div className="h-4 w-4 rounded bg-slate-200" />
+      </td>
+      <td className="py-2 pr-4">
+        <div className="h-8 w-8 rounded-full bg-slate-200" />
+      </td>
+      <td className="py-2 pr-4">
+        <div className="h-4 w-32 rounded bg-slate-200" />
+      </td>
+      <td className="py-2 pr-4">
+        <div className="h-4 w-24 rounded bg-slate-200" />
+      </td>
+      <td className="py-2 pr-4">
+        <div className="h-4 w-28 rounded bg-slate-200" />
+      </td>
+      <td className="py-2 pr-4">
+        <div className="h-4 w-36 rounded bg-slate-200" />
+      </td>
+      <td className="py-2 pr-5">
+        <div className="h-8 w-8 rounded-lg bg-slate-200" />
+      </td>
+    </tr>
+  ));
 }

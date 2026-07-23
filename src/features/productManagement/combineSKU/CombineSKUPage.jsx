@@ -34,7 +34,10 @@ export default function CombineSKUPage() {
     isFetching,
     isError,
     error,
+    refetch,
     selectedIds,
+    selectedBundles,
+    selectionLoading,
     toggleSelect,
     toggleAll,
     allSelected,
@@ -55,6 +58,16 @@ export default function CombineSKUPage() {
   const { total, totalPages, limit } = pagination;
   const rangeStart = total === 0 ? 0 : (page - 1) * limit + 1;
   const rangeEnd = Math.min(page * limit, total);
+  const selectedRows =
+    selectedBundles.length === selectedIds.length
+      ? selectedBundles
+      : bundles.filter((bundle) => selectedIds.includes(bundle.id));
+  const exportColumns = [
+    { label: "Combine SKU", key: "combine_sku_code" },
+    { label: "Name", key: "combine_name" },
+    { label: "Stock", key: "computed_quantity" },
+    { label: "Items", render: (row) => row.items?.length || 0 },
+  ];
 
   // Show at most 5 page buttons, centered around current page
   const getPageNumbers = () => {
@@ -103,7 +116,7 @@ export default function CombineSKUPage() {
           </div>
           <button
             onClick={() => setPage(1)}
-            className="px-5 py-2 text-sm font-semibold bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors"
+            className="min-w-[64px] whitespace-nowrap flex items-center justify-center px-5 py-2 text-sm font-semibold bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors"
           >
             Search
           </button>
@@ -153,7 +166,10 @@ export default function CombineSKUPage() {
                 error?.message ??
                 "Failed to load combine SKUs"
               }
-              onRetry={() => setPage(1)}
+              onRetry={() => {
+                setPage(1);
+                refetch?.();
+              }}
             />
           ) : (
             <table className="w-full text-sm font-body">
@@ -161,16 +177,20 @@ export default function CombineSKUPage() {
                 <tr className="border-b border-surface-border bg-white">
                   <th className="py-3 pl-5 text-left w-32">
                     <div className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={allSelected}
-                        ref={(el) => {
-                          if (el)
-                            el.indeterminate = someSelected && !allSelected;
-                        }}
-                        onChange={toggleAll}
-                        className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
-                      />
+                      {selectionLoading ? (
+                        <Loader2 size={16} className="text-primary animate-spin" />
+                      ) : (
+                        <input
+                          type="checkbox"
+                          checked={allSelected}
+                          ref={(el) => {
+                            if (el)
+                              el.indeterminate = someSelected && !allSelected;
+                          }}
+                          onChange={toggleAll}
+                          className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
+                        />
+                      )}
                       <span className="pl-2 text-base font-semibold text-primary-text whitespace-nowrap">
                         Select All
                       </span>
@@ -418,25 +438,10 @@ export default function CombineSKUPage() {
         <div className="flex justify-end gap-3 px-5 py-4 border-t border-surface-border">
           <ExportMenu
             className="flex items-center gap-2 px-14 py-2 text-base font-semibold border border-surface-border rounded-lg text-slate-700 bg-white hover:bg-surface-card transition-colors"
-            onExportCsv={() => exportRowsToCsv(bundles.filter((bundle) => selectedIds.includes(bundle.id)), [
-              { label: "Combine SKU", key: "combine_sku_code" },
-              { label: "Name", key: "combine_name" },
-              { label: "Stock", key: "computed_quantity" },
-              { label: "Items", render: (row) => row.items?.length || 0 },
-            ], "combine-skus.csv", "combine SKU")}
-            onExportXlsx={() => exportRowsToXlsx(bundles.filter((bundle) => selectedIds.includes(bundle.id)), [
-              { label: "Combine SKU", key: "combine_sku_code" },
-              { label: "Name", key: "combine_name" },
-              { label: "Stock", key: "computed_quantity" },
-              { label: "Items", render: (row) => row.items?.length || 0 },
-            ], "combine-skus.xlsx", "combine SKU")}
+            onExportCsv={() => exportRowsToCsv(selectedRows, exportColumns, "combine-skus.csv", "combine SKU")}
+            onExportXlsx={() => exportRowsToXlsx(selectedRows, exportColumns, "combine-skus.xlsx", "combine SKU")}
           />
-          <button onClick={() => printRows(bundles.filter((bundle) => selectedIds.includes(bundle.id)), [
-            { label: "Combine SKU", key: "combine_sku_code" },
-            { label: "Name", key: "combine_name" },
-            { label: "Stock", key: "computed_quantity" },
-            { label: "Items", render: (row) => row.items?.length || 0 },
-          ], "Selected Combine SKUs", "combine SKU")} className="px-16 py-2 text-base font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors">
+          <button onClick={() => printRows(selectedRows, exportColumns, "Selected Combine SKUs", "combine SKU")} className="px-16 py-2 text-base font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors">
             Print
           </button>
         </div>

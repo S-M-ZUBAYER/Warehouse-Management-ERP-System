@@ -670,6 +670,8 @@ export default function AddAccountPage({
                 value: String(w?.id), // ✅ ensure string to match form state
               }))}
               placeholder="Select warehouse"
+              required
+              error={errors.warehouseId}
             />
 
             <FormInput
@@ -754,6 +756,8 @@ export default function AddAccountPage({
                   ? "Leave blank to keep current Email"
                   : "Write email here"
               }
+              required
+              error={errors.email}
             />
 
             <FormInput

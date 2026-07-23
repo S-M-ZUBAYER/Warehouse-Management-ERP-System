@@ -16,10 +16,18 @@ const api = axios.create({
 // ── Request interceptor: attach token only when it exists ─────────────────
 api.interceptors.request.use(
     (config) => {
+        const publicAuthPaths = ["/auth/register", "/auth/login"];
+        const isPublicAuthPath = publicAuthPaths.some((path) =>
+            config.url?.includes(path)
+        );
         const token = localStorage.getItem("whmAccessToken");
-        if (token) {
+
+        if (token && !isPublicAuthPath) {
             config.headers.Authorization = `Bearer ${token}`;
+        } else {
+            delete config.headers.Authorization;
         }
+
         return config;
     },
     (error) => Promise.reject(error)
