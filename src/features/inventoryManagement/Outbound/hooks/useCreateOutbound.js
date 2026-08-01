@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { OUTBOUND_KEYS } from './useOutboundList';
 import api from '../../../../lib/api';
 import useDebounce from '../../../../hooks/useDebounce';
+import { filterWarehousesByPermission } from '../../../../utils/permissions';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // API helpers
@@ -55,7 +56,18 @@ const EMPTY_FORM = {
 // ─────────────────────────────────────────────────────────────────────────────
 // Hook — used by CreateOutboundPage and SelectMerchantSKUModal
 // ─────────────────────────────────────────────────────────────────────────────
-const getAvailableQty = (sku) => Math.max(0, Number(sku?.qty_available ?? sku?.qty_on_hand ?? 0));
+const getMerchantSkuId = (sku) => sku?.merchant_sku_id ?? sku?.merchantSkuId ?? String(sku?.id ?? '').replace(/^merchant:/, '');
+const getSkuRowId = (sku) => sku?.row_id || sku?.rowId || `merchant:${getMerchantSkuId(sku)}`;
+const normalizePickerSku = (sku) => {
+    const recordId = getMerchantSkuId(sku);
+    return {
+        ...sku,
+        id: getSkuRowId(sku),
+        skuType: 'merchant',
+        merchantSkuId: recordId,
+    };
+};
+const getAvailableQty = (sku) => Math.max(0, Number(sku?.qty_available ?? sku?.available_for_platform ?? sku?.available ?? sku?.qty_on_hand ?? 0));
 
 export function useCreateOutbound({ onSuccess, initialOrder = null }) {
     const queryClient = useQueryClient();
@@ -88,9 +100,12 @@ export function useCreateOutbound({ onSuccess, initialOrder = null }) {
         staleTime: 1000 * 60 * 2,
         gcTime: 1000 * 60 * 5,
         placeholderData: (prev) => prev,
+        select: (warehouses) => filterWarehousesByPermission(warehouses),
     });
 
-    const pickerSkus = pickerData?.data ?? [];
+    const pickerSkus = (pickerData?.data ?? [])
+        .filter((sku) => !sku?.combine_sku_id && !sku?.combineSkuId && (sku?.sku_type ?? sku?.skuType ?? 'merchant') !== 'combine')
+        .map(normalizePickerSku);
 
     useEffect(() => {
         if (!initialOrder) return;
@@ -104,11 +119,15 @@ export function useCreateOutbound({ onSuccess, initialOrder = null }) {
             receivingWarehouseAddress: initialOrder.receiving_warehouse_address ?? initialOrder.warehouse?.location ?? '',
             notes: initialOrder.notes ?? '',
         });
-        setLines((initialOrder.lines ?? []).map((line) => {
+        setLines((initialOrder.lines ?? [])
+            .filter((line) => !line.combine_sku_id && !line.combineSkuId && !line.combineSku)
+            .map((line) => {
             const sku = line.merchantSku ?? {};
+            const recordId = line.merchant_sku_id ?? line.merchantSkuId;
             return {
-                id: line.merchant_sku_id,
-                merchantSkuId: line.merchant_sku_id,
+                id: `merchant:${recordId}`,
+                skuType: 'merchant',
+                merchantSkuId: recordId,
                 sku_name: sku.sku_name,
                 sku_title: sku.sku_title,
                 image_url: sku.image_url,
@@ -185,7 +204,8 @@ export function useCreateOutbound({ onSuccess, initialOrder = null }) {
     const confirmSkuSelection = useCallback(() => {
         const newLines = pickerPreviewItems.map((sku) => ({
             id: sku.id,
-            merchantSkuId: sku.id,
+            skuType: 'merchant',
+            merchantSkuId: sku.merchantSkuId,
             sku_name: sku.sku_name,
             sku_title: sku.sku_title,
             image_url: sku.image_url,
@@ -246,7 +266,7 @@ export function useCreateOutbound({ onSuccess, initialOrder = null }) {
         if (!form.warehouseId) e.warehouseId = 'Warehouse is required';
         if (!form.receivingWarehouseName?.trim()) e.receivingWarehouseName = 'Receiving warehouse is required';
         if (!form.receivingWarehouseAddress?.trim()) e.receivingWarehouseAddress = 'Receiving warehouse full address is required';
-        if (!lines.length) e.lines = 'Add at least one merchant SKU';
+        if (!lines.length) e.lines = 'Add at least one SKU';
         const invalidQtyLine = lines.find((line) => !Number.isInteger(Number(line.qtyExpected)) || Number(line.qtyExpected) < 1);
         if (invalidQtyLine) e.lines = 'Quantity must be at least 1 for every SKU';
         const overLimitLine = lines.find((line) => Number(line.qtyExpected) > Number(line.qtyAvailable ?? 0));
@@ -303,7 +323,7 @@ export function useCreateOutbound({ onSuccess, initialOrder = null }) {
             receivingWarehouseAddress: form.receivingWarehouseAddress || undefined,
             notes: form.notes || undefined,
             lines: lines.map((l) => ({
-                merchantSkuId: l.merchantSkuId,
+                merchantSkuId: l.merchantSkuId || String(l.id).replace(/^merchant:/, ''),
                 qtyExpected: Number(l.qtyExpected),
                 unitCost: l.unitCost ? Number(l.unitCost) : undefined,
             })),

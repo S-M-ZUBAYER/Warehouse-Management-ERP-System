@@ -38,12 +38,17 @@ api.interceptors.response.use(
     (response) => response.data,
     (error) => {
         const status = error.response?.status;
+        const publicAuthPaths = ["/auth/register", "/auth/login"];
+        const isPublicAuthPath = publicAuthPaths.some((path) =>
+            error.config?.url?.includes(path)
+        );
 
-        if (status === 401) {
+        if (status === 401 && !isPublicAuthPath) {
             // Token expired — clear storage and redirect
             localStorage.removeItem("whmAccessToken");
             localStorage.removeItem("whmRefreshToken");
             localStorage.removeItem("warehouseUser");
+            localStorage.removeItem("auth-store");
             window.location.href = "/warehouse_management/login";
         }
 

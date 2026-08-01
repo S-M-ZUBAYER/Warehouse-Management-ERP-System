@@ -1,6 +1,7 @@
 'use strict';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../../../lib/api';
+import { filterWarehousesByPermission } from '../../../../utils/permissions';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Query keys
@@ -25,7 +26,7 @@ export function useOutboundDropdowns() {
         gcTime: 1000 * 60 * 20,
     });
 
-    const warehouses = data?.warehouses ?? [];
+    const warehouses = filterWarehousesByPermission(data?.warehouses ?? []);
     const currencies = data?.currencies ?? [];
 
     // Options shaped for the filter bar dropdowns

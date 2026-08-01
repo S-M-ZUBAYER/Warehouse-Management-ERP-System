@@ -9,6 +9,7 @@ import {
     getInboundSearchField,
 } from '../../shared/inboundFilterUtils';
 import { isManualInboundNote } from '../manualInboundConstants';
+import { getDefaultAllowedWarehouseId, resolveAllowedWarehouseId } from '../../../../utils/permissions';
 
 const COMPLETED_STATUSES = ['completed', 'complete', 'received'];
 
@@ -74,7 +75,7 @@ const fetchAllManualInboundList = async (params, knownTotal = 0) => {
 // ─────────────────────────────────────────────────────────────────────────────
 export function useManualInboundList() {
     // ── Filter state ──────────────────────────────────────────────────────────
-    const [warehouseId, setWarehouseId] = useState('');
+    const [warehouseId, setWarehouseId] = useState(() => getDefaultAllowedWarehouseId());
     const [timeType,    setTimeType]    = useState('Created Time');
     const [inboundType, setInboundType] = useState('Inbound No.');
     const [search,      setSearch]      = useState('');
@@ -96,7 +97,7 @@ export function useManualInboundList() {
     }, []);
 
     const updateWarehouseId = useCallback((value) => {
-        setWarehouseId(value);
+        setWarehouseId(resolveAllowedWarehouseId(value));
         resetList();
     }, [resetList]);
 

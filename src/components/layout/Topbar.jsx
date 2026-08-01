@@ -305,6 +305,31 @@ const normalizeImageSrc = (image) => {
     return `data:image/jpeg;base64,${src}`;
 };
 
+const formatListValue = (value) => {
+    if (!value) return '';
+    if (Array.isArray(value)) {
+        return value
+            .map((item) => {
+                if (!item || typeof item !== 'object') return item;
+                return item.name || item.label || item.shopName || item.storeName || item.warehouseName || item.id;
+            })
+            .filter(Boolean)
+            .join(', ');
+    }
+    if (typeof value === 'object') {
+        return value.name || value.label || value.shopName || value.storeName || value.warehouseName || '';
+    }
+    return value;
+};
+
+const summarizePermissions = (permissions) => {
+    if (!permissions || typeof permissions !== 'object') return '';
+    return Object.entries(permissions)
+        .filter(([, value]) => value === true || value?.access === true)
+        .map(([key]) => key.replace(/_/g, ' '))
+        .join(', ');
+};
+
 export default function Topbar({ PageTitle, showBack = false, onBack }) {
     const navigate = useNavigate();
     const { t } = useTranslation();
@@ -390,6 +415,45 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
         );
         const department = getFirstValue(oldApiUser.department, zustandUser.department, storedWarehouseUser.department);
         const designation = getFirstValue(oldApiUser.designation, zustandUser.designation, storedWarehouseUser.designation);
+        const companyName = getFirstValue(
+            oldApiUser.companyName,
+            oldApiUser.shopName,
+            oldApiUser.company?.name,
+            zustandUser.companyName,
+            zustandUser.shopName,
+            zustandUser.company?.name,
+            storedWarehouseUser.companyName,
+            storedWarehouseUser.shopName,
+            storedWarehouseUser.company?.name
+        );
+        const timezone = getFirstValue(oldApiUser.timezone, zustandUser.timezone, storedWarehouseUser.timezone);
+        const createdDate = getFirstValue(
+            oldApiUser.createdAt,
+            oldApiUser.created_at,
+            zustandUser.createdAt,
+            zustandUser.created_at,
+            storedWarehouseUser.createdAt,
+            storedWarehouseUser.created_at
+        );
+        const lastLogin = getFirstValue(
+            oldApiUser.lastLogin,
+            oldApiUser.last_login,
+            oldApiUser.lastLoginAt,
+            zustandUser.lastLogin,
+            zustandUser.last_login,
+            zustandUser.lastLoginAt,
+            storedWarehouseUser.lastLogin,
+            storedWarehouseUser.last_login,
+            storedWarehouseUser.lastLoginAt
+        );
+        const emailVerified = getFirstValue(
+            oldApiUser.emailVerified,
+            oldApiUser.email_verified,
+            zustandUser.emailVerified,
+            zustandUser.email_verified,
+            storedWarehouseUser.emailVerified,
+            storedWarehouseUser.email_verified
+        );
         const warehouse = getFirstValue(
             oldApiUser.warehouse?.name,
             oldApiUser.warehouseName,
@@ -397,6 +461,28 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
             zustandUser.warehouseName,
             storedWarehouseUser.warehouse?.name,
             storedWarehouseUser.warehouseName
+        );
+        const assignedWarehouses = formatListValue(getFirstValue(
+            oldApiUser.warehouses,
+            oldApiUser.assignedWarehouses,
+            zustandUser.warehouses,
+            zustandUser.assignedWarehouses,
+            storedWarehouseUser.warehouses,
+            storedWarehouseUser.assignedWarehouses
+        ));
+        const storeAccess = formatListValue(getFirstValue(
+            oldApiUser.stores,
+            oldApiUser.platformStores,
+            oldApiUser.storeAccess,
+            zustandUser.stores,
+            zustandUser.platformStores,
+            zustandUser.storeAccess,
+            storedWarehouseUser.stores,
+            storedWarehouseUser.platformStores,
+            storedWarehouseUser.storeAccess
+        ));
+        const permissionSummary = summarizePermissions(
+            oldApiUser.permissions || zustandUser.permissions || storedWarehouseUser.permissions
         );
 
         return {
@@ -408,7 +494,15 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
             phone,
             department,
             designation,
+            companyName,
+            timezone,
+            createdDate,
+            lastLogin,
+            emailVerified: typeof emailVerified === 'boolean' ? (emailVerified ? 'Verified' : 'Not verified') : emailVerified,
             warehouse,
+            assignedWarehouses,
+            storeAccess,
+            permissionSummary,
         };
     }, [authUser, authTokenData, t]);
 
@@ -423,8 +517,11 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
     }, []);
 
     const handleLogout = () => {
+        localStorage.removeItem('whmAccessToken');
+        localStorage.removeItem('whmRefreshToken');
+        localStorage.removeItem('warehouseUser');
         logout();
-        navigate('/warehouse_management/login');
+        navigate('/warehouse_management/login', { replace: true });
     };
 
     const initials = profile.fullName
@@ -438,12 +535,19 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
     const profileRows = [
         [t('topbar.name'), profile.fullName],
         [t('topbar.email'), profile.email],
-        [t('topbar.accountId'), profile.accountId],
         [t('topbar.role'), profile.role],
         [t('topbar.phone'), profile.phone],
+        ['Company / Shop', profile.companyName],
         [t('topbar.department'), profile.department],
         [t('topbar.designation'), profile.designation],
         [t('topbar.warehouse'), profile.warehouse],
+        ['Assigned Warehouses', profile.assignedWarehouses],
+        ['Store Access', profile.storeAccess],
+        ['Permissions', profile.permissionSummary],
+        ['Timezone', profile.timezone],
+        ['Created Date', profile.createdDate],
+        ['Last Login', profile.lastLogin],
+        ['Email Verified', profile.emailVerified],
     ];
 
     const dropdownItems = [
@@ -551,7 +655,7 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
             </div>
             {showProfileModal && (
                 <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
-                    <div className="w-full max-w-xl bg-white rounded-2xl shadow-2xl overflow-hidden">
+                    <div className="w-full max-w-3xl max-h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
                         <div className="flex items-start justify-between px-6 py-4 border-b border-surface-border">
                             <div>
                                 <h2 className="text-lg font-bold text-slate-800 font-display">{t('topbar.profileInfo')}</h2>
@@ -565,7 +669,7 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
                             </button>
                         </div>
 
-                        <div className="p-6">
+                        <div className="p-6 overflow-y-auto">
                             <div className="flex items-center gap-4 mb-5">
                                 <div
                                     className="w-16 h-16 border-2 border-primary rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 text-base font-bold"
@@ -583,7 +687,7 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 gap-3">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 {profileRows.map(([label, value]) => (
                                     <div key={label} className="rounded-xl border border-surface-border bg-slate-50/70 px-4 py-3">
                                         <p className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold mb-1">{label}</p>

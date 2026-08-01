@@ -45,9 +45,11 @@ export default function NewOrder() {
   const actionLabel = activeTab === "Packed Successfully" ? "Push" : "Pack";
   const isShopee = String(list.storeContext?.platform || "").toLowerCase().includes("shopee");
   const isOutOfStockTab = activeTab === "Out Of Stock";
+  const isPlatformProcessingTab = activeTab === "Platform Processing";
   const isPackedSuccessfullyTab = activeTab === "Packed Successfully";
   const showActionButton =
     !isOutOfStockTab &&
+    !isPlatformProcessingTab &&
     (!isShopee || actionName !== "pack" || SHOPEE_READY_TO_SHIP_TABS.includes(activeTab));
   const rowActions = isPackedSuccessfullyTab
     ? [

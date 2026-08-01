@@ -419,7 +419,7 @@ export default function OrderDetailPage() {
               <h3 className="text-sm font-bold text-slate-800 font-display mb-6">Select Merchant SKU</h3>
               <div className="overflow-auto" style={{ maxHeight: "260px" }}>
                 <table className="w-full text-sm">
-                  <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
+                  <thead className="sticky top-0 z-10 bg-white [&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                     <tr className="border-b border-surface-border">
                       {["Select", "Image", "Product Name", "SKU", "Warehouse", "Total Available", "Available For Platform", "Lock"].map((h) => (
                         <th key={h} className="py-2.5 text-left text-xs font-semibold text-slate-600 pr-4">{h}</th>

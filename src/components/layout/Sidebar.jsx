@@ -19,6 +19,7 @@ import {
   FileText,
   AlertCircle,
   Crown,
+  MessageCircle,
 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import { getStoredWarehouseUser, filterNavByPermission } from "@/utils/permissions";
@@ -306,6 +307,13 @@ const navItems = [
       },
     ],
   },
+  //  {
+  //   label: "Chat",
+  //   i18nKey: "nav.chat",
+  //   permissionKey: "dashboard",
+  //   to: "/warehouse_management/chat",
+  //   icon: MessageCircle,
+  // }
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────

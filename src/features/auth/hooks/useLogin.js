@@ -4,6 +4,54 @@ import authApi from "@/lib/authApi";
 import { useAuthStore } from "../../../stores/authStore";
 import api from "../../../lib/api";
 
+const loginNewApi = async (email, password) => {
+    return api.post("/auth/login", { email, password });
+};
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const getAuthData = (response) => {
+    const body = response?.data?.success !== undefined ? response.data : response;
+    return body?.data || body || {};
+};
+
+const hasAuthSuccess = (response) => {
+    const body = response?.data?.success !== undefined ? response.data : response;
+    return body?.success === true || Boolean(getAuthData(response).accessToken);
+};
+
+const storeNewApiAuth = (authData) => {
+    const { accessToken, refreshToken, user } = authData || {};
+
+    if (!accessToken) {
+        throw new Error("Auth token was not returned.");
+    }
+
+    localStorage.setItem("whmAccessToken", accessToken);
+    localStorage.setItem("whmRefreshToken", refreshToken || "");
+    localStorage.setItem("warehouseUser", JSON.stringify(user));
+};
+
+const getSafeRegistrationName = (email) => {
+    const fallback = String(email || "").split("@")[0] || "user";
+    return fallback.replace(/[^a-zA-Z0-9]/g, "") || "user";
+};
+
+const resolveUserWithPermissions = async (user) => {
+    if (!user?.id) return user;
+
+    try {
+        const detailRes = await api.get(`/users/${user.id}`);
+        const detailUser = detailRes?.data || detailRes;
+        return detailUser && typeof detailUser === "object"
+            ? { ...user, ...detailUser }
+            : user;
+    } catch (err) {
+        console.warn("Failed to load full user permissions:", err);
+        return user;
+    }
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // useLogin — uses authApi (no token) + Zustand authStore
 // ─────────────────────────────────────────────────────────────────────────────
@@ -69,52 +117,52 @@ export function useLogin() {
                 region: res.data.country || "",
                 status: res.data.status || "active",
             };
+            const registrationName = getSafeRegistrationName(formData.email);
 
             // ── STEP 2: New login API ───────────────────────────────────────────
             let newApiRes = null;
             try {
-                newApiRes = await api.post("/auth/login", {
-                    email: formData.email,
-                    password: formData.password,
-                });
+                newApiRes = await loginNewApi(formData.email, formData.password);
             } catch (newApiErr) {
                 newApiRes = newApiErr.response?.data || null;
             }
 
-            const newApiSuccess = newApiRes?.success === true || newApiRes?.data?.success === true;
+            const newApiSuccess = hasAuthSuccess(newApiRes);
 
             if (newApiSuccess) {
                 // ── Step 2 succeeded — store tokens from new API ───────────────
-                const { accessToken, refreshToken, user } =
-                    newApiRes.data?.data || newApiRes.data || {};
-
-                localStorage.setItem("whmAccessToken", accessToken);
-                localStorage.setItem("whmRefreshToken", refreshToken);
-                localStorage.setItem("warehouseUser", JSON.stringify(user));
+                const authData = getAuthData(newApiRes);
+                const resolvedUser = await resolveUserWithPermissions(authData.user);
+                storeNewApiAuth({ ...authData, user: resolvedUser });
 
             } else {
                 // ── Step 2 failed — register via new API then store tokens ──────
                 console.warn("New login API failed, attempting auto-register...");
             
                 try {
-                    const registerRes = await api.post("/auth/register", {
-                        userName: res.data.userName,
+                    const autoRegisterPayload = {
+                        userName: registrationName,
                         userEmail: formData.email,
                         userPassword: formData.password,
-                        companyName: res.data.designation || "",
-                        phone: res.data.phone || "",
-                        timezone: res.data.timezone || "",
-                        currency: res.data.currency || "",
-                        avatar: res.data.photo || "",
-                    });
+                    };
 
-                    const regData = registerRes.data || registerRes;
+                    const registerRes = await api.post("/auth/register", autoRegisterPayload);
 
-                    if (regData?.success === true) {
-                        const { accessToken, refreshToken, user } = regData.data || {};
-                        localStorage.setItem("whmAccessToken", accessToken);
-                        localStorage.setItem("whmRefreshToken", refreshToken);
-                        localStorage.setItem("warehouseUser", JSON.stringify(user));
+                    const regData = registerRes;
+
+                    if (hasAuthSuccess(regData)) {
+                        let authData = getAuthData(regData);
+
+                        if (!authData.accessToken) {
+                            const loginAfterRegisterRes = await loginNewApi(formData.email, formData.password);
+                            authData = getAuthData(loginAfterRegisterRes);
+                        }
+
+                        if (!authData.accessToken) {
+                            throw new Error("Auto-register succeeded but login token was not returned.");
+                        }
+
+                        storeNewApiAuth(authData);
                     } else {
                         // Register also failed — clear new API keys, proceed with old login only
                         console.warn("Auto-register also failed:", regData?.message);
@@ -123,15 +171,34 @@ export function useLogin() {
                         localStorage.removeItem("warehouseUser");
                     }
                 } catch (regErr) {
-                    console.warn("Auto-register error:", regErr);
-                    localStorage.removeItem("whmAccessToken");
-                    localStorage.removeItem("whmRefreshToken");
-                    localStorage.removeItem("warehouseUser");
+                    console.warn("Auto-register error:", regErr.response?.data || regErr);
+                    try {
+                        if (!regErr.response) {
+                            await wait(800);
+                        }
+
+                        const loginAfterRegisterRes = await loginNewApi(formData.email, formData.password);
+                        const loginAfterRegisterData = getAuthData(loginAfterRegisterRes);
+
+                        if (!loginAfterRegisterData.accessToken) {
+                            throw new Error("Login token was not returned after register error.");
+                        }
+
+                        storeNewApiAuth(loginAfterRegisterData);
+                    } catch (loginAfterRegisterErr) {
+                        console.warn(
+                            "Login after auto-register error:",
+                            loginAfterRegisterErr.response?.data || loginAfterRegisterErr
+                        );
+                        localStorage.removeItem("whmAccessToken");
+                        localStorage.removeItem("whmRefreshToken");
+                        localStorage.removeItem("warehouseUser");
+                    }
                 }
             }
 
             // ── STEP 3: Save old API user to Zustand + navigate ────────────────
-            login(formData.email, userData);
+            login(userData, localStorage.getItem("whmAccessToken"));
             navigate("/warehouse_management");
 
         } catch (err) {

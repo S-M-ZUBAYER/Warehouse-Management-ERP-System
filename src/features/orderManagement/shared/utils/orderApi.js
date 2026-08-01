@@ -2174,6 +2174,10 @@ const formatManualDate = (value) => {
 
 const mapWarehouseSku = (sku, index = 0) => {
   const firstMapping = Array.isArray(sku.mappings) ? sku.mappings[0] : (Array.isArray(sku.platformMappings) ? sku.platformMappings[0] : null);
+  const skuType = sku.sku_type || sku.skuType || (sku.combine_sku_id || sku.combineSkuId ? "combine" : "merchant");
+  const merchantSkuId = sku.merchant_sku_id ?? sku.merchantSkuId ?? (skuType === "merchant" ? (sku.id ?? sku.sku_id) : null);
+  const combineSkuId = sku.combine_sku_id ?? sku.combineSkuId ?? (skuType === "combine" ? (sku.id ?? sku.sku_id) : null);
+  const stableId = sku.row_id || sku.rowId || `${skuType}:${merchantSkuId || combineSkuId || index}`;
   const qtyOnHand = Number(sku.qty_on_hand ?? sku.total_available ?? sku.on_hand ?? sku.onHand ?? sku.total_inventory ?? 0);
   const qtyReserved = Number(sku.qty_reserved ?? sku.lock_quantity ?? sku.allocated ?? sku.allocated_inventory ?? 0);
   const qtyAvailable = Number(
@@ -2186,8 +2190,10 @@ const mapWarehouseSku = (sku, index = 0) => {
   );
 
   return {
-    id: sku.id ?? sku.merchant_sku_id ?? sku.sku_id ?? index,
-    merchantSkuId: sku.merchant_sku_id ?? sku.id ?? sku.sku_id ?? index,
+    id: stableId,
+    merchantSkuId,
+    combineSkuId,
+    skuType,
     name: sku.sku_title || sku.product_name || sku.name || sku.sku_name || "Product",
     sku: sku.sku_name || sku.sku || sku.merchant_sku || "-",
     onHand: qtyOnHand,
@@ -2202,6 +2208,20 @@ const mapWarehouseSku = (sku, index = 0) => {
     weight: Number(sku.weight || sku.package_weight || 0),
     unitPrice: Number(sku.unit_price || sku.price || sku.sale_price || 0),
     raw: sku,
+  };
+};
+
+const getSelectedSkuIds = (sku) => {
+  const skuType = sku?.skuType || sku?.sku_type || (sku?.combineSkuId || sku?.combine_sku_id ? "combine" : "merchant");
+  const rawId = String(sku?.id || "");
+  const fallbackId = rawId.includes(":") ? rawId.split(":").pop() : rawId;
+  const combineSkuId = sku?.combineSkuId ?? sku?.combine_sku_id ?? (skuType === "combine" ? fallbackId : null);
+  const merchantSkuId = sku?.merchantSkuId ?? sku?.merchant_sku_id ?? (skuType === "merchant" ? fallbackId : null);
+  return {
+    skuType,
+    merchantSkuId: skuType === "combine" ? null : merchantSkuId,
+    combineSkuId: skuType === "combine" ? combineSkuId : null,
+    warehouseId: sku?.warehouseId ?? sku?.warehouse_id,
   };
 };
 
@@ -2273,17 +2293,21 @@ const buildPlatformItemPayload = (order, item = {}) => {
 };
 
 export const updateOrderItemMapping = async ({ order, item, merchantSku }) => {
-  const mappingResult = await api
-    .put(`/order-management/order-items/${encodeURIComponent(item.id)}/merchant-mapping`, {
-      platform: order.platform,
-      orderNo: order.orderNo,
-      warehousePackageNo: order.pkgNo,
-      merchantSkuId: merchantSku.id,
-      merchantSku: merchantSku.sku,
-      platformItemId: item.platformItemId,
-      quantity: item.quantity,
-    })
-    .then((res) => res.data ?? res);
+  const selectedSku = getSelectedSkuIds(merchantSku);
+  const mappingResult =
+    selectedSku.skuType === "merchant"
+      ? await api
+          .put(`/order-management/order-items/${encodeURIComponent(item.id)}/merchant-mapping`, {
+            platform: order.platform,
+            orderNo: order.orderNo,
+            warehousePackageNo: order.pkgNo,
+            merchantSkuId: selectedSku.merchantSkuId,
+            merchantSku: merchantSku.sku,
+            platformItemId: item.platformItemId,
+            quantity: item.quantity,
+          })
+          .then((res) => res.data ?? res)
+      : { message: "Merchant mapping updated" };
 
   const platform = normalizePlatform(order.platform);
   await api.post("/order-management/platform-orders/change-sku-mapping", {
@@ -2296,8 +2320,9 @@ export const updateOrderItemMapping = async ({ order, item, merchantSku }) => {
       storeContext: order.storeContext || getStoredOrderContext(),
     },
     item: buildPlatformItemPayload(order, item),
-    merchantSkuId: merchantSku.merchantSkuId || merchantSku.id,
-    warehouseId: merchantSku.warehouseId,
+    merchantSkuId: selectedSku.merchantSkuId || undefined,
+    combineSkuId: selectedSku.combineSkuId || undefined,
+    warehouseId: selectedSku.warehouseId,
   });
 
   return mappingResult;
@@ -2310,8 +2335,7 @@ export const lockReplacementSkuForPlatformOrder = async ({ order, item, merchant
 
   return api.post("/order-management/platform-orders/change-sku-mapping", {
     platform,
-    merchantSkuId: merchantSku?.merchantSkuId || merchantSku?.id,
-    warehouseId: merchantSku?.warehouseId,
+    ...getSelectedSkuIds(merchantSku),
     context: storeContext,
     order: {
       id: orderId,
@@ -2328,8 +2352,8 @@ const buildSkuOverridePayload = ({ order, item, merchantSku, context }) => {
   const storeContext = context || order?.storeContext || getStoredOrderContext();
   const orderId = order?.rawId || order?.orderId || order?.orderNo || order?.id;
   const platformItem = buildPlatformItemPayload(order, item);
-  const replacementMerchantSkuId = merchantSku?.merchantSkuId || merchantSku?.id;
-  const replacementWarehouseId = merchantSku?.warehouseId;
+  const selectedSku = getSelectedSkuIds(merchantSku);
+  const replacementWarehouseId = selectedSku.warehouseId;
   const quantity = platformItem.quantity || item?.quantity || 1;
 
   if (platform === "shopee") {
@@ -2340,7 +2364,8 @@ const buildSkuOverridePayload = ({ order, item, merchantSku, context }) => {
       shopId: getShopeeShopId(storeContext),
       itemId: platformItem.itemId || platformItem.platformItemId,
       modelId: platformItem.modelId,
-      replacementMerchantSkuId,
+      replacementMerchantSkuId: selectedSku.merchantSkuId || undefined,
+      replacementCombineSkuId: selectedSku.combineSkuId || undefined,
       replacementWarehouseId,
       quantity,
       reason: "out_of_stock",
@@ -2357,7 +2382,8 @@ const buildSkuOverridePayload = ({ order, item, merchantSku, context }) => {
     cipherId: getTikTokCipher(storeContext),
     productId: platformItem.productId || platformItem.platformItemId,
     skuId: platformItem.skuId,
-    replacementMerchantSkuId,
+    replacementMerchantSkuId: selectedSku.merchantSkuId || undefined,
+    replacementCombineSkuId: selectedSku.combineSkuId || undefined,
     replacementWarehouseId,
     quantity,
     reason: "out_of_stock",

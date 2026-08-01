@@ -8,6 +8,7 @@ import {
     getInboundDateField,
     getInboundSearchField,
 } from '../../shared/inboundFilterUtils';
+import { getDefaultAllowedWarehouseId, resolveAllowedWarehouseId } from '../../../../utils/permissions';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Query keys
@@ -71,7 +72,7 @@ export function useInboundList({ status }) {
     const queryClient = useQueryClient();
 
     // ── Filter state ──────────────────────────────────────────────────────────
-    const [warehouseId, setWarehouseId] = useState('');
+    const [warehouseId, setWarehouseId] = useState(() => getDefaultAllowedWarehouseId());
     const [timeType, setTimeType] = useState('Created Time');
     const [inboundType, setInboundType] = useState('Inbound No.');
     const [search, setSearch] = useState('');
@@ -98,7 +99,7 @@ export function useInboundList({ status }) {
     }, []);
 
     const updateWarehouseId = useCallback((value) => {
-        setWarehouseId(value);
+        setWarehouseId(resolveAllowedWarehouseId(value));
         resetList();
     }, [resetList]);
 

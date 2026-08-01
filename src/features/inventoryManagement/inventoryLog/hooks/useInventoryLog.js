@@ -1,6 +1,11 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../../../lib/api';
+import {
+    filterWarehousesByPermission,
+    getDefaultAllowedWarehouseId,
+    resolveAllowedWarehouseId,
+} from '../../../../utils/permissions';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Query keys
@@ -74,7 +79,7 @@ const toPositiveNumber = (value, fallback) => {
 // ─────────────────────────────────────────────────────────────────────────────
 export function useInventoryLog() {
     // ── Filter state ────────────────────────────────────────────────────────────
-    const [warehouseId, setWarehouseId] = useState('');
+    const [warehouseId, setWarehouseId] = useState(() => getDefaultAllowedWarehouseId());
     const [movementType, setMovementType] = useState('recent');
     const [startDate, setStartDate] = useState(formatDateInput(new Date()));
     const [endDate, setEndDate] = useState(formatDateInput(new Date()));
@@ -147,7 +152,7 @@ export function useInventoryLog() {
             limit,
         };
     }, [items.length, ledgerData, page]);
-    const warehouses = warehouseData?.data ?? [];
+    const warehouses = filterWarehousesByPermission(warehouseData?.data ?? []);
 
     useEffect(() => {
         setSelectedItems((prev) => {
@@ -197,7 +202,7 @@ export function useInventoryLog() {
 
     // Reset page when filters change
     const handleSetWarehouseId = useCallback((val) => {
-        setWarehouseId(val);
+        setWarehouseId(resolveAllowedWarehouseId(val));
         setPage(1);
         setSelectedIds([]);
         setSelectedItems([]);

@@ -5733,6 +5733,18 @@ const orderConfirmationModalLanguageFixes = {
     "Are you sure you want to withdraw this order?": "\u786e\u5b9a\u8981\u64a4\u56de\u8fd9\u4e2a\u8ba2\u5355\u5417\uff1f",
     "Order Number:": "\u8ba2\u5355\u53f7\uff1a",
     "order(s) selected": "\u4e2a\u8ba2\u5355\u5df2\u9009",
+    "Confirm Multi-Platform Action": "\u786e\u8ba4\u591a\u5e73\u53f0\u64cd\u4f5c",
+    "Only Shopee and TikTok orders can be processed together": "\u53ea\u80fd\u540c\u65f6\u5904\u7406 Shopee \u548c TikTok \u8ba2\u5355",
+    "Pack is only available for READY_TO_SHIP Shopee orders": "\u6253\u5305\u4ec5\u9002\u7528\u4e8e READY_TO_SHIP \u7684 Shopee \u8ba2\u5355",
+    "Pack is only available for AWAITING_SHIPMENT TikTok orders": "\u6253\u5305\u4ec5\u9002\u7528\u4e8e AWAITING_SHIPMENT \u7684 TikTok \u8ba2\u5355",
+    "Push is only available for AWAITING_COLLECTION TikTok orders": "\u63a8\u9001\u4ec5\u9002\u7528\u4e8e AWAITING_COLLECTION \u7684 TikTok \u8ba2\u5355",
+    "Process {count} selected Shopee and TikTok order(s) to {action}?": "\u5904\u7406 {count} \u4e2a\u5df2\u9009 Shopee \u548c TikTok \u8ba2\u5355\u5e76\u6267\u884c{action}\uff1f",
+    "{count} order(s) failed to {action}": "{count} \u4e2a\u8ba2\u5355{action}\u5931\u8d25",
+    "{count} selected order(s) packed successfully": "{count} \u4e2a\u5df2\u9009\u8ba2\u5355\u6253\u5305\u6210\u529f",
+    "{count} selected order(s) ready to print": "{count} \u4e2a\u5df2\u9009\u8ba2\u5355\u5df2\u53ef\u6253\u5370",
+    "Order {action} failed": "\u8ba2\u5355{action}\u5931\u8d25",
+    "pack": "\u6253\u5305",
+    "push": "\u63a8\u9001",
   },
   fil: {
     "Confirm Pack": "Kumpirmahin ang pack",
@@ -5741,6 +5753,18 @@ const orderConfirmationModalLanguageFixes = {
     "Are you sure you want to withdraw this order?": "Sigurado ka bang i-withdraw ang order na ito?",
     "Order Number:": "Order number:",
     "order(s) selected": "order ang napili",
+    "Confirm Multi-Platform Action": "Kumpirmahin ang multi-platform action",
+    "Only Shopee and TikTok orders can be processed together": "Shopee at TikTok orders lang ang puwedeng iproseso nang sabay",
+    "Pack is only available for READY_TO_SHIP Shopee orders": "Pack ay available lang para sa READY_TO_SHIP Shopee orders",
+    "Pack is only available for AWAITING_SHIPMENT TikTok orders": "Pack ay available lang para sa AWAITING_SHIPMENT TikTok orders",
+    "Push is only available for AWAITING_COLLECTION TikTok orders": "Push ay available lang para sa AWAITING_COLLECTION TikTok orders",
+    "Process {count} selected Shopee and TikTok order(s) to {action}?": "I-process ang {count} napiling Shopee at TikTok order(s) para mag-{action}?",
+    "{count} order(s) failed to {action}": "{count} order(s) failed to {action}",
+    "{count} selected order(s) packed successfully": "{count} selected order(s) packed successfully",
+    "{count} selected order(s) ready to print": "{count} selected order(s) ready to print",
+    "Order {action} failed": "Order {action} failed",
+    "pack": "pack",
+    "push": "push",
   },
   id: {
     "Confirm Pack": "Konfirmasi kemas",
@@ -5749,6 +5773,18 @@ const orderConfirmationModalLanguageFixes = {
     "Are you sure you want to withdraw this order?": "Yakin ingin menarik pesanan ini?",
     "Order Number:": "Nomor pesanan:",
     "order(s) selected": "pesanan dipilih",
+    "Confirm Multi-Platform Action": "Konfirmasi aksi multi-platform",
+    "Only Shopee and TikTok orders can be processed together": "Hanya pesanan Shopee dan TikTok yang dapat diproses bersama",
+    "Pack is only available for READY_TO_SHIP Shopee orders": "Kemas hanya tersedia untuk pesanan Shopee READY_TO_SHIP",
+    "Pack is only available for AWAITING_SHIPMENT TikTok orders": "Kemas hanya tersedia untuk pesanan TikTok AWAITING_SHIPMENT",
+    "Push is only available for AWAITING_COLLECTION TikTok orders": "Push hanya tersedia untuk pesanan TikTok AWAITING_COLLECTION",
+    "Process {count} selected Shopee and TikTok order(s) to {action}?": "Proses {count} pesanan Shopee dan TikTok yang dipilih untuk {action}?",
+    "{count} order(s) failed to {action}": "{count} pesanan gagal {action}",
+    "{count} selected order(s) packed successfully": "{count} pesanan terpilih berhasil dikemas",
+    "{count} selected order(s) ready to print": "{count} pesanan terpilih siap dicetak",
+    "Order {action} failed": "Pesanan gagal {action}",
+    "pack": "dikemas",
+    "push": "push",
   },
   th: {
     "Confirm Pack": "\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e01\u0e32\u0e23\u0e41\u0e1e\u0e47\u0e01",
@@ -5757,6 +5793,18 @@ const orderConfirmationModalLanguageFixes = {
     "Are you sure you want to withdraw this order?": "\u0e04\u0e38\u0e13\u0e41\u0e19\u0e48\u0e43\u0e08\u0e27\u0e48\u0e32\u0e08\u0e30\u0e16\u0e2d\u0e19\u0e04\u0e33\u0e2a\u0e31\u0e48\u0e07\u0e0b\u0e37\u0e49\u0e2d\u0e19\u0e35\u0e49\u0e2b\u0e23\u0e37\u0e2d\u0e44\u0e21\u0e48?",
     "Order Number:": "\u0e40\u0e25\u0e02\u0e04\u0e33\u0e2a\u0e31\u0e48\u0e07\u0e0b\u0e37\u0e49\u0e2d:",
     "order(s) selected": "\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23\u0e16\u0e39\u0e01\u0e40\u0e25\u0e37\u0e2d\u0e01",
+    "Confirm Multi-Platform Action": "\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e01\u0e32\u0e23\u0e14\u0e33\u0e40\u0e19\u0e34\u0e19\u0e01\u0e32\u0e23\u0e2b\u0e25\u0e32\u0e22\u0e41\u0e1e\u0e25\u0e15\u0e1f\u0e2d\u0e23\u0e4c\u0e21",
+    "Only Shopee and TikTok orders can be processed together": "\u0e1b\u0e23\u0e30\u0e21\u0e27\u0e25\u0e1c\u0e25\u0e23\u0e48\u0e27\u0e21\u0e01\u0e31\u0e19\u0e44\u0e14\u0e49\u0e40\u0e09\u0e1e\u0e32\u0e30\u0e04\u0e33\u0e2a\u0e31\u0e48\u0e07\u0e0b\u0e37\u0e49\u0e2d Shopee \u0e41\u0e25\u0e30 TikTok",
+    "Pack is only available for READY_TO_SHIP Shopee orders": "\u0e41\u0e1e\u0e47\u0e01\u0e44\u0e14\u0e49\u0e40\u0e09\u0e1e\u0e32\u0e30\u0e04\u0e33\u0e2a\u0e31\u0e48\u0e07 Shopee \u0e2a\u0e16\u0e32\u0e19\u0e30 READY_TO_SHIP",
+    "Pack is only available for AWAITING_SHIPMENT TikTok orders": "\u0e41\u0e1e\u0e47\u0e01\u0e44\u0e14\u0e49\u0e40\u0e09\u0e1e\u0e32\u0e30\u0e04\u0e33\u0e2a\u0e31\u0e48\u0e07 TikTok \u0e2a\u0e16\u0e32\u0e19\u0e30 AWAITING_SHIPMENT",
+    "Push is only available for AWAITING_COLLECTION TikTok orders": "Push \u0e44\u0e14\u0e49\u0e40\u0e09\u0e1e\u0e32\u0e30\u0e04\u0e33\u0e2a\u0e31\u0e48\u0e07 TikTok \u0e2a\u0e16\u0e32\u0e19\u0e30 AWAITING_COLLECTION",
+    "Process {count} selected Shopee and TikTok order(s) to {action}?": "\u0e1b\u0e23\u0e30\u0e21\u0e27\u0e25\u0e1c\u0e25 {count} \u0e04\u0e33\u0e2a\u0e31\u0e48\u0e07 Shopee \u0e41\u0e25\u0e30 TikTok \u0e17\u0e35\u0e48\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e40\u0e1e\u0e37\u0e48\u0e2d{action}?",
+    "{count} order(s) failed to {action}": "{count} \u0e04\u0e33\u0e2a\u0e31\u0e48\u0e07{action}\u0e25\u0e49\u0e21\u0e40\u0e2b\u0e25\u0e27",
+    "{count} selected order(s) packed successfully": "{count} \u0e04\u0e33\u0e2a\u0e31\u0e48\u0e07\u0e17\u0e35\u0e48\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e41\u0e1e\u0e47\u0e01\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08",
+    "{count} selected order(s) ready to print": "{count} \u0e04\u0e33\u0e2a\u0e31\u0e48\u0e07\u0e17\u0e35\u0e48\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e1e\u0e23\u0e49\u0e2d\u0e21\u0e1e\u0e34\u0e21\u0e1e\u0e4c",
+    "Order {action} failed": "\u0e04\u0e33\u0e2a\u0e31\u0e48\u0e07{action}\u0e25\u0e49\u0e21\u0e40\u0e2b\u0e25\u0e27",
+    "pack": "\u0e41\u0e1e\u0e47\u0e01",
+    "push": "push",
   },
   vi: {
     "Confirm Pack": "Xac nhan dong goi",
@@ -5765,6 +5813,18 @@ const orderConfirmationModalLanguageFixes = {
     "Are you sure you want to withdraw this order?": "Ban co chac muon rut don hang nay?",
     "Order Number:": "Ma don hang:",
     "order(s) selected": "don hang da chon",
+    "Confirm Multi-Platform Action": "Xac nhan thao tac da nen tang",
+    "Only Shopee and TikTok orders can be processed together": "Chi co don Shopee va TikTok co the xu ly cung nhau",
+    "Pack is only available for READY_TO_SHIP Shopee orders": "Dong goi chi kha dung cho don Shopee READY_TO_SHIP",
+    "Pack is only available for AWAITING_SHIPMENT TikTok orders": "Dong goi chi kha dung cho don TikTok AWAITING_SHIPMENT",
+    "Push is only available for AWAITING_COLLECTION TikTok orders": "Push chi kha dung cho don TikTok AWAITING_COLLECTION",
+    "Process {count} selected Shopee and TikTok order(s) to {action}?": "Xu ly {count} don Shopee va TikTok da chon de {action}?",
+    "{count} order(s) failed to {action}": "{count} don hang khong the {action}",
+    "{count} selected order(s) packed successfully": "{count} don hang da chon dong goi thanh cong",
+    "{count} selected order(s) ready to print": "{count} don hang da chon san sang in",
+    "Order {action} failed": "Don hang {action} that bai",
+    "pack": "dong goi",
+    "push": "push",
   },
   ms: {
     "Confirm Pack": "Sahkan Pembungkusan",
@@ -5773,6 +5833,18 @@ const orderConfirmationModalLanguageFixes = {
     "Are you sure you want to withdraw this order?": "Anda pasti mahu withdraw pesanan ini?",
     "Order Number:": "Nombor Pesanan:",
     "order(s) selected": "pesanan dipilih",
+    "Confirm Multi-Platform Action": "Sahkan tindakan berbilang platform",
+    "Only Shopee and TikTok orders can be processed together": "Hanya pesanan Shopee dan TikTok boleh diproses bersama",
+    "Pack is only available for READY_TO_SHIP Shopee orders": "Bungkus hanya tersedia untuk pesanan Shopee READY_TO_SHIP",
+    "Pack is only available for AWAITING_SHIPMENT TikTok orders": "Bungkus hanya tersedia untuk pesanan TikTok AWAITING_SHIPMENT",
+    "Push is only available for AWAITING_COLLECTION TikTok orders": "Push hanya tersedia untuk pesanan TikTok AWAITING_COLLECTION",
+    "Process {count} selected Shopee and TikTok order(s) to {action}?": "Proses {count} pesanan Shopee dan TikTok yang dipilih untuk {action}?",
+    "{count} order(s) failed to {action}": "{count} pesanan gagal untuk {action}",
+    "{count} selected order(s) packed successfully": "{count} pesanan dipilih berjaya dibungkus",
+    "{count} selected order(s) ready to print": "{count} pesanan dipilih sedia untuk dicetak",
+    "Order {action} failed": "Pesanan gagal untuk {action}",
+    "pack": "bungkus",
+    "push": "push",
   },
 };
 
@@ -7870,6 +7942,55 @@ Object.entries(platformManualOrderLanguageFixes).forEach(([language, additions])
   dictionaries[language] = { ...(dictionaries[language] || {}), ...additions };
 });
 
+const multiStoreAwbLanguageFixes = {
+  zh: {
+    "Multi-Store AWB Results": "多店铺运单结果",
+    "Print or open each platform-store AWB separately.": "分别打印或打开每个平台店铺的运单。",
+    "Ready": "已准备",
+    "Refreshing AWB preview...": "正在刷新运单预览...",
+    "No PDF generated": "未生成 PDF",
+  },
+  fil: {
+    "Multi-Store AWB Results": "Mga Resulta ng Multi-Store AWB",
+    "Print or open each platform-store AWB separately.": "I-print o buksan nang hiwalay ang AWB ng bawat platform-store.",
+    "Ready": "Handa",
+    "Refreshing AWB preview...": "Nire-refresh ang AWB preview...",
+    "No PDF generated": "Walang PDF na nabuo",
+  },
+  id: {
+    "Multi-Store AWB Results": "Hasil AWB Multi-Toko",
+    "Print or open each platform-store AWB separately.": "Cetak atau buka AWB setiap platform-toko secara terpisah.",
+    "Ready": "Siap",
+    "Refreshing AWB preview...": "Memperbarui pratinjau AWB...",
+    "No PDF generated": "PDF tidak dibuat",
+  },
+  th: {
+    "Multi-Store AWB Results": "ผลลัพธ์ AWB หลายร้านค้า",
+    "Print or open each platform-store AWB separately.": "พิมพ์หรือเปิด AWB ของแต่ละแพลตฟอร์ม-ร้านค้าแยกกัน",
+    "Ready": "พร้อม",
+    "Refreshing AWB preview...": "กำลังรีเฟรชตัวอย่าง AWB...",
+    "No PDF generated": "ไม่ได้สร้าง PDF",
+  },
+  vi: {
+    "Multi-Store AWB Results": "Ket qua AWB nhieu cua hang",
+    "Print or open each platform-store AWB separately.": "In hoac mo rieng AWB cua tung nen tang-cua hang.",
+    "Ready": "San sang",
+    "Refreshing AWB preview...": "Dang lam moi ban xem truoc AWB...",
+    "No PDF generated": "Chua tao PDF",
+  },
+  ms: {
+    "Multi-Store AWB Results": "Keputusan AWB Berbilang Kedai",
+    "Print or open each platform-store AWB separately.": "Cetak atau buka AWB setiap platform-kedai secara berasingan.",
+    "Ready": "Sedia",
+    "Refreshing AWB preview...": "Memuat semula pratonton AWB...",
+    "No PDF generated": "PDF tidak dijana",
+  },
+};
+
+Object.entries(multiStoreAwbLanguageFixes).forEach(([language, additions]) => {
+  dictionaries[language] = { ...(dictionaries[language] || {}), ...additions };
+});
+
 let textNodes = new WeakMap();
 let attrValues = new WeakMap();
 const translatedAttrNames = ["placeholder", "title", "aria-label", "alt", "label"];
@@ -7974,6 +8095,36 @@ function translatePattern(canonicalText, dictionary) {
   if (completedPackagingMatch && dictionary["Are you sure you have completed packaging"]) {
     const suffixKey = completedPackagingMatch[2] ? "TikTok order(s)?" : "order(s)?";
     return `${dictionary["Are you sure you have completed packaging"]} ${completedPackagingMatch[1]} ${dictionary[suffixKey] || suffixKey}`;
+  }
+
+  const multiPlatformConfirmMatch = canonicalText.match(/^Process (\d[\d,]*) selected Shopee and TikTok order\(s\) to (pack|push)\?$/i);
+  if (multiPlatformConfirmMatch && dictionary["Process {count} selected Shopee and TikTok order(s) to {action}?"]) {
+    return dictionary["Process {count} selected Shopee and TikTok order(s) to {action}?"]
+      .replace("{count}", multiPlatformConfirmMatch[1])
+      .replace("{action}", translateText(multiPlatformConfirmMatch[2].toLowerCase(), dictionary));
+  }
+
+  const mixedActionFailedMatch = canonicalText.match(/^(\d[\d,]*) order\(s\) failed to (pack|push)$/i);
+  if (mixedActionFailedMatch && dictionary["{count} order(s) failed to {action}"]) {
+    return dictionary["{count} order(s) failed to {action}"]
+      .replace("{count}", mixedActionFailedMatch[1])
+      .replace("{action}", translateText(mixedActionFailedMatch[2].toLowerCase(), dictionary));
+  }
+
+  const mixedActionSuccessMatch = canonicalText.match(/^(\d[\d,]*) selected order\(s\) (packed successfully|ready to print)$/i);
+  if (mixedActionSuccessMatch) {
+    const templateKey = mixedActionSuccessMatch[2].toLowerCase() === "packed successfully"
+      ? "{count} selected order(s) packed successfully"
+      : "{count} selected order(s) ready to print";
+    if (dictionary[templateKey]) return dictionary[templateKey].replace("{count}", mixedActionSuccessMatch[1]);
+  }
+
+  const orderActionFailedMatch = canonicalText.match(/^Order (pack|push) failed$/i);
+  if (orderActionFailedMatch && dictionary["Order {action} failed"]) {
+    return dictionary["Order {action} failed"].replace(
+      "{action}",
+      translateText(orderActionFailedMatch[1].toLowerCase(), dictionary)
+    );
   }
 
   const orderNumberMatch = canonicalText.match(/^Order Number:\s*(.+)$/i);

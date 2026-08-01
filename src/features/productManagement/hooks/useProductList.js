@@ -3,6 +3,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../../../lib/api";
 import useDebounce from "../../../hooks/useDebounce";
 import { toast } from "sonner";
+import {
+    filterWarehousesByPermission,
+    getDefaultAllowedWarehouseId,
+    hasWarehouseRestriction,
+    resolveAllowedWarehouseId,
+} from "../../../utils/permissions";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Query keys
@@ -442,8 +448,8 @@ export function useProductList() {
     // ── Filter state ──────────────────────────────────────────────────────────
     const [search, setSearch] = useState("");
     const [searchField, setSearchField] = useState("sku_name");
-    const [warehouseFilter, setWarehouseFilter] = useState("all");
-    const [warehouseFilterName, setWarehouseFilterName] = useState("All Warehouses");
+    const [warehouseFilter, setWarehouseFilter] = useState(() => getDefaultAllowedWarehouseId() || "all");
+    const [warehouseFilterName, setWarehouseFilterName] = useState(() => getDefaultAllowedWarehouseId() ? "Warehouse name" : "All Warehouses");
     const [productStatus, setProductStatus] = useState("all");
     const [country, setCountry] = useState("all");
     const [sku, setSku] = useState("");
@@ -499,16 +505,31 @@ export function useProductList() {
 
     // Build dropdown option arrays from API response
     const warehouseOptions = useMemo(() => {
-        const base = [{ label: "All Warehouses", value: "all" }];
+        const restricted = hasWarehouseRestriction();
+        const base = restricted ? [] : [{ label: "All Warehouses", value: "all" }];
         if (!dropdowns?.warehouses) return base;
+        const allowedWarehouses = filterWarehousesByPermission(dropdowns.warehouses);
         return [
             ...base,
-            ...dropdowns.warehouses.map((w) => ({
+            ...allowedWarehouses.map((w) => ({
                 label: w.name,
                 value: String(w.id),
             })),
         ];
     }, [dropdowns]);
+
+    useEffect(() => {
+        if (!hasWarehouseRestriction() || !warehouseOptions.length) return;
+        const selected = warehouseOptions.find((option) => option.value === warehouseFilter);
+        if (selected) {
+            setWarehouseFilterName(selected.label);
+            return;
+        }
+        const firstWarehouse = warehouseOptions[0];
+        setWarehouseFilter(firstWarehouse.value);
+        setWarehouseFilterName(firstWarehouse.label);
+        setPage(1);
+    }, [warehouseOptions, warehouseFilter]);
 
     const countryOptions = useMemo(() => {
         const base = [{ label: "All Countries", value: "all" }];
@@ -558,6 +579,7 @@ export function useProductList() {
         staleTime: 1000 * 60 * 2,
         gcTime: 1000 * 60 * 5,
         placeholderData: (prev) => prev,
+        select: (warehouses) => filterWarehousesByPermission(warehouses),
         enabled: showAddModal || showImportModal,  // only fetch when a modal needs warehouses
     });
 
@@ -957,11 +979,12 @@ export function useProductList() {
     // Filter helpers
     // ─────────────────────────────────────────────────────────────────────────
     const resetFilters = useCallback(() => {
+        const defaultWarehouseId = getDefaultAllowedWarehouseId();
         setSearch("");
         setSearchField("sku_name");
         setSku("");
-        setWarehouseFilter("all");
-        setWarehouseFilterName("All Warehouses");
+        setWarehouseFilter(defaultWarehouseId || "all");
+        setWarehouseFilterName(defaultWarehouseId ? "Warehouse name" : "All Warehouses");
         setProductStatus("all");
         setCountry("all");
         setPage(1);
@@ -974,10 +997,12 @@ export function useProductList() {
         country !== "all";
 
     const handleWarehouseFilterChange = useCallback((value, label) => {
-        setWarehouseFilter(value);
-        setWarehouseFilterName(label);
+        const nextValue = value === "all" ? "all" : resolveAllowedWarehouseId(value);
+        const nextOption = warehouseOptions.find((option) => option.value === nextValue);
+        setWarehouseFilter(nextValue);
+        setWarehouseFilterName(nextOption?.label ?? label);
         setPage(1);
-    }, []);
+    }, [warehouseOptions]);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Bulk action handler

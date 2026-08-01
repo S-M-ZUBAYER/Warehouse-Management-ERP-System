@@ -8,6 +8,7 @@ import {
     getOutboundDateField,
     getOutboundSearchField,
 } from '../../shared/outboundFilterUtils';
+import { getDefaultAllowedWarehouseId, resolveAllowedWarehouseId } from '../../../../utils/permissions';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Query keys
@@ -64,7 +65,7 @@ export function useOutboundList({ status }) {
     const queryClient = useQueryClient();
 
     // ── Filter state ──────────────────────────────────────────────────────────
-    const [warehouseId, setWarehouseId] = useState('');
+    const [warehouseId, setWarehouseId] = useState(() => getDefaultAllowedWarehouseId());
     const [timeType, setTimeType] = useState('Created Time');
     const [outboundType, setOutboundType] = useState('Outbound No.');
     const [search, setSearch] = useState('');
@@ -90,7 +91,7 @@ export function useOutboundList({ status }) {
     }, []);
 
     const updateWarehouseId = useCallback((value) => {
-        setWarehouseId(value);
+        setWarehouseId(resolveAllowedWarehouseId(value));
         resetList();
     }, [resetList]);
 

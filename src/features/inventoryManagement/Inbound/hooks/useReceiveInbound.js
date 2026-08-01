@@ -77,6 +77,8 @@ export function useReceiveInbound({ onSuccess } = {}) {
         ? bulkDetailQueries.map((query, index) => query.data ?? receiveTarget[index]).filter(Boolean)
         : [];
     const bulkDetailLoading = bulkDetailQueries.some((query) => query.isLoading || query.isFetching);
+    const receiveLines = isBulkReceive ? bulkDetails.flatMap((detail) => detail?.lines ?? []) : lines;
+    const canConfirmReceive = receiveLines.length > 0 && receiveLines.every((line) => receivedQtys[line.id] !== undefined && receivedQtys[line.id] !== '');
 
     const openReceiveModal = useCallback((itemOrItems) => {
         setReceiveTarget(itemOrItems);
@@ -86,7 +88,10 @@ export function useReceiveInbound({ onSuccess } = {}) {
     }, []);
 
     const handleReceivedQtyChange = useCallback((lineId, val) => {
-        setReceivedQtys((prev) => ({ ...prev, [lineId]: Math.max(0, Number(val) || 0) }));
+        setReceivedQtys((prev) => ({
+            ...prev,
+            [lineId]: val === '' ? '' : Math.max(0, Number(val) || 0),
+        }));
     }, []);
 
     const fillAllExpected = useCallback(() => {
@@ -128,6 +133,10 @@ export function useReceiveInbound({ onSuccess } = {}) {
                 toast.error('No lines found for one or more selected inbound orders');
                 return;
             }
+            if (!canConfirmReceive) {
+                toast.error('Please enter received quantity for every line');
+                return;
+            }
 
             receiveMutation.mutate({
                 target: receiveTarget,
@@ -144,6 +153,10 @@ export function useReceiveInbound({ onSuccess } = {}) {
             toast.error('No lines found for this inbound order');
             return;
         }
+        if (!canConfirmReceive) {
+            toast.error('Please enter received quantity for every line');
+            return;
+        }
 
         const linePayload = lines.map((line) => ({
             lineId: line.id,
@@ -158,7 +171,7 @@ export function useReceiveInbound({ onSuccess } = {}) {
                 notes: receiveNotes || undefined,
             },
         });
-    }, [bulkDetailLoading, bulkDetails, receiveTarget, lines, receivedQtys, receiveNotes, receiveMutation]);
+    }, [bulkDetailLoading, bulkDetails, receiveTarget, lines, receivedQtys, receiveNotes, receiveMutation, canConfirmReceive]);
 
     return {
         receiveTarget,
@@ -175,6 +188,7 @@ export function useReceiveInbound({ onSuccess } = {}) {
         handleReceivedQtyChange,
         fillAllExpected,
         confirmReceive,
+        canConfirmReceive,
         receiving: receiveMutation.isPending,
     };
 }

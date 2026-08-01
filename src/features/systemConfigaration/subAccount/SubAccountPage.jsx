@@ -368,6 +368,56 @@ import { useSubAccount } from "./hooks/useSubAccount";
 import AddAccountPage from "./component/AddAccountPage";
 import PortalActionMenu from "../../../components/shared/PortalActionMenu";
 import RecordDetailModal from "../../../components/shared/RecordDetailModal";
+import api from "../../../lib/api";
+import { toast } from "sonner";
+
+const getUserDetail = (id) => api.get(`/users/${id}`).then((res) => res?.data ?? res);
+
+const formatPermissionList = (rows = [], getLabel) => {
+  if (!Array.isArray(rows) || rows.length === 0) return "-";
+  return rows.map(getLabel).filter(Boolean).join("\n") || "-";
+};
+
+const getPermissionId = (item) =>
+  item?.connection_id ?? item?.connectionId ?? item?.connection?.id ?? item?.id;
+
+const findStorePermissionLabel = (item, stores = []) => {
+  const permissionId = getPermissionId(item);
+  const matchedStore = stores.find((store) =>
+    [store.id, store.storeId, store.raw?.id, store.raw?.connection_id, store.raw?.connectionId]
+      .filter((value) => value !== undefined && value !== null)
+      .some((value) => String(value) === String(permissionId))
+  );
+
+  if (matchedStore) {
+    return [matchedStore.marketplace, matchedStore.storeName].filter(Boolean).join(" - ");
+  }
+
+  return (
+    item.store?.store_name ||
+    item.store?.external_store_name ||
+    item.connection?.store_name ||
+    item.connection?.external_store_name ||
+    null
+  );
+};
+
+const formatStorePermissions = (row, stores = []) => {
+  const rows = row.storePermissions ?? row.store_permissions;
+  if (!Array.isArray(rows) || rows.length === 0) return "-";
+
+  const labels = rows.map((item) => findStorePermissionLabel(item, stores)).filter(Boolean);
+  if (labels.length) return labels.join("\n");
+
+  return `${rows.length} authorized store${rows.length > 1 ? "s" : ""}`;
+};
+
+const formatWarehousePermissions = (row) =>
+  formatPermissionList(row.warehousePermissions ?? row.warehouse_permissions, (item) =>
+    item.warehouse?.name ||
+    item.warehouse_name ||
+    null
+  );
 
 export default function SubAccountPage() {
   const {
@@ -604,8 +654,14 @@ export default function SubAccountPage() {
                           <button
                             type="button"
                             className="flex items-center gap-2 w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-surface-card transition-colors"
-                            onClick={() => {
-                              setDetailAccount(acc);
+                            onClick={async () => {
+                              try {
+                                const detail = await getUserDetail(acc.id);
+                                setDetailAccount(detail);
+                              } catch (err) {
+                                toast.error(err?.response?.data?.message || "Failed to load account details");
+                                setDetailAccount(acc);
+                              }
                               setOpenActionId(null);
                             }}
                           >
@@ -649,16 +705,22 @@ export default function SubAccountPage() {
         subtitle={detailAccount?.name}
         record={detailAccount}
         onClose={() => setDetailAccount(null)}
+        showRecordId={false}
         fields={[
           { label: "Name", key: "name" },
           { label: "Account ID", key: "account_id" },
           { label: "Email", key: "email" },
           { label: "Phone", render: (row) => row.phone || row.phoneNumber || "—" },
           { label: "Role", render: (row) => row.roleInfo?.name || "—" },
+          { label: "Status", render: (row) => row.is_active === false ? "Inactive" : "Active" },
           { label: "Department", key: "department" },
           { label: "Designation", key: "designation" },
           { label: "Address", key: "address" },
+          { label: "Store Permissions", render: (row) => formatStorePermissions(row, filteredStores), fullWidth: true },
+          { label: "Warehouse Permissions", render: formatWarehousePermissions, fullWidth: true },
           { label: "Create Time", key: "createdAt" },
+          { label: "Update Time", key: "updatedAt" },
+          { label: "Last Login", key: "last_login_at" },
         ]}
       />
 

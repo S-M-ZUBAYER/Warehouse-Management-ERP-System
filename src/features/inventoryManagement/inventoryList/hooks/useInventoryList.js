@@ -2,6 +2,11 @@ import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../../lib/api';
 import { toast } from 'sonner';
+import {
+    filterWarehousesByPermission,
+    getDefaultAllowedWarehouseId,
+    resolveAllowedWarehouseId,
+} from '../../../../utils/permissions';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Query Keys
@@ -176,7 +181,7 @@ export function useInventoryList({ initialStockAlertStatus = '' } = {}) {
     const queryClient = useQueryClient();
 
     // ── Filter state ──────────────────────────────────────────────────────────
-    const [warehouseId, setWarehouseId] = useState('');
+    const [warehouseId, setWarehouseId] = useState(() => getDefaultAllowedWarehouseId());
     const [warehouseName, setWarehouseName] = useState('Warehouse name here');
     const [skuType, setSkuType] = useState('sku_name');
     const [skuTypeLabel, setSkuTypeLabel] = useState('SKU Name');
@@ -207,13 +212,20 @@ export function useInventoryList({ initialStockAlertStatus = '' } = {}) {
         gcTime: 1000 * 60 * 20,
     });
 
+    const allowedWarehouses = filterWarehousesByPermission(dropdownData?.warehouses ?? []);
     const warehouseOptions = [
         { label: 'Warehouse name here', value: '' },
-        ...(dropdownData?.warehouses ?? []).map((w) => ({
+        ...allowedWarehouses.map((w) => ({
             label: w.name,
             value: String(w.id),
         })),
     ];
+
+    useEffect(() => {
+        if (!warehouseId || !allowedWarehouses.length) return;
+        const selected = allowedWarehouses.find((warehouse) => String(warehouse.id) === String(warehouseId));
+        if (selected) setWarehouseName(selected.name);
+    }, [allowedWarehouses, warehouseId]);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Query: tab counts
@@ -398,12 +410,14 @@ const syncMutation = useMutation({
     // Filter helpers
     // ─────────────────────────────────────────────────────────────────────────
     const handleWarehouseSelect = useCallback((opt) => {
-        setWarehouseId(opt.value);
-        setWarehouseName(opt.label);
+        const nextWarehouseId = resolveAllowedWarehouseId(opt.value);
+        const nextOption = warehouseOptions.find((item) => item.value === nextWarehouseId);
+        setWarehouseId(nextWarehouseId);
+        setWarehouseName(nextOption?.label ?? opt.label);
         setPage(1);
         setSelectedIds([]);
         setSelectedItems([]);
-    }, []);
+    }, [warehouseOptions]);
 
     const handleSkuTypeSelect = useCallback((opt) => {
         setSkuType(opt.value);

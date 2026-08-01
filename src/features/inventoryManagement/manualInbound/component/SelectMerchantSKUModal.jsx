@@ -428,7 +428,7 @@ export default function SelectMerchantSKUModal({
                         SKU
                       </th>
                       <th className="py-2 pl-3 pr-4 text-left font-medium text-slate-500 whitespace-nowrap">
-                        Available in Inventory
+                        Current Stock in Selected Warehouse
                       </th>
                     </tr>
                   </thead>
@@ -445,8 +445,7 @@ export default function SelectMerchantSKUModal({
                     ) : (
                       pickerSkus.map((sku) => {
                         const isChecked = selectedIds.includes(sku.id);
-                        const available =
-                          sku.stock?.[0]?.qty_on_hand ?? sku.qty_on_hand ?? 0;
+                        const available = sku.qty_on_hand ?? sku.stock?.[0]?.qty_on_hand ?? 0;
                         return (
                           <tr
                             key={sku.id}

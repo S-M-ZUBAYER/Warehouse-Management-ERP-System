@@ -12,6 +12,7 @@ import {
   normalizeManualOrder,
   searchWarehouseProducts,
 } from "../../shared/utils/orderApi";
+import { filterWarehousesByPermission } from "../../../../utils/permissions";
 
 function FormInput({
   label,
@@ -244,7 +245,7 @@ export default function AddManualOrderAftershipPage({ mode = "order", onBack, on
     staleTime: 1000 * 60 * 5,
   });
 
-  const warehouses = dropdownsQuery.data?.warehouses || [];
+  const warehouses = filterWarehousesByPermission(dropdownsQuery.data?.warehouses || []);
   const currencies = dropdownsQuery.data?.currencies || [];
 
   const warehouseOptions = useMemo(
@@ -545,7 +546,7 @@ export default function AddManualOrderAftershipPage({ mode = "order", onBack, on
     if (addedProducts.find((p) => String(p.id) === String(product.id))) return;
     const availableForPlatform = Number(product.availableForPlatform ?? product.available ?? 0);
     if (availableForPlatform <= 0) {
-      toast.error("This merchant SKU has no available inventory");
+      toast.error("This SKU has no available inventory");
       return;
     }
     setAddedProducts((prev) => [
@@ -635,15 +636,20 @@ export default function AddManualOrderAftershipPage({ mode = "order", onBack, on
     },
     currency: afterShipConfigQuery.data?.currency || selectedLogistic?.currency || orderForm.currency || "USD",
     buyer: buyerForm,
-    items: addedProducts.map((product) => ({
-      merchantSkuId: product.merchantSkuId || product.id,
-      sku: product.sku,
-      productName: product.name,
-      quantity: product.qty,
-      unitPrice: product.unitPrice,
-      weight: product.weight,
-      image: product.image,
-    })),
+    items: addedProducts.map((product) => {
+      const isCombine = product.skuType === "combine" || product.combineSkuId;
+      return {
+        ...(isCombine
+          ? { combineSkuId: product.combineSkuId || String(product.id).replace(/^combine:/, "") }
+          : { merchantSkuId: product.merchantSkuId || String(product.id).replace(/^merchant:/, "") }),
+        sku: product.sku,
+        productName: product.name,
+        quantity: product.qty,
+        unitPrice: product.unitPrice,
+        weight: product.weight,
+        image: product.image,
+      };
+    }),
     package: {
       weight: totalPackageWeight,
       length: packageForm.length,
@@ -838,7 +844,7 @@ export default function AddManualOrderAftershipPage({ mode = "order", onBack, on
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Search merchant SKU from selected warehouse"
+                  placeholder="Search Merchant / Combine SKU from selected warehouse"
                   value={productSearch}
                   onChange={(e) => setProductSearch(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -861,7 +867,7 @@ export default function AddManualOrderAftershipPage({ mode = "order", onBack, on
                       <tr className="bg-white [&_th]:py-3 [&_th]:text-left [&_th]:text-xs [&_th]:font-bold [&_th]:text-slate-800">
                         <th className="w-10 pl-4">Select</th>
                         <th className="pl-4">Image</th>
-                        <th className="pl-4">Merchant SKU</th>
+                        <th className="pl-4">SKU</th>
                         <th className="pl-4">Available Inventory</th>
                         <th className="pl-4">Available For Platform</th>
                         <th className="pl-4">Lock Quantity</th>
@@ -903,7 +909,7 @@ export default function AddManualOrderAftershipPage({ mode = "order", onBack, on
 
             {addedProducts.length === 0 ? (
               <div className="flex h-48 items-center justify-center rounded-lg border border-dashed border-surface-border text-xs text-slate-400">
-                Select a warehouse and search merchant SKU to add products.
+                Select a warehouse and search Merchant / Combine SKU to add products.
               </div>
             ) : (
               <table className="w-full text-sm">

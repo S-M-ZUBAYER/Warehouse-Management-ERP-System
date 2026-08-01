@@ -65,6 +65,7 @@ export default function CombineSKUPage() {
   const exportColumns = [
     { label: "Combine SKU", key: "combine_sku_code" },
     { label: "Name", key: "combine_name" },
+    { label: "Warehouse", render: (row) => getWarehouseName(row) },
     { label: "Stock", key: "computed_quantity" },
     { label: "Items", render: (row) => row.items?.length || 0 },
   ];
@@ -78,9 +79,6 @@ export default function CombineSKUPage() {
     for (let p = left; p <= right; p++) range.push(p);
     return range;
   };
-
-  console.log(bundles,"Combine");
-  
 
   return (
     <div className="space-y-4 font-body">
@@ -211,6 +209,11 @@ export default function CombineSKUPage() {
                       Bundle SKU Name
                     </span>
                   </th>
+                  <th className="w-40 py-3 text-left pr-4">
+                    <span className="font-semibold text-base text-primary-text">
+                      Warehouse
+                    </span>
+                  </th>
                   <th className="w-28 py-3 text-left pr-4">
                     <span className="font-semibold text-base text-primary-text">
                       Stock
@@ -232,7 +235,7 @@ export default function CombineSKUPage() {
               <tbody className="divide-y divide-surface-border">
                 {bundles.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-20 text-center">
+                    <td colSpan={8} className="py-20 text-center">
                       <div className="flex flex-col items-center gap-2 text-slate-400">
                         <Search size={32} className="opacity-30" />
                         <p className="text-sm font-medium">
@@ -309,6 +312,14 @@ export default function CombineSKUPage() {
                               {bundle.items.length} item(s)
                             </p>
                           )}
+                        </td>
+                        <td className="py-2 pr-4">
+                          <span
+                            className="block max-w-40 truncate text-sm font-medium text-slate-600"
+                            title={getWarehouseName(bundle)}
+                          >
+                            {getWarehouseName(bundle)}
+                          </span>
                         </td>
                         <td className="py-2 pr-4">
                           <span
@@ -542,6 +553,9 @@ function TableError({ message, onRetry }) {
 const fallbackText = (value) =>
   value === null || value === undefined || value === "" ? "—" : value;
 
+const getWarehouseName = (bundle) =>
+  fallbackText(bundle?.warehouse?.name ?? bundle?.warehouse_name ?? bundle?.warehouseName);
+
 const formatDateTime = (value) => {
   if (!value) return "—";
   const date = new Date(value);
@@ -569,14 +583,22 @@ const getSortedItems = (items) =>
     ? [...items].sort((a, b) => getItemOrder(a) - getItemOrder(b))
     : [];
 
-const getItemStock = (sku) => {
-  if (Array.isArray(sku?.stock) && sku.stock.length) {
-    return sku.stock.reduce(
-      (sum, stock) => sum + Number(stock?.qty_on_hand ?? stock?.available_in_inventory ?? 0),
-      0
-    );
+const getItemStock = (sku, warehouseId) => {
+  const stockRows = Array.isArray(sku?.stock) ? sku.stock : (sku?.stock ? [sku.stock] : []);
+  if (stockRows.length) {
+    const rows = warehouseId
+      ? stockRows.filter((stock) => String(stock?.warehouse_id) === String(warehouseId))
+      : stockRows;
+    return rows.reduce((sum, stock) => {
+      const available = stock?.available_in_inventory ?? stock?.qty_available;
+      if (available !== undefined && available !== null) return sum + Number(available || 0);
+      return sum + Math.max(0, Number(stock?.qty_on_hand || 0) - Number(stock?.qty_reserved || 0));
+    }, 0);
   }
-  return Number(sku?.available_in_inventory ?? sku?.qty_on_hand ?? 0);
+  if (sku?.available_in_inventory !== undefined || sku?.qty_available !== undefined) {
+    return Number(sku?.available_in_inventory ?? sku?.qty_available ?? 0);
+  }
+  return Math.max(0, Number(sku?.qty_on_hand || 0) - Number(sku?.qty_reserved || 0));
 };
 
 function DetailField({ label, value }) {
@@ -595,6 +617,7 @@ function CombineSkuDetailModal({ open, bundle, onClose }) {
 
   const items = getSortedItems(bundle.items);
   const warehouseName = fallbackText(bundle.warehouse?.name ?? bundle.warehouse_name);
+  const warehouseId = bundle.warehouse_id ?? bundle.warehouseId ?? bundle.warehouse?.id;
 
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
@@ -658,7 +681,7 @@ function CombineSkuDetailModal({ open, bundle, onClose }) {
                     {items.map((item) => {
                       const sku = getMerchantSku(item);
                       const imageUrl = sku.image_url || sku.image;
-                      const stock = getItemStock(sku);
+                      const stock = getItemStock(sku, warehouseId);
                       return (
                         <tr key={item.id ?? item.merchant_sku_id ?? sku.id}>
                           <td className="px-4 py-3">

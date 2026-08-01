@@ -6,6 +6,7 @@ import Register from "@/features/auth/pages/Register";
 import ForgotPassword from "@/features/auth/pages/ForgotPassword";
 import VerifyEmail from "@/features/auth/pages/VerifyEmail";
 import ProtectedRoute from "./ProtectedRoute";
+import PublicOnlyRoute from "./PublicOnlyRoute";
 import NotFound from "../components/shared/NotFound";
 import StoreAuthorizationPage from "../features/systemConfigaration/storeAuthorization/StoreAuthorizationPage";
 import SubAccountPage from "../features/systemConfigaration/subAccount/SubAccountPage";
@@ -37,6 +38,7 @@ import InboundDraftPage from "../features/inventoryManagement/Inbound/draft/Inbo
 import OutboundCompletedPage from "../features/inventoryManagement/Outbound/completed/OutboundCompletedPage";
 import OutboundOnTheWayPage from "../features/inventoryManagement/Outbound/onTheWay/OutboundOnTheWayPage";
 import OutboundDraftPage from "../features/inventoryManagement/Outbound/draft/OutboundDraftPage";
+import ChatPage from "../features/chat/ChatPage";
 
 export const routes = [
   {
@@ -49,6 +51,7 @@ export const routes = [
     children: [
       // Dashboard Routes
       { index: true, element: <DashboardPage /> },
+      { path: "/warehouse_management/chat", element: <ChatPage /> },
 
       // Product Management Routes
       {
@@ -182,9 +185,29 @@ export const routes = [
       },
     ],
   },
-  { path: "warehouse_management/login", element: <Login /> },
-  { path: "warehouse_management/register", element: <Register /> },
-  { path: "warehouse_management/forgotpassword", element: <ForgotPassword /> },
-  { path: "warehouse_management/verifyemail", element: <VerifyEmail /> },
+  {
+    path: "warehouse_management/login",
+    element: (
+      <PublicOnlyRoute>
+        <Login />
+      </PublicOnlyRoute>
+    ),
+  },
+  {
+    path: "warehouse_management/register",
+    element: (
+      <PublicOnlyRoute>
+        <Register />
+      </PublicOnlyRoute>
+    ),
+  },
+  {
+    path: "warehouse_management/forgotpassword",
+    element: <ForgotPassword />,
+  },
+  {
+    path: "warehouse_management/verifyemail",
+    element: <VerifyEmail />,
+  },
   { path: "*", element: <NotFound /> },
 ];

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   ChevronDown,
@@ -19,6 +19,7 @@ import Topbar from "../../../components/layout/Topbar";
 import ConfirmActionModal from "../../../components/shared/ConfirmActionModal";
 import OrderFooter from "../shared/components/OrderFooter";
 import api from "../../../lib/api";
+import { filterWarehousesByPermission } from "../../../utils/permissions";
 
 const STATUS_OPTIONS = ["All", "Processed", "On The Way", "Shipped", "Delivered", "Completed", "Cancelled"];
 const SEARCH_TYPES = ["Single Search", "Batch Search"];
@@ -173,16 +174,40 @@ const getWarehouseRows = (response) => {
   return [];
 };
 
-const normalizeSkuOption = (sku) => ({
-  id: String(sku.id),
-  sku: sku.sku || "",
-  name: sku.name || sku.sku || "",
-  image: sku.image || "",
-  availableForPlatform: Number(sku.availableForPlatform || 0),
-  qty: 1,
-  unitPrice: Number(sku.unitPrice || 0),
-  weight: Number(sku.weight || 0),
-});
+const normalizeSkuOption = (sku) => {
+  const skuType = sku.skuType || sku.sku_type || (sku.combineSkuId || sku.combine_sku_id ? "combine" : "merchant");
+  const merchantSkuId = sku.merchantSkuId || sku.merchant_sku_id || (skuType === "merchant" ? String(sku.id || "").replace(/^merchant:/, "") : null);
+  const combineSkuId = sku.combineSkuId || sku.combine_sku_id || (skuType === "combine" ? String(sku.id || "").replace(/^combine:/, "") : null);
+  return {
+    id: String(sku.id || `${skuType}:${merchantSkuId || combineSkuId || ""}`),
+    merchantSkuId,
+    combineSkuId,
+    skuType,
+    sku: sku.sku || "",
+    name: sku.name || sku.sku || "",
+    image: sku.image || "",
+    availableForPlatform: Number(sku.availableForPlatform || 0),
+    qty: 1,
+    unitPrice: Number(sku.unitPrice || 0),
+    weight: Number(sku.weight || 0),
+  };
+};
+
+const normalizeOrderProduct = (product = {}) => {
+  const skuType = product.skuType || product.sku_type || (product.combineSkuId || product.combine_sku_id ? "combine" : "merchant");
+  const merchantSkuId = product.merchantSkuId || product.merchant_sku_id || null;
+  const combineSkuId = product.combineSkuId || product.combine_sku_id || null;
+  return {
+    ...product,
+    id: String(product.id || `${skuType}:${merchantSkuId || combineSkuId || product.sku || ""}`),
+    merchantSkuId,
+    combineSkuId,
+    skuType,
+    qty: Number(product.qty ?? product.quantity ?? 1) || 1,
+    unitPrice: Number(product.unitPrice ?? product.unit_price ?? 0),
+    weight: Number(product.weight || 0),
+  };
+};
 
 const clampProductQty = (value, available) => {
   if (value === "") return "";
@@ -204,7 +229,7 @@ const normalizePlatformManualOrder = (order = {}) => ({
   sender: parseJsonField(order.sender, {}),
   buyer: parseJsonField(order.buyer, {}),
   package: parseJsonField(order.package, {}),
-  products: Array.isArray(order.products) ? order.products : parseJsonField(order.products, []),
+  products: (Array.isArray(order.products) ? order.products : parseJsonField(order.products, [])).map(normalizeOrderProduct),
   waybillUrl: resolveAssetUrl(order.waybillUrl || order.waybill_url || ""),
   waybillFileName: order.waybillFileName || order.waybill_file_name || "",
 });
@@ -260,24 +285,31 @@ function useWaybillObjectUrl(url) {
   return { objectUrl, loading, error };
 }
 
-const buildPlatformManualOrderFormData = (payload) => {
+const buildPlatformManualOrderFormData = (payload, { includeLockedFields = true } = {}) => {
   const formData = new FormData();
-  formData.append("warehouseId", payload.warehouseId);
+  if (includeLockedFields) formData.append("warehouseId", payload.warehouseId);
   formData.append("orderNumber", payload.orderNumber);
   formData.append("orderTime", payload.orderTime);
   formData.append("orderDate", payload.orderDate);
   formData.append("logistic", JSON.stringify(payload.logistic || {}));
-  formData.append("sender", JSON.stringify(payload.sender || {}));
+  if (includeLockedFields) formData.append("sender", JSON.stringify(payload.sender || {}));
   formData.append("buyer", JSON.stringify(payload.buyer || {}));
-  formData.append("products", JSON.stringify((payload.products || []).map((product) => ({
-    id: product.id,
-    merchantSkuId: product.id,
-    sku: product.sku,
-    name: product.name,
-    qty: normalizeProductQtyForSave(product.qty, product.availableForPlatform),
-    unitPrice: Number(product.unitPrice || 0),
-    weight: Number(product.weight || 0),
-  }))));
+  if (includeLockedFields) {
+    formData.append("products", JSON.stringify((payload.products || []).map((product) => {
+      const isCombine = product.skuType === "combine" || product.combineSkuId;
+      return {
+        id: product.id,
+        ...(isCombine
+          ? { combineSkuId: product.combineSkuId || String(product.id).replace(/^combine:/, "") }
+          : { merchantSkuId: product.merchantSkuId || String(product.id).replace(/^merchant:/, "") }),
+        sku: product.sku,
+        name: product.name,
+        qty: normalizeProductQtyForSave(product.qty, product.availableForPlatform),
+        unitPrice: Number(product.unitPrice || 0),
+        weight: Number(product.weight || 0),
+      };
+    })));
+  }
   formData.append("package", JSON.stringify(payload.package || {}));
   if (payload.waybillFile) formData.append("waybillFile", payload.waybillFile);
   return formData;
@@ -298,7 +330,7 @@ const platformManualOrderApi = {
     });
   },
   async update(id, payload) {
-    return api.put(`/platform-manual-orders/${encodeURIComponent(id)}`, buildPlatformManualOrderFormData(payload), {
+    return api.put(`/platform-manual-orders/${encodeURIComponent(id)}`, buildPlatformManualOrderFormData(payload, { includeLockedFields: false }), {
       headers: { "Content-Type": "multipart/form-data" },
     });
   },
@@ -460,7 +492,7 @@ function StatusMultiSelect({ value, onChange }) {
   );
 }
 
-function PlatformManualOrderForm({ initialOrder, warehouses = [], companyId, onCancel, onSubmit, submitLabel = "Save" }) {
+function PlatformManualOrderForm({ initialOrder, warehouses = [], companyId, onCancel, onSubmit, submitLabel = "Save", scrollContainerRef = null }) {
   const [form, setForm] = useState(() => initialOrder ? { ...emptyForm(), ...initialOrder } : emptyForm());
   const [productSearch, setProductSearch] = useState("");
   const [warehouseProducts, setWarehouseProducts] = useState([]);
@@ -479,6 +511,7 @@ function PlatformManualOrderForm({ initialOrder, warehouses = [], companyId, onC
   }, [form.warehouseId, warehouses]);
 
   useEffect(() => {
+    if (isEdit) return;
     if (!selectedWarehouse) return;
     const senderInfo = getWarehouseSenderInfo(selectedWarehouse);
     setForm((current) => ({
@@ -495,7 +528,7 @@ function PlatformManualOrderForm({ initialOrder, warehouses = [], companyId, onC
         zipCode: senderInfo.zipCode,
       },
     }));
-  }, [selectedWarehouse]);
+  }, [isEdit, selectedWarehouse]);
 
   const update = (path, value) => {
     setForm((current) => {
@@ -524,7 +557,7 @@ function PlatformManualOrderForm({ initialOrder, warehouses = [], companyId, onC
       });
       setWarehouseProducts(rows);
     } catch (err) {
-      toast.error(err?.response?.data?.message || err?.message || "Failed to load merchant SKUs");
+      toast.error(err?.response?.data?.message || err?.message || "Failed to load SKUs");
     } finally {
       setProductsLoading(false);
     }
@@ -561,14 +594,16 @@ function PlatformManualOrderForm({ initialOrder, warehouses = [], companyId, onC
       ["Upload Waybill", form.waybillFileName || (isEdit && form.waybillUrl)],
       ["Tracking Number", form.logistic.trackingNumber],
       ["Delivery Company", form.logistic.deliveryCompany],
-      ["Sender Name", form.sender.name],
-      ["Company", form.sender.company],
-      ["Sender Phone Number", form.sender.phone],
-      ["Pickup Address", form.sender.address],
-      ["Sender Country", form.sender.country],
-      ["Sender State", form.sender.state],
-      ["Sender City", form.sender.city],
-      ["Sender Zip Code", form.sender.zipCode],
+      ...(!isEdit ? [
+        ["Sender Name", form.sender.name],
+        ["Company", form.sender.company],
+        ["Sender Phone Number", form.sender.phone],
+        ["Pickup Address", form.sender.address],
+        ["Sender Country", form.sender.country],
+        ["Sender State", form.sender.state],
+        ["Sender City", form.sender.city],
+        ["Sender Zip Code", form.sender.zipCode],
+      ] : []),
       ["Buyer Name", form.buyer.name],
       ["Buyer Phone Number", form.buyer.phone],
       ["Buyer Email", form.buyer.email],
@@ -585,11 +620,11 @@ function PlatformManualOrderForm({ initialOrder, warehouses = [], companyId, onC
       toast.error(`${missing[0]} is required`);
       return false;
     }
-    if (!form.products.length) {
+    if (!isEdit && !form.products.length) {
       toast.error("Please select at least one product first.");
       return false;
     }
-    if (form.products.some((product) => normalizeProductQtyForSave(product.qty, product.availableForPlatform) < 1)) {
+    if (!isEdit && form.products.some((product) => normalizeProductQtyForSave(product.qty, product.availableForPlatform) < 1)) {
       toast.error("Product quantity must be at least 1.");
       return false;
     }
@@ -608,6 +643,11 @@ function PlatformManualOrderForm({ initialOrder, warehouses = [], companyId, onC
 
   const handleSaveClick = () => {
     if (!validate()) return;
+    if (isEdit && scrollContainerRef?.current) {
+      scrollContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
+      window.setTimeout(() => setConfirmOpen(true), 180);
+      return;
+    }
     setConfirmOpen(true);
   };
 
@@ -666,14 +706,14 @@ function PlatformManualOrderForm({ initialOrder, warehouses = [], companyId, onC
         <section className="rounded-xl border border-surface-border bg-white p-5">
           <h2 className="mb-4 text-base font-bold text-slate-800 font-display">Sender Information</h2>
           <div className="grid grid-cols-12 gap-4">
-            <TextInput required label="Sender Name" value={form.sender.name} onChange={(value) => update("sender.name", value)} placeholder="Sender name here" className="col-span-12 md:col-span-4" />
-            <TextInput required label="Company" value={form.sender.company} onChange={(value) => update("sender.company", value)} placeholder="Company / warehouse name" className="col-span-12 md:col-span-4" />
-            <TextInput required label="Phone Number" value={form.sender.phone} onChange={(value) => update("sender.phone", value)} placeholder="Phone Number Here" className="col-span-12 md:col-span-4" />
-            <TextInput required label="Address" value={form.sender.address} onChange={(value) => update("sender.address", value)} placeholder="Address here" className="col-span-12 md:col-span-6" />
-            <TextInput required label="Country" value={form.sender.country} onChange={(value) => update("sender.country", value)} placeholder="Country Name here" className="col-span-12 md:col-span-6" />
-            <TextInput required label="State" value={form.sender.state} onChange={(value) => update("sender.state", value)} placeholder="State name here" className="col-span-12 md:col-span-4" />
-            <TextInput required label="City" value={form.sender.city} onChange={(value) => update("sender.city", value)} placeholder="City name here" className="col-span-12 md:col-span-4" />
-            <TextInput required label="Zip Code" value={form.sender.zipCode} onChange={(value) => update("sender.zipCode", value)} placeholder="Zip code here" className="col-span-12 md:col-span-4" />
+            <TextInput required label="Sender Name" value={form.sender.name} onChange={(value) => update("sender.name", value)} placeholder="Sender name here" disabled={isEdit} className="col-span-12 md:col-span-4" />
+            <TextInput required label="Company" value={form.sender.company} onChange={(value) => update("sender.company", value)} placeholder="Company / warehouse name" disabled={isEdit} className="col-span-12 md:col-span-4" />
+            <TextInput required label="Phone Number" value={form.sender.phone} onChange={(value) => update("sender.phone", value)} placeholder="Phone Number Here" disabled={isEdit} className="col-span-12 md:col-span-4" />
+            <TextInput required label="Address" value={form.sender.address} onChange={(value) => update("sender.address", value)} placeholder="Address here" disabled={isEdit} className="col-span-12 md:col-span-6" />
+            <TextInput required label="Country" value={form.sender.country} onChange={(value) => update("sender.country", value)} placeholder="Country Name here" disabled={isEdit} className="col-span-12 md:col-span-6" />
+            <TextInput required label="State" value={form.sender.state} onChange={(value) => update("sender.state", value)} placeholder="State name here" disabled={isEdit} className="col-span-12 md:col-span-4" />
+            <TextInput required label="City" value={form.sender.city} onChange={(value) => update("sender.city", value)} placeholder="City name here" disabled={isEdit} className="col-span-12 md:col-span-4" />
+            <TextInput required label="Zip Code" value={form.sender.zipCode} onChange={(value) => update("sender.zipCode", value)} placeholder="Zip code here" disabled={isEdit} className="col-span-12 md:col-span-4" />
           </div>
         </section>
 
@@ -700,7 +740,7 @@ function PlatformManualOrderForm({ initialOrder, warehouses = [], companyId, onC
                 <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Search merchant SKU"
+                  placeholder="Search Merchant / Combine SKU"
                   value={productSearch}
                   onChange={(event) => setProductSearch(event.target.value)}
                   className="h-9 w-full rounded-lg border border-surface-border bg-white py-2 pl-9 pr-3 text-xs text-slate-700 outline-none placeholder:text-slate-400 focus:border-primary"
@@ -716,7 +756,7 @@ function PlatformManualOrderForm({ initialOrder, warehouses = [], companyId, onC
             <table className="min-w-full text-sm">
               <thead className="sticky top-0 z-10 bg-white">
                 <tr className="text-left text-sm font-bold text-slate-800">
-                  {(isEdit ? ["Product Name", "Merchant SKU", "* Quantity", "Unit Price", "Weight", "Total"] : ["Select", "Image", "Product Name", "Merchant SKU", "Available", "* Quantity", "Unit Price", "Weight", "Total"]).map((heading) => (
+                  {(isEdit ? ["Product Name", "SKU", "* Quantity", "Unit Price", "Weight", "Total"] : ["Select", "Image", "Product Name", "SKU", "Available", "* Quantity", "Unit Price", "Weight", "Total"]).map((heading) => (
                     <th key={heading} className="pb-3 pr-5">{heading}</th>
                   ))}
                 </tr>
@@ -744,12 +784,12 @@ function PlatformManualOrderForm({ initialOrder, warehouses = [], companyId, onC
                   <>
                     {productsLoading && (
                       <tr>
-                        <td colSpan={9} className="py-8 text-center text-xs text-slate-400">Loading merchant SKUs...</td>
+                        <td colSpan={9} className="py-8 text-center text-xs text-slate-400">Loading SKUs...</td>
                       </tr>
                     )}
                     {!productsLoading && warehouseProducts.length === 0 && (
                       <tr>
-                        <td colSpan={9} className="py-8 text-center text-xs text-slate-400">No merchant SKU found for this warehouse.</td>
+                        <td colSpan={9} className="py-8 text-center text-xs text-slate-400">No SKU found for this warehouse.</td>
                       </tr>
                     )}
                     {!productsLoading && warehouseProducts.map((product) => {
@@ -855,9 +895,10 @@ function PlatformManualOrderForm({ initialOrder, warehouses = [], companyId, onC
 }
 
 function EditOrderModal({ order, warehouses, companyId, onClose, onSubmit }) {
+  const scrollContainerRef = useRef(null);
   if (!order) return null;
   return (
-    <div className="fixed inset-0 z-[10000] overflow-y-auto bg-black/40 px-4 py-8 backdrop-blur-sm">
+    <div ref={scrollContainerRef} className="fixed inset-0 z-[10000] overflow-y-auto bg-black/40 px-4 py-8 backdrop-blur-sm">
       <div className="mx-auto w-full max-w-6xl rounded-2xl bg-surface p-5 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold text-slate-800 font-display">Edit Platform Manual Order</h2>
@@ -865,7 +906,7 @@ function EditOrderModal({ order, warehouses, companyId, onClose, onSubmit }) {
             <X size={18} />
           </button>
         </div>
-        <PlatformManualOrderForm initialOrder={order} warehouses={warehouses} companyId={companyId} onCancel={onClose} onSubmit={onSubmit} submitLabel="Update" />
+        <PlatformManualOrderForm initialOrder={order} warehouses={warehouses} companyId={companyId} onCancel={onClose} onSubmit={onSubmit} submitLabel="Update" scrollContainerRef={scrollContainerRef} />
       </div>
     </div>
   );
@@ -1608,7 +1649,7 @@ export default function PlatformManualOrderPage() {
     if (!companyId) return;
     try {
       const rows = await platformManualOrderApi.warehouses(companyId);
-      setWarehouses(rows);
+      setWarehouses(filterWarehousesByPermission(rows));
     } catch {
       setWarehouses([]);
     }

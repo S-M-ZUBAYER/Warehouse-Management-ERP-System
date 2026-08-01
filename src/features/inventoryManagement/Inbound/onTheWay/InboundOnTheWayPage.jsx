@@ -93,6 +93,7 @@ export default function InboundOnTheWayPage() {
     handleReceivedQtyChange,
     fillAllExpected,
     confirmReceive,
+    canConfirmReceive,
     receiving,
   } = useReceiveInbound({ onSuccess: clearSelected });
 
@@ -277,6 +278,7 @@ export default function InboundOnTheWayPage() {
           onFillAll={fillAllExpected}
           onConfirm={confirmReceive}
           onCancel={() => setShowReceiveModal(false)}
+          canConfirmReceive={canConfirmReceive}
           receiving={receiving}
         />
       )}
@@ -319,6 +321,7 @@ function ReceiveModal({
   onFillAll,
   onConfirm,
   onCancel,
+  canConfirmReceive,
   receiving,
 }) {
   const targetCount = Array.isArray(target) ? target.length : target ? 1 : 0;
@@ -389,8 +392,9 @@ function ReceiveModal({
                         </thead>
                         <tbody className="divide-y divide-surface-border">
                           {detail.lines.map((line) => {
-                            const received = receivedQtys[line.id] ?? line.qty_expected;
-                            const hasDiscrepancy = Number(received) !== line.qty_expected;
+                            const received = receivedQtys[line.id] ?? "";
+                            const hasDiscrepancy =
+                              received !== "" && Number(received) !== line.qty_expected;
 
                             return (
                               <tr key={line.id}>
@@ -409,6 +413,7 @@ function ReceiveModal({
                                     min={0}
                                     value={received}
                                     onChange={(e) => onQtyChange(line.id, e.target.value)}
+                                    placeholder={String(line.qty_expected)}
                                     className={`w-20 px-2 py-1 text-xs border rounded-lg text-center outline-none focus:border-primary transition-all ${
                                       hasDiscrepancy ? "border-amber-400 bg-amber-50 text-amber-700" : "border-surface-border"
                                     }`}
@@ -517,7 +522,7 @@ function ReceiveModal({
           </button>
           <button
             onClick={onConfirm}
-            disabled={receiving || loading}
+            disabled={receiving || loading || bulkLoading || !canConfirmReceive}
             className="px-6 py-2.5 text-sm font-semibold bg-primary hover:bg-primary-dark text-white rounded-xl disabled:opacity-60 flex items-center gap-2"
           >
             {receiving && <Loader2 size={13} className="animate-spin" />}

@@ -147,6 +147,10 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
   const [tikTokAwbRows, setTikTokAwbRows] = useState([]);
   const [tikTokAwbFromStatus, setTikTokAwbFromStatus] = useState("");
   const [withdrawPackLoading, setWithdrawPackLoading] = useState(false);
+  const [multiPlatformAction, setMultiPlatformAction] = useState(null);
+  const [multiPlatformActionLoading, setMultiPlatformActionLoading] = useState(false);
+  const [multiPlatformAwbResults, setMultiPlatformAwbResults] = useState([]);
+  const [multiPlatformAwbRefreshId, setMultiPlatformAwbRefreshId] = useState("");
   const platformValue = String(storeContext?.platform || "").toLowerCase();
   const allStoreScope =
     storeContext?.isAllStoreContext === true ||
@@ -582,6 +586,34 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
     );
   };
 
+  const getActionBatches = (rows = []) => {
+    const batchMap = new Map();
+
+    rows.forEach((order) => {
+      const platformName = getActionPlatform(order);
+      const platform = platformName.includes("tik") ? "tiktok" : platformName.includes("shopee") ? "shopee" : platformName;
+      const storeKey = getActionStoreKey(order);
+      const key = `${platform || "unknown"}::${storeKey || "unknown"}`;
+
+      if (!batchMap.has(key)) {
+        batchMap.set(key, {
+          key,
+          platform,
+          storeKey,
+          context: order?.storeContext || storeContext || {},
+          rows: [],
+        });
+      }
+
+      batchMap.get(key).rows.push(order);
+    });
+
+    return [...batchMap.values()];
+  };
+
+  const canUseMultiPlatformAction = (action, rows = []) =>
+    ["pack", "push"].includes(action) && rows.length > 1 && getActionBatches(rows).length > 1;
+
   const completeWithdrawPack = async (rows = []) => {
     const actionContext = getActionContext(rows);
     const platformName = String(rows[0]?.platform || actionContext?.platform || "").toLowerCase();
@@ -626,6 +658,180 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
     return true;
   };
 
+  const validateMultiPlatformBatches = (action, batches = []) => {
+    const unsupportedBatch = batches.find((batch) => !["shopee", "tiktok"].includes(batch.platform));
+    if (unsupportedBatch) {
+      toast.error("Only Shopee and TikTok orders can be processed together");
+      return false;
+    }
+
+    for (const batch of batches) {
+      if (action === "pack" && batch.platform === "shopee") {
+        const invalidRows = batch.rows.filter((order) => String(order?.rawStatus || "").toUpperCase() !== "READY_TO_SHIP");
+        if (invalidRows.length > 0) {
+          toast.error("Pack is only available for READY_TO_SHIP Shopee orders");
+          return false;
+        }
+      }
+
+      if (action === "pack" && batch.platform === "tiktok") {
+        const invalidRows = batch.rows.filter((order) => String(order?.rawStatus || "").toUpperCase() !== "AWAITING_SHIPMENT");
+        if (invalidRows.length > 0) {
+          toast.error("Pack is only available for AWAITING_SHIPMENT TikTok orders");
+          return false;
+        }
+      }
+
+      if (action === "push" && batch.platform === "tiktok") {
+        const allowedStatuses = ["AWAITING_COLLECTION", "AWAITING_COLLECTION_PRINTED", "IN_TRANSIT"];
+        const invalidRows = batch.rows.filter((order) => !allowedStatuses.includes(String(order?.rawStatus || "").toUpperCase()));
+        if (invalidRows.length > 0) {
+          toast.error("Push is only available for AWAITING_COLLECTION TikTok orders");
+          return false;
+        }
+      }
+    }
+
+    return true;
+  };
+
+  const summarizeMixedAction = ({ action, successfulCount = 0, failedCount = 0 }) => {
+    if (failedCount > 0) {
+      toast.error(`${failedCount} order(s) failed to ${action}`);
+      return;
+    }
+
+    toast.success(`${successfulCount} selected order(s) ${action === "pack" ? "packed successfully" : "ready to print"}`);
+  };
+
+  const processMultiPlatformPack = async (batches = []) => {
+    let successfulCount = 0;
+    let failedCount = 0;
+    const successfulIds = [];
+    const shopeeFailedOrders = [];
+    const tikTokFailedOrders = [];
+
+    for (const batch of batches) {
+      const result = batch.platform === "shopee"
+        ? await packShopeeOrders({ context: batch.context, orders: batch.rows })
+        : await packTikTokOrders({ context: batch.context, orders: batch.rows });
+      const batchSuccessfulIds = result?.successfulIds || [];
+      const batchFailedOrders = result?.failedOrders || [];
+
+      successfulIds.push(...batchSuccessfulIds);
+      successfulCount += batchSuccessfulIds.length;
+      failedCount += batchFailedOrders.length;
+
+      removeFailedPackOrders({ context: batch.context, platform: batch.platform, orderIds: batchSuccessfulIds });
+      removeWithdrawOrders({ context: batch.context, platform: batch.platform, orderIds: batchSuccessfulIds });
+      saveFailedPackOrders({ context: batch.context, platform: batch.platform, failedOrders: batchFailedOrders });
+
+      if (batch.platform === "shopee") {
+        shopeeFailedOrders.push(...batchFailedOrders);
+      } else {
+        tikTokFailedOrders.push(...batchFailedOrders);
+      }
+    }
+
+    removeOrdersFromCurrentList(successfulIds);
+    setFailedShopeePackOrders(shopeeFailedOrders);
+    setFailedTikTokPackOrders(tikTokFailedOrders);
+    summarizeMixedAction({ action: "pack", successfulCount, failedCount });
+  };
+
+  const processMultiPlatformPush = async (batches = []) => {
+    let successfulCount = 0;
+    let failedCount = 0;
+    const shopeeFailedOrders = [];
+    const tikTokFailedOrders = [];
+    const awbResults = [];
+
+    setShopeeAwbPdfUrl("");
+    setTikTokAwbPdfUrl("");
+    setFailedShopeePrintOrders([]);
+    setFailedTikTokPrintOrders([]);
+    setMultiPlatformAwbResults([]);
+
+    for (const batch of batches) {
+      const fromStatus = activeTab === "Pushed Successful"
+        ? batch.platform === "shopee" ? "PROCESSED_PRINTED" : "AWAITING_COLLECTION_PRINTED"
+        : String(batch.rows[0]?.rawStatus || "").toUpperCase();
+      const result = batch.platform === "shopee"
+        ? await generateShopeeAwbPdf({ context: batch.context, orders: batch.rows, fromStatus })
+        : await generateTikTokAwbPdf({ context: batch.context, orders: batch.rows, fromStatus });
+      const printedOrderIds = result?.printedOrderIds || [];
+      const failedOrders = result?.failedOrders || [];
+
+      successfulCount += printedOrderIds.length || (result?.pdfUrl ? Math.max(0, batch.rows.length - failedOrders.length) : 0);
+      failedCount += failedOrders.length;
+
+      if (
+        (batch.platform === "shopee" && fromStatus === "PROCESSED") ||
+        (batch.platform === "tiktok" && fromStatus === "AWAITING_COLLECTION")
+      ) {
+        savePushSuccessfulOrders({ context: batch.context, platform: batch.platform, orderIds: printedOrderIds });
+      }
+
+      if (batch.platform === "shopee") {
+        shopeeFailedOrders.push(...failedOrders);
+      } else {
+        tikTokFailedOrders.push(...failedOrders);
+      }
+
+      awbResults.push({
+        id: batch.key,
+        platform: batch.platform,
+        storeName: batch.context?.store || batch.rows[0]?.storeName || batch.storeKey || "-",
+        storeKey: batch.storeKey,
+        context: batch.context,
+        rows: batch.rows,
+        fromStatus,
+        orderCount: batch.rows.length,
+        successCount: printedOrderIds.length || (result?.pdfUrl ? Math.max(0, batch.rows.length - failedOrders.length) : 0),
+        failedOrders,
+        pdfUrl: result?.pdfUrl || "",
+      });
+    }
+
+    setFailedShopeePrintOrders(shopeeFailedOrders);
+    setFailedTikTokPrintOrders(tikTokFailedOrders);
+    setMultiPlatformAwbResults(awbResults);
+    summarizeMixedAction({ action: "push", successfulCount, failedCount });
+  };
+
+  const processMultiPlatformAction = async ({ action, rows = [] }) => {
+    const batches = getActionBatches(rows);
+    if (!validateMultiPlatformBatches(action, batches)) return;
+
+    setMultiPlatformActionLoading(true);
+    try {
+      if (action === "pack") {
+        await processMultiPlatformPack(batches);
+      } else {
+        await processMultiPlatformPush(batches);
+      }
+
+      invalidateOrderManagementData();
+      setSelectedIds([]);
+      setSelectedOrderRows([]);
+    } catch (error) {
+      toast.error(error?.response?.data?.message || error?.message || `Order ${action} failed`);
+    } finally {
+      setMultiPlatformActionLoading(false);
+      setMultiPlatformAction(null);
+    }
+  };
+
+  const cancelMultiPlatformAction = () => {
+    if (multiPlatformActionLoading) return;
+    setMultiPlatformAction(null);
+  };
+
+  const confirmMultiPlatformAction = () => {
+    if (!multiPlatformAction) return;
+    processMultiPlatformAction(multiPlatformAction);
+  };
+
   const runAction = (action, rows = selectedRows) => {
     if (!rows.length) {
       const isShopeeAction =
@@ -647,6 +853,13 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
       } else {
         toast.error(action === "pack" ? "No Items Selected" : "Please select at least one order");
       }
+      return;
+    }
+
+    if (canUseMultiPlatformAction(action, rows)) {
+      const batches = getActionBatches(rows);
+      if (!validateMultiPlatformBatches(action, batches)) return;
+      setMultiPlatformAction({ action, rows });
       return;
     }
 
@@ -800,6 +1013,71 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
     setTikTokAwbFromStatus("");
   };
 
+  const closeMultiPlatformAwbResults = () => {
+    if (multiPlatformActionLoading || multiPlatformAwbRefreshId) return;
+    multiPlatformAwbResults.forEach((result) => {
+      if (result?.pdfUrl) URL.revokeObjectURL(result.pdfUrl);
+    });
+    setMultiPlatformAwbResults([]);
+  };
+
+  const refreshMultiPlatformTikTokAwbPdf = async (resultId) => {
+    const currentResult = multiPlatformAwbResults.find((result) => result.id === resultId);
+    if (!currentResult || currentResult.platform !== "tiktok" || multiPlatformAwbRefreshId) return;
+
+    setMultiPlatformAwbRefreshId(resultId);
+    try {
+      const result = await generateTikTokAwbPdf({
+        context: currentResult.context,
+        orders: currentResult.rows,
+        fromStatus: currentResult.fromStatus,
+      });
+      const failedOrders = result?.failedOrders || [];
+      const printedOrderIds = result?.printedOrderIds || [];
+
+      if (String(currentResult.fromStatus || "").toUpperCase() === "AWAITING_COLLECTION") {
+        savePushSuccessfulOrders({
+          context: currentResult.context,
+          platform: "tiktok",
+          orderIds: printedOrderIds,
+        });
+      }
+
+      if (currentResult.pdfUrl) URL.revokeObjectURL(currentResult.pdfUrl);
+
+      setMultiPlatformAwbResults((results) => {
+        const nextResults = results.map((item) =>
+          item.id === resultId
+            ? {
+                ...item,
+                pdfUrl: result?.pdfUrl || "",
+                failedOrders,
+                successCount: printedOrderIds.length || (result?.pdfUrl ? Math.max(0, item.orderCount - failedOrders.length) : 0),
+              }
+            : item
+        );
+
+        setFailedTikTokPrintOrders(
+          nextResults
+            .filter((item) => item.platform === "tiktok")
+            .flatMap((item) => item.failedOrders || [])
+        );
+
+        return nextResults;
+      });
+
+      if (failedOrders.length > 0) {
+        toast.error(`${failedOrders.length} TikTok AWB order(s) failed`);
+      } else if (result?.pdfUrl) {
+        toast.success("TikTok AWB is ready to print");
+      }
+    } catch (error) {
+      toast.error(error?.response?.data?.message || error?.message || "TikTok AWB print failed");
+    } finally {
+      setMultiPlatformAwbRefreshId("");
+    }
+  };
+
   const refreshTikTokAwbPdf = () => {
     if (!tikTokAwbRows.length || tikTokPrintMutation.isPending) return;
     if (tikTokAwbPdfUrl) URL.revokeObjectURL(tikTokAwbPdfUrl);
@@ -881,8 +1159,19 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
     // actions
     runAction,
     markWithdraw,
-    actionLoading: actionMutation.isPending || shopeePackMutation.isPending || shopeePrintMutation.isPending || tikTokPackMutation.isPending || tikTokPrintMutation.isPending || withdrawPackLoading,
+    actionLoading: actionMutation.isPending || shopeePackMutation.isPending || shopeePrintMutation.isPending || tikTokPackMutation.isPending || tikTokPrintMutation.isPending || withdrawPackLoading || multiPlatformActionLoading || Boolean(multiPlatformAwbRefreshId),
     cacheOrderForDetail,
+    multiPlatformConfirmOpen: Boolean(multiPlatformAction),
+    multiPlatformConfirmMessage: multiPlatformAction
+      ? `Process ${multiPlatformAction.rows?.length || 0} selected Shopee and TikTok order(s) to ${multiPlatformAction.action}?`
+      : "",
+    multiPlatformActionLoading,
+    confirmMultiPlatformAction,
+    cancelMultiPlatformAction,
+    multiPlatformAwbResults,
+    multiPlatformAwbRefreshId,
+    refreshMultiPlatformTikTokAwbPdf,
+    closeMultiPlatformAwbResults,
     shopeeNoItemsModalOpen,
     closeShopeeNoItemsModal: () => setShopeeNoItemsModalOpen(false),
     shopeePackConfirmOpen: pendingShopeePackRows.length > 0,

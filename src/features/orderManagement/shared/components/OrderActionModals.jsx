@@ -36,6 +36,25 @@ export default function OrderActionModals({ list }) {
     }
   };
 
+  const handlePrintPdf = (pdfUrl) => {
+    if (!pdfUrl || typeof document === "undefined") return;
+
+    const frame = document.createElement("iframe");
+    frame.style.position = "fixed";
+    frame.style.right = "0";
+    frame.style.bottom = "0";
+    frame.style.width = "0";
+    frame.style.height = "0";
+    frame.style.border = "0";
+    frame.src = pdfUrl;
+    frame.onload = () => {
+      frame.contentWindow?.focus();
+      frame.contentWindow?.print();
+      window.setTimeout(() => frame.remove(), 1000);
+    };
+    document.body.appendChild(frame);
+  };
+
   const handleTikTokLabelCheck = (id) => {
     const next = checkedLabelItems.includes(id)
       ? checkedLabelItems.filter((itemId) => itemId !== id)
@@ -61,6 +80,11 @@ export default function OrderActionModals({ list }) {
     window.setTimeout(() => list.refreshTikTokAwbPdf?.(), 0);
   };
 
+  const handleMultiTikTokLabelChange = (id, resultId) => {
+    handleTikTokLabelCheck(id);
+    window.setTimeout(() => list.refreshMultiPlatformTikTokAwbPdf?.(resultId), 0);
+  };
+
   return (
     <>
       <ConfirmActionModal
@@ -72,6 +96,148 @@ export default function OrderActionModals({ list }) {
         onCancel={list.closeShopeeNoItemsModal}
         onConfirm={list.closeShopeeNoItemsModal}
       />
+
+      <ConfirmActionModal
+        open={list.multiPlatformConfirmOpen}
+        title="Confirm Multi-Platform Action"
+        message={list.multiPlatformConfirmMessage}
+        confirmLabel="Confirm"
+        loading={list.multiPlatformActionLoading}
+        onCancel={list.cancelMultiPlatformAction}
+        onConfirm={list.confirmMultiPlatformAction}
+      />
+
+      {list.multiPlatformAwbResults?.length > 0 && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+          <div className="w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between border-b border-surface-border px-6 py-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-800 font-display">Multi-Store AWB Results</h3>
+                <p className="mt-1 text-xs text-slate-500">Print or open each platform-store AWB separately.</p>
+              </div>
+              <button
+                type="button"
+                onClick={list.closeMultiPlatformAwbResults}
+                className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X size={17} />
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] overflow-auto p-6">
+              <div className="grid gap-4 md:grid-cols-2">
+                {list.multiPlatformAwbResults.map((result) => (
+                  <div key={result.id} className="rounded-xl border border-surface-border bg-white p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-bold text-slate-800">
+                          {result.platform === "shopee" ? "Shopee AWB Printing" : "TikTok AWB Printing"}
+                        </p>
+                        <div className="mt-2 grid gap-1 text-xs text-slate-500">
+                          <p><span className="font-semibold text-slate-700">Platform</span>: {result.platform === "shopee" ? "Shopee" : "TikTok"}</p>
+                          <p><span className="font-semibold text-slate-700">Store</span>: {result.storeName || "-"}</p>
+                          <p>
+                            <span className="font-semibold text-slate-700">Selected</span>: {result.orderCount || 0}
+                            <span className="mx-2 text-slate-300">|</span>
+                            <span className="font-semibold text-slate-700">Ready</span>: {result.successCount || 0}
+                            <span className="mx-2 text-slate-300">|</span>
+                            <span className="font-semibold text-slate-700">Failed</span>: {result.failedOrders?.length || 0}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handlePrintPdf(result.pdfUrl)}
+                          disabled={!result.pdfUrl || list.multiPlatformAwbRefreshId === result.id}
+                          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Print All Pages
+                        </button>
+                        {result.pdfUrl && (
+                          <a
+                            href={result.pdfUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-lg border border-surface-border px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-surface-card"
+                          >
+                            Open PDF
+                          </a>
+                        )}
+                      </div>
+                    </div>
+
+                    {result.platform === "tiktok" && (
+                      <div className="mt-4 rounded-xl border border-surface-border bg-[#004368]/[0.05] p-4">
+                        <p className="text-sm font-bold text-slate-800">Label Waybill List</p>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          {TIKTOK_PRINTING_LABEL_LIST.map((item) => (
+                            <label
+                              key={item.id}
+                              className="flex cursor-pointer items-center gap-3 rounded px-2 py-1.5"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checkedLabelItems.includes(item.id)}
+                                onChange={() => handleMultiTikTokLabelChange(item.id, result.id)}
+                                disabled={list.multiPlatformAwbRefreshId === result.id}
+                                className="h-4 w-4 cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-50"
+                              />
+                              <span className="text-sm font-medium text-slate-700">{item.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                        {list.multiPlatformAwbRefreshId === result.id && (
+                          <p className="mt-2 text-xs font-semibold text-slate-500">Refreshing AWB preview...</p>
+                        )}
+                      </div>
+                    )}
+
+                    {result.pdfUrl ? (
+                      <div className="mt-4 h-64 overflow-hidden rounded-lg border border-surface-border bg-slate-50">
+                        <iframe
+                          src={result.pdfUrl}
+                          title={`${result.platform} ${result.storeName || "store"} AWB Preview`}
+                          className="h-full w-full"
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                    ) : (
+                      <div className="mt-4 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                        No PDF generated
+                      </div>
+                    )}
+
+                    {result.failedOrders?.length > 0 && (
+                      <div className="mt-4 max-h-36 overflow-auto rounded-lg border border-red-100 bg-red-50 p-3">
+                        <p className="text-xs font-bold text-red-700">Failed Orders</p>
+                        <div className="mt-2 space-y-2">
+                          {result.failedOrders.map((order) => (
+                            <div key={order.orderId} className="rounded bg-white px-2 py-1.5">
+                              <p className="text-xs font-semibold text-red-700">{order.orderId}</p>
+                              <p className="text-xs text-red-600">{order.reason || "Unknown error"}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end border-t border-surface-border px-6 py-4">
+              <button
+                type="button"
+                onClick={list.closeMultiPlatformAwbResults}
+                className="rounded-xl border border-surface-border px-5 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-surface-card"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ConfirmActionModal
         open={list.shopeePackConfirmOpen}
