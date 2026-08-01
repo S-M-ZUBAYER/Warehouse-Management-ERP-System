@@ -744,8 +744,7 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
           </div>
 
           <div
-            className="bg-white rounded-xl p-5"
-            style={{ border: isGift ? "1.5px dashed #004368" : "1px solid #E2E8F0" }}
+            className="bg-white rounded-xl border border-surface-border p-5"
           >
             <h3 className="text-sm font-bold text-slate-800 font-display mb-4">Buyer / Receiver Information</h3>
             <div className="grid grid-cols-3 gap-3 mb-3">

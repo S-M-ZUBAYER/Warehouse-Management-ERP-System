@@ -20,6 +20,7 @@ import PortalActionMenu from "../../../components/shared/PortalActionMenu";
 import RecordDetailModal from "../../../components/shared/RecordDetailModal";
 import { exportRowsToCsv, exportRowsToXlsx, printRows } from "../../../utils/tableOutput";
 import ExportMenu from "../../../components/shared/ExportMenu";
+import ListPageSizePagination from "../../../components/shared/ListPageSizePagination";
 
 const MERCHANT_SKU_SEARCH_FIELDS = [
   { label: "SKU Name", value: "sku_name" },
@@ -135,6 +136,9 @@ export default function MerchantSKUPage() {
     pagination,
     page,
     setPage,
+    pageSizeInput,
+    setPageSizeInput,
+    applyPageSize,
     listLoading,
     listFetching,
     isListError,
@@ -550,7 +554,7 @@ export default function MerchantSKUPage() {
         </div>
 
         {/* Updated Pagination - matching ProductListPage style */}
-        {!listLoading && pagination?.totalPages > 1 && (
+        {false && !listLoading && pagination?.totalPages > 1 && (
           <div className="flex items-center justify-between px-5 py-4 border-t border-surface-border">
             <p className="text-xs text-slate-500">
               Showing {(page - 1) * (pagination.limit || 10) + 1}–
@@ -603,6 +607,18 @@ export default function MerchantSKUPage() {
             </div>
           </div>
         )}
+
+        <ListPageSizePagination
+          page={page}
+          limit={pagination.limit || 10}
+          total={pagination.total || 0}
+          itemLabel="SKUs"
+          pageSizeInput={pageSizeInput}
+          onPageChange={setPage}
+          onPageSizeInputChange={setPageSizeInput}
+          onApplyPageSize={applyPageSize}
+          loading={listFetching}
+        />
 
         {/* Footer buttons */}
         <div className="flex justify-end gap-3 px-5 py-4 border-t border-surface-border">

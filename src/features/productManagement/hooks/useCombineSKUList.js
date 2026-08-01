@@ -57,6 +57,8 @@ const bulkDeleteCombineSkus = async (ids) => {
 export function useCombineSKUList() {
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+    const [pageSizeInput, setPageSizeInput] = useState("10");
     const [selectedIds, setSelectedIds] = useState([]);
     const [selectedBundles, setSelectedBundles] = useState([]);
     const [selectionLoading, setSelectionLoading] = useState(false);
@@ -69,7 +71,7 @@ export function useCombineSKUList() {
 
     const listFilters = {
         page,
-        limit: 10, // ← 10 per page
+        limit: pageSize,
         search: debouncedSearch,
         sortBy: "created_at",
         sortOrder: "DESC",
@@ -92,7 +94,13 @@ export function useCombineSKUList() {
     });
 
     const bundles = listData?.data ?? [];
-    const pagination = listData?.pagination ?? { total: 0, totalPages: 1, page: 1, limit: 10 };
+    const pagination = listData?.pagination ?? { total: 0, totalPages: 1, page: 1, limit: pageSize };
+    const handlePageSizeSearch = () => {
+        const nextPageSize = Math.max(1, Number.parseInt(pageSizeInput, 10) || 10);
+        setPageSize(nextPageSize);
+        setPageSizeInput(String(nextPageSize));
+        setPage(1);
+    };
 
     useEffect(() => {
         setSelectedBundles((prev) => {
@@ -186,6 +194,9 @@ export function useCombineSKUList() {
         // search
         search, setSearch,
         page, setPage,
+        pageSizeInput,
+        setPageSizeInput,
+        applyPageSize: handlePageSizeSearch,
 
         // data
         bundles,

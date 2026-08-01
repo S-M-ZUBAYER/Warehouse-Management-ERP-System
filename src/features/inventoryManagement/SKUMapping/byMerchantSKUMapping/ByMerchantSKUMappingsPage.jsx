@@ -21,7 +21,7 @@ import { useSkuMappingDropdowns } from '../hooks/useSkuMappingDropdowns';
 import MappingStatusBadge from '../components/MappingStatusBadge';
 import ConfirmModal from '../components/ConfirmModal';
 import { TableSkeleton, EmptyState } from '../components/TableHelpers';
-import Pagination from '../../../../components/shared/Pagination';
+import ListPageSizePagination from '../../../../components/shared/ListPageSizePagination';
 import ExportMenu from '../../../../components/shared/ExportMenu';
 import api from '../../../../lib/api';
 import { exportRowsToCsv, exportRowsToXlsx, printRows } from '../../../../utils/tableOutput';
@@ -66,6 +66,7 @@ export default function ByMerchantSKUMappingsPage() {
         skuType, setSkuType,
         mappingStatus, handleTabChange,
         page, setPage,
+        pageSizeInput, setPageSizeInput, applyPageSize,
         merchantSkus, pagination,
         counts,
         isLoading, isFetching, isError, error, refetch,
@@ -607,14 +608,16 @@ export default function ByMerchantSKUMappingsPage() {
                     )}
                 </div>
 
-                <Pagination
+                <ListPageSizePagination
                     page={page}
-                    totalPages={pagination.totalPages}
-                    total={pagination.total}
-                    limit={pagination.limit}
-                    itemLabel="merchant SKUs"
-                    showWhenSinglePage
+                    limit={pagination.limit || 10}
+                    total={pagination.total || 0}
+                    itemLabel="SKUs"
+                    pageSizeInput={pageSizeInput}
                     onPageChange={setPage}
+                    onPageSizeInputChange={setPageSizeInput}
+                    onApplyPageSize={applyPageSize}
+                    loading={isFetching}
                 />
                 <div className="flex justify-end gap-3 px-5 py-4 border-t border-surface-border">
                     <ExportMenu

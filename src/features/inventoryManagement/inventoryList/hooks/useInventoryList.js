@@ -190,6 +190,8 @@ export function useInventoryList({ initialStockAlertStatus = '' } = {}) {
     const [mappingStatus, setMappingStatus] = useState('all');
     const [stockAlertStatus] = useState(initialStockAlertStatus);
     const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+    const [pageSizeInput, setPageSizeInput] = useState('10');
 
     // ── Selection ─────────────────────────────────────────────────────────────
     const [selectedIds, setSelectedIds] = useState([]);   // sku_warehouse_stock IDs
@@ -242,7 +244,7 @@ export function useInventoryList({ initialStockAlertStatus = '' } = {}) {
     // ─────────────────────────────────────────────────────────────────────────
     const listParams = {
         page,
-        limit: 10,
+        limit: pageSize,
         warehouseId: warehouseId || undefined,
         search: searchApplied || undefined,
         skuType: skuType || undefined,
@@ -472,6 +474,13 @@ const syncMutation = useMutation({
         stockAlertMutation.mutate({ skuIds: selectedIds, minStock });
     }, [selectedIds, minStock, stockAlertMutation]);
 
+    const applyPageSize = useCallback(() => {
+        const nextPageSize = Math.max(1, Number.parseInt(pageSizeInput, 10) || 10);
+        setPageSize(nextPageSize);
+        setPageSizeInput(String(nextPageSize));
+        setPage(1);
+    }, [pageSizeInput]);
+
    const handleSyncOpen = useCallback(() => {
     if (selectedIds.length === 0) {
         toast.error('Select at least one mapped SKU to sync');
@@ -513,6 +522,7 @@ const syncMutation = useMutation({
         counts,
 
         page, setPage,
+        pageSizeInput, setPageSizeInput, applyPageSize,
 
         // data
         items, pagination,

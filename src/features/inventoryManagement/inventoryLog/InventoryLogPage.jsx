@@ -1,5 +1,6 @@
 import { AlertCircle, ChevronDown, ChevronLeft, ChevronRight, Loader2, RefreshCw, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { translateStaticText } from "../../../i18nDomTranslator";
 import Topbar from "../../../components/layout/Topbar";
 import InvFooter from "../shared/components/InvFooter";
 import calendarIcon from "../../../assets/calendar.svg";
@@ -165,11 +166,27 @@ const DateFilterInput = ({ value, onChange }) => (
 // ─────────────────────────────────────────────────────────────────────────────
 // Pagination
 // ─────────────────────────────────────────────────────────────────────────────
-const Pagination = ({ pagination, page, setPage, isFetching }) => {
+const Pagination = ({
+  pagination,
+  page,
+  setPage,
+  isFetching,
+  pageSizeInput,
+  setPageSizeInput,
+  applyPageSize,
+}) => {
+  const { i18n } = useTranslation();
   const { total = 0, totalPages = 1, limit = 10 } = pagination;
   const currentPage = Math.min(page, totalPages);
   const from = total === 0 ? 0 : (currentPage - 1) * limit + 1;
   const to = Math.min(currentPage * limit, total);
+  const language = i18n.resolvedLanguage || i18n.language;
+  const showingLabel = translateStaticText("Showing", language);
+  const ofLabel = translateStaticText("of", language);
+  const recordsLabel = translateStaticText("records", language);
+  const recordsPerPageLabel = translateStaticText("Records per page", language);
+  const searchLabel = translateStaticText("Search", language);
+  const searchingLabel = translateStaticText("Searching...", language);
 
   // Build page numbers — show up to 5 around current page
   const getPages = () => {
@@ -188,26 +205,50 @@ const Pagination = ({ pagination, page, setPage, isFetching }) => {
   };
 
   return (
-    <div className="flex items-center justify-between px-5 py-3 border-t border-surface-border">
+    <div className="grid grid-cols-1 items-center gap-3 px-5 py-3 border-t border-surface-border md:grid-cols-3">
       {/* Left: record count */}
       <p className="text-xs text-slate-500">
-        Showing <span className="font-semibold text-slate-700">{from}</span>
+        {showingLabel} <span className="font-semibold text-slate-700">{from}</span>
         {" – "}
         <span className="font-semibold text-slate-700">{to}</span>
-        {" of "}
+        {` ${ofLabel} `}
         <span className="font-semibold text-slate-700">{total}</span>
-        {" records"}
+        {` ${recordsLabel}`}
         {isFetching && (
           <span className="ml-2 inline-block w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin align-middle" />
         )}
       </p>
 
+      <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-slate-500">
+        <label className="flex items-center gap-2">
+          <span>{recordsPerPageLabel}</span>
+          <input
+            type="number"
+            min="1"
+            value={pageSizeInput ?? limit}
+            onChange={(event) => setPageSizeInput?.(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") applyPageSize?.();
+            }}
+            className="h-8 w-20 rounded-lg border border-surface-border bg-white px-2 text-xs font-semibold text-slate-700 outline-none focus:border-primary"
+          />
+        </label>
+        <button
+          type="button"
+          onClick={() => applyPageSize?.()}
+          disabled={isFetching}
+          className="h-8 rounded-lg bg-primary px-3 text-xs font-semibold text-white transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isFetching ? searchingLabel : searchLabel}
+        </button>
+      </div>
+
       {/* Right: page controls */}
       {total > 0 && (
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 md:justify-end">
         {/* Prev */}
         <button
-          disabled={currentPage <= 1}
+          disabled={currentPage <= 1 || isFetching}
           onClick={() => setPage((p) => Math.max(1, p - 1))}
           className="flex items-center justify-center w-8 h-8 rounded-lg border border-surface-border bg-white text-slate-500 disabled:opacity-40 hover:border-primary hover:text-primary transition-all"
         >
@@ -231,7 +272,7 @@ const Pagination = ({ pagination, page, setPage, isFetching }) => {
 
         {/* Next */}
         <button
-          disabled={currentPage >= totalPages}
+          disabled={currentPage >= totalPages || isFetching}
           onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
           className="flex items-center justify-center w-8 h-8 rounded-lg border border-surface-border bg-white text-slate-500 disabled:opacity-40 hover:border-primary hover:text-primary transition-all"
         >
@@ -262,6 +303,9 @@ export default function InventoryLogPage() {
     handleSearch,
     page,
     setPage,
+    pageSizeInput,
+    setPageSizeInput,
+    applyPageSize,
     items,
     pagination,
     warehouses,
@@ -512,6 +556,9 @@ export default function InventoryLogPage() {
           page={page}
           setPage={setPage}
           isFetching={isFetching}
+          pageSizeInput={pageSizeInput}
+          setPageSizeInput={setPageSizeInput}
+          applyPageSize={applyPageSize}
         />
 
         {/* ── Export / Print footer ── */}

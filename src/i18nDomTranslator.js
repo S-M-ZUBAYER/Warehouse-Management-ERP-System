@@ -6109,6 +6109,170 @@ Object.entries(manualOrderLanguageFixes).forEach(([language, additions]) => {
   dictionaries[language] = { ...(dictionaries[language] || {}), ...additions };
 });
 
+const pageSizeLanguageFixes = {
+  zh: {
+    "Products per page": "\u6bcf\u9875\u4ea7\u54c1\u6570",
+    "Combine SKUs per page": "\u6bcf\u9875\u7ec4\u5408 SKU \u6570",
+    "Orders per page": "\u6bcf\u9875\u8ba2\u5355\u6570",
+    "Warehouses per page": "\u6bcf\u9875\u4ed3\u5e93\u6570",
+    "Stores per page": "\u6bcf\u9875\u5e97\u94fa\u6570",
+    "Sub Accounts per page": "\u6bcf\u9875\u5b50\u8d26\u53f7\u6570",
+    "Roles per page": "\u6bcf\u9875\u89d2\u8272\u6570",
+    "Inventory items per page": "\u6bcf\u9875\u5e93\u5b58\u9879\u6570",
+    "SKUs per page": "\u6bcf\u9875 SKU \u6570",
+    "Records per page": "\u6bcf\u9875\u8bb0\u5f55\u6570",
+    "Search": "\u641c\u7d22",
+    "Searching...": "\u641c\u7d22\u4e2d...",
+    "Page": "\u9875",
+    "orders": "\u8ba2\u5355",
+    "warehouses": "\u4ed3\u5e93",
+    "stores": "\u5e97\u94fa",
+    "sub accounts": "\u5b50\u8d26\u53f7",
+    "roles": "\u89d2\u8272",
+    "inventory items": "\u5e93\u5b58\u9879",
+    "skus": "SKU",
+  },
+  fil: {
+    "Products per page": "Mga produkto bawat pahina",
+    "Combine SKUs per page": "Combine SKU bawat pahina",
+    "Orders per page": "Mga order bawat pahina",
+    "Warehouses per page": "Mga warehouse bawat pahina",
+    "Stores per page": "Mga store bawat pahina",
+    "Sub Accounts per page": "Mga sub account bawat pahina",
+    "Roles per page": "Mga role bawat pahina",
+    "Inventory items per page": "Mga inventory item bawat pahina",
+    "SKUs per page": "Mga SKU bawat pahina",
+    "Records per page": "Mga record bawat pahina",
+    "Search": "Maghanap",
+    "Searching...": "Naghahanap...",
+    "Page": "Pahina",
+    "orders": "order",
+    "warehouses": "warehouse",
+    "stores": "store",
+    "sub accounts": "sub account",
+    "roles": "role",
+    "inventory items": "inventory item",
+    "skus": "SKU",
+  },
+  id: {
+    "Products per page": "Produk per halaman",
+    "Combine SKUs per page": "Combine SKU per halaman",
+    "Orders per page": "Pesanan per halaman",
+    "Warehouses per page": "Gudang per halaman",
+    "Stores per page": "Toko per halaman",
+    "Sub Accounts per page": "Sub akun per halaman",
+    "Roles per page": "Role per halaman",
+    "Inventory items per page": "Item inventaris per halaman",
+    "SKUs per page": "SKU per halaman",
+    "Records per page": "Catatan per halaman",
+    "Search": "Cari",
+    "Searching...": "Mencari...",
+    "Page": "Halaman",
+    "orders": "pesanan",
+    "warehouses": "gudang",
+    "stores": "toko",
+    "sub accounts": "sub akun",
+    "roles": "role",
+    "inventory items": "item inventaris",
+    "skus": "SKU",
+  },
+  th: {
+    "Products per page": "\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32\u0e15\u0e48\u0e2d\u0e2b\u0e19\u0e49\u0e32",
+    "Combine SKUs per page": "Combine SKU \u0e15\u0e48\u0e2d\u0e2b\u0e19\u0e49\u0e32",
+    "Orders per page": "\u0e04\u0e33\u0e2a\u0e31\u0e48\u0e07\u0e0b\u0e37\u0e49\u0e2d\u0e15\u0e48\u0e2d\u0e2b\u0e19\u0e49\u0e32",
+    "Warehouses per page": "\u0e04\u0e25\u0e31\u0e07\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32\u0e15\u0e48\u0e2d\u0e2b\u0e19\u0e49\u0e32",
+    "Stores per page": "\u0e23\u0e49\u0e32\u0e19\u0e04\u0e49\u0e32\u0e15\u0e48\u0e2d\u0e2b\u0e19\u0e49\u0e32",
+    "Sub Accounts per page": "\u0e1a\u0e31\u0e0d\u0e0a\u0e35\u0e22\u0e48\u0e2d\u0e22\u0e15\u0e48\u0e2d\u0e2b\u0e19\u0e49\u0e32",
+    "Roles per page": "\u0e1a\u0e17\u0e1a\u0e32\u0e17\u0e15\u0e48\u0e2d\u0e2b\u0e19\u0e49\u0e32",
+    "Inventory items per page": "\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23\u0e2a\u0e15\u0e47\u0e2d\u0e01\u0e15\u0e48\u0e2d\u0e2b\u0e19\u0e49\u0e32",
+    "SKUs per page": "SKU \u0e15\u0e48\u0e2d\u0e2b\u0e19\u0e49\u0e32",
+    "Records per page": "\u0e23\u0e30\u0e40\u0e1a\u0e35\u0e22\u0e19\u0e15\u0e48\u0e2d\u0e2b\u0e19\u0e49\u0e32",
+    "Search": "\u0e04\u0e49\u0e19\u0e2b\u0e32",
+    "Searching...": "\u0e01\u0e33\u0e25\u0e31\u0e07\u0e04\u0e49\u0e19\u0e2b\u0e32...",
+    "Page": "\u0e2b\u0e19\u0e49\u0e32",
+    "orders": "\u0e04\u0e33\u0e2a\u0e31\u0e48\u0e07\u0e0b\u0e37\u0e49\u0e2d",
+    "warehouses": "\u0e04\u0e25\u0e31\u0e07\u0e2a\u0e34\u0e19\u0e04\u0e49\u0e32",
+    "stores": "\u0e23\u0e49\u0e32\u0e19\u0e04\u0e49\u0e32",
+    "sub accounts": "\u0e1a\u0e31\u0e0d\u0e0a\u0e35\u0e22\u0e48\u0e2d\u0e22",
+    "roles": "\u0e1a\u0e17\u0e1a\u0e32\u0e17",
+    "inventory items": "\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23\u0e2a\u0e15\u0e47\u0e2d\u0e01",
+    "skus": "SKU",
+  },
+  vi: {
+    "Products per page": "San pham moi trang",
+    "Combine SKUs per page": "Combine SKU moi trang",
+    "Orders per page": "Don hang moi trang",
+    "Warehouses per page": "Kho moi trang",
+    "Stores per page": "Cua hang moi trang",
+    "Sub Accounts per page": "Tai khoan phu moi trang",
+    "Roles per page": "Vai tro moi trang",
+    "Inventory items per page": "Muc ton kho moi trang",
+    "SKUs per page": "SKU moi trang",
+    "Records per page": "Ban ghi moi trang",
+    "Search": "Tim kiem",
+    "Searching...": "Dang tim kiem...",
+    "Page": "Trang",
+    "orders": "don hang",
+    "warehouses": "kho",
+    "stores": "cua hang",
+    "sub accounts": "tai khoan phu",
+    "roles": "vai tro",
+    "inventory items": "muc ton kho",
+    "skus": "SKU",
+  },
+  ms: {
+    "Products per page": "Produk setiap halaman",
+    "Combine SKUs per page": "Combine SKU setiap halaman",
+    "Orders per page": "Pesanan setiap halaman",
+    "Warehouses per page": "Gudang setiap halaman",
+    "Stores per page": "Kedai setiap halaman",
+    "Sub Accounts per page": "Sub akaun setiap halaman",
+    "Roles per page": "Peranan setiap halaman",
+    "Inventory items per page": "Item inventori setiap halaman",
+    "SKUs per page": "SKU setiap halaman",
+    "Records per page": "Rekod setiap halaman",
+    "Search": "Cari",
+    "Searching...": "Sedang mencari...",
+    "Page": "Halaman",
+    "orders": "pesanan",
+    "warehouses": "gudang",
+    "stores": "kedai",
+    "sub accounts": "sub akaun",
+    "roles": "peranan",
+    "inventory items": "item inventori",
+    "skus": "SKU",
+  },
+};
+
+Object.entries(pageSizeLanguageFixes).forEach(([language, additions]) => {
+  dictionaries[language] = { ...(dictionaries[language] || {}), ...additions };
+});
+
+const recordDetailLanguageFixes = {
+  zh: {
+    "Manager": "\u7ba1\u7406\u5458",
+  },
+  fil: {
+    "Manager": "Manager",
+  },
+  id: {
+    "Manager": "Manajer",
+  },
+  th: {
+    "Manager": "\u0e1c\u0e39\u0e49\u0e08\u0e31\u0e14\u0e01\u0e32\u0e23",
+  },
+  vi: {
+    "Manager": "Quan ly",
+  },
+  ms: {
+    "Manager": "Pengurus",
+  },
+};
+
+Object.entries(recordDetailLanguageFixes).forEach(([language, additions]) => {
+  dictionaries[language] = { ...(dictionaries[language] || {}), ...additions };
+});
+
 const authorizationWarehouseAndCancelFixes = {
   zh: {
     "Cancelation Request": "\u53d6\u6d88\u8bf7\u6c42",
@@ -8159,10 +8323,15 @@ function translatePattern(canonicalText, dictionary) {
     return `${dictionary.Showing} ${showingMatch[1]} - ${showingMatch[2]} ${dictionary.of} ${showingMatch[3]} ${dictionary.results}`;
   }
 
-  const showingRangeMatch = canonicalText.match(/^Showing (\d[\d,]*)-(\d[\d,]*) of (\d[\d,]*) (products|records|items)$/i);
+  const showingRangeMatch = canonicalText.match(/^Showing (\d[\d,]*)\s*[-–]\s*(\d[\d,]*) of (\d[\d,]*)(?: (products|records|items|orders|warehouses|stores|sub accounts|roles|inventory items|skus))?$/i);
   if (showingRangeMatch && dictionary.Showing && dictionary.of) {
-    const itemLabel = translateText(showingRangeMatch[4], dictionary);
-    return `${dictionary.Showing} ${showingRangeMatch[1]}-${showingRangeMatch[2]} ${dictionary.of} ${showingRangeMatch[3]} ${itemLabel}`;
+    const itemLabel = showingRangeMatch[4] ? ` ${translateText(showingRangeMatch[4].toLowerCase(), dictionary)}` : "";
+    return `${dictionary.Showing} ${showingRangeMatch[1]}-${showingRangeMatch[2]} ${dictionary.of} ${showingRangeMatch[3]}${itemLabel}`;
+  }
+
+  const pageOfMatch = canonicalText.match(/^Page (\d[\d,]*) of (\d[\d,]*)$/i);
+  if (pageOfMatch && dictionary.Page && dictionary.of) {
+    return `${dictionary.Page} ${pageOfMatch[1]} ${dictionary.of} ${pageOfMatch[2]}`;
   }
 
   const pleaseSelectMatch = canonicalText.match(/^Please select at least one (.+) first\.$/i);

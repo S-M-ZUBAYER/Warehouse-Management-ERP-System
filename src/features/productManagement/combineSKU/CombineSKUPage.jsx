@@ -28,6 +28,9 @@ export default function CombineSKUPage() {
     setSearch,
     page,
     setPage,
+    pageSizeInput,
+    setPageSizeInput,
+    applyPageSize,
     bundles,
     pagination,
     isLoading,
@@ -362,14 +365,38 @@ export default function CombineSKUPage() {
 
         {/* ── Pagination — shows when more than 1 page ── */}
         {!isLoading && !isError && totalPages >= 1 && total > 0 && (
-          <div className="flex items-center justify-between px-5 py-4 border-t border-surface-border">
+          <div className="grid grid-cols-1 items-center gap-3 px-5 py-4 border-t border-surface-border md:grid-cols-3">
             {/* Range label */}
             <p className="text-xs text-slate-500">
               Showing {rangeStart}–{rangeEnd} of {total}
             </p>
 
+            <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-slate-500">
+              <label className="flex items-center gap-2">
+                <span>Combine SKUs per page</span>
+                <input
+                  type="number"
+                  min="1"
+                  value={pageSizeInput ?? limit}
+                  onChange={(event) => setPageSizeInput?.(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") applyPageSize?.();
+                  }}
+                  className="h-8 w-20 rounded-lg border border-surface-border bg-white px-2 text-xs font-semibold text-slate-700 outline-none focus:border-primary"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => applyPageSize?.()}
+                disabled={isFetching}
+                className="h-8 rounded-lg bg-primary px-3 text-xs font-semibold text-white transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isFetching ? "Searching..." : "Search"}
+              </button>
+            </div>
+
             {/* Page controls */}
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 md:justify-end">
               {/* Previous */}
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}

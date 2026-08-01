@@ -2531,7 +2531,7 @@ import { useAddMappingFromProduct }  from '../hooks/useAddMappingFromProduct';
 import WarehouseSelect               from '../components/WarehouseSelect';
 import ConfirmModal                  from '../components/ConfirmModal';
 import { TableSkeleton, EmptyState } from '../components/TableHelpers';
-import Pagination                    from '../../../../components/shared/Pagination';
+import ListPageSizePagination        from '../../../../components/shared/ListPageSizePagination';
 import ExportMenu                    from '../../../../components/shared/ExportMenu';
 import api                           from '../../../../lib/api';
 import { toast } from 'sonner';
@@ -2566,6 +2566,7 @@ export default function ByProductSKUMappingPage() {
         skuType, setSkuType,
         mappingStatus, handleTabChange,
         page, setPage,
+        pageSizeInput, setPageSizeInput, applyPageSize,
         products, pagination,
         counts,
         isLoading, isFetching, isError, error, refetch,
@@ -2968,14 +2969,16 @@ export default function ByProductSKUMappingPage() {
                     )}
                 </div>
 
-                <Pagination
+                <ListPageSizePagination
                     page={page}
-                    totalPages={pagination.totalPages}
-                    total={pagination.total}
-                    limit={pagination.limit}
-                    itemLabel="products"
-                    showWhenSinglePage
+                    limit={pagination.limit || 10}
+                    total={pagination.total || 0}
+                    itemLabel="Products"
+                    pageSizeInput={pageSizeInput}
                     onPageChange={setPage}
+                    onPageSizeInputChange={setPageSizeInput}
+                    onApplyPageSize={applyPageSize}
+                    loading={isFetching}
                 />
 
                 <div className="flex justify-end gap-3 px-5 py-4 border-t border-surface-border">

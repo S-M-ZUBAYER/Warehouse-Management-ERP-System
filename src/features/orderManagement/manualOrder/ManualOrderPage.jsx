@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Gift, Plus, Search } from "lucide-react";
 import Topbar from "../../../components/layout/Topbar";
 import OrderFooter from "../shared/components/OrderFooter";
+import PageSizePagination from "../shared/components/PageSizePagination";
 import WaybillPdfModal from "../shared/components/WaybillPdfModal";
 import {
   cancelManualOrderShipment,
@@ -50,6 +51,7 @@ const MANUAL_ORDER_OUTPUT_COLUMNS = [
   { label: "COD Status", key: "codStatus" },
   { label: "Created", key: "createdAt" },
 ];
+const DEFAULT_MANUAL_ORDER_PAGE_SIZE = 10;
 
 export default function ManualOrderPage() {
   const queryClient = useQueryClient();
@@ -62,6 +64,9 @@ export default function ManualOrderPage() {
   const [selectedIds, setSelectedIds] = useState([]);
   const [selectedOrderRows, setSelectedOrderRows] = useState([]);
   const [selectionLoading, setSelectionLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_MANUAL_ORDER_PAGE_SIZE);
+  const [pageSizeInput, setPageSizeInput] = useState(String(DEFAULT_MANUAL_ORDER_PAGE_SIZE));
   const [showAddPage, setShowAddPage] = useState(false);
   const [addMode, setAddMode] = useState("order");
   const [detailOrder, setDetailOrder] = useState(null);
@@ -84,6 +89,12 @@ export default function ManualOrderPage() {
 
   const orders = manualOrdersQuery.data?.orders || [];
   const statusCounts = manualOrdersQuery.data?.statusCounts || {};
+  const totalPages = Math.max(1, Math.ceil(orders.length / pageSize));
+  const effectivePage = Math.min(page, totalPages);
+  const paginatedOrders = useMemo(() => {
+    const start = (effectivePage - 1) * pageSize;
+    return orders.slice(start, start + pageSize);
+  }, [effectivePage, orders, pageSize]);
   const selectedRows = useMemo(() => {
     const cachedRowsMatchSelection =
       selectedOrderRows.length === selectedIds.length &&
@@ -100,7 +111,12 @@ export default function ManualOrderPage() {
   useEffect(() => {
     setSelectedIds([]);
     setSelectedOrderRows([]);
+    setPage(1);
   }, [queryParams]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
 
   const openWaybill = (order, response = {}) => {
     const pdf = getManualWaybillPdf(order, response);
@@ -230,6 +246,13 @@ export default function ManualOrderPage() {
     setSelectedOrderRows([]);
   };
 
+  const handlePageSizeSearch = () => {
+    const nextPageSize = Math.max(1, Number.parseInt(pageSizeInput, 10) || DEFAULT_MANUAL_ORDER_PAGE_SIZE);
+    setPageSize(nextPageSize);
+    setPageSizeInput(String(nextPageSize));
+    setPage(1);
+  };
+
   return (
     <div className="space-y-4 font-body">
       <Topbar PageTitle="Manual Order" />
@@ -339,7 +362,7 @@ export default function ManualOrderPage() {
         </div>
 
         <ManualOrderTable
-          orders={orders}
+          orders={paginatedOrders}
           loading={manualOrdersQuery.isFetching}
           isError={manualOrdersQuery.isError}
           onRetry={() => manualOrdersQuery.refetch()}
@@ -356,6 +379,17 @@ export default function ManualOrderPage() {
           cancelLoadingId={cancelShipmentMutation.isPending ? cancelShipmentMutation.variables?.id : ""}
           refreshLoadingId={refreshStatusMutation.isPending ? refreshStatusMutation.variables?.id : ""}
           codSettlementLoadingId={codSettlementMutation.isPending ? codSettlementMutation.variables?.id : ""}
+        />
+
+        <PageSizePagination
+          page={effectivePage}
+          limit={pageSize}
+          total={orders.length}
+          onPageChange={setPage}
+          pageSizeInput={pageSizeInput}
+          onPageSizeInputChange={setPageSizeInput}
+          onApplyPageSize={handlePageSizeSearch}
+          loading={manualOrdersQuery.isFetching}
         />
 
         <OrderFooter selectedRows={selectedRows} columns={MANUAL_ORDER_OUTPUT_COLUMNS} title="Manual Orders" />

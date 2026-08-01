@@ -37,7 +37,7 @@ const DEFAULT_PLATFORMS = ["All Platforms", "Shopee", "TikTok"];
 const DEFAULT_STORES = ["All Stores"];
 const SEARCH_TYPES = ["Single Search", "Batch Search"];
 const SKU_TYPES = ["SKU", "Package Number", "Order Number", "Tracking Number"];
-const ORDER_PAGE_SIZE = 10;
+const DEFAULT_ORDER_PAGE_SIZE = 10;
 const ORDER_LIST_CACHE_TIME = 1000 * 60 * 30;
 
 const getStatusSortValue = (order) =>
@@ -127,6 +127,8 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
       ? initialPageState.pageCursors
       : { 1: "" };
   const [page, setPage] = useState(Number.isFinite(initialPage) && initialPage > 0 ? initialPage : 1);
+  const [pageSize, setPageSize] = useState(DEFAULT_ORDER_PAGE_SIZE);
+  const [pageSizeInput, setPageSizeInput] = useState(String(DEFAULT_ORDER_PAGE_SIZE));
   const [pageCursors, setPageCursors] = useState(initialPageCursors);
   const [showSearchTypeDropdown, setShowSearchTypeDropdown] = useState(false);
   const [pendingShopeePackRows, setPendingShopeePackRows] = useState([]);
@@ -211,6 +213,15 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
     [setPageAndPersist]
   );
 
+  const handlePageSizeSearch = useCallback(() => {
+    const nextPageSize = Math.max(1, Number.parseInt(pageSizeInput, 10) || DEFAULT_ORDER_PAGE_SIZE);
+    setPageSize(nextPageSize);
+    setPageSizeInput(String(nextPageSize));
+    setPage(1);
+    setPageCursors({ 1: "" });
+    persistPageState(1, { 1: "" });
+  }, [pageSizeInput, persistPageState]);
+
   useEffect(() => {
     if (!isOrderDetailReturn) return;
     consumeOrderDetailReturnContext({
@@ -250,18 +261,18 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
         ? {
             serverPaginated: true,
             page: queryPage,
-            pageSize: ORDER_PAGE_SIZE,
+          pageSize,
             cursor: queryCursor,
           }
         : detailPaginated
           ? {
               detailPaginated: true,
               page: queryPage,
-              pageSize: ORDER_PAGE_SIZE,
+              pageSize,
             }
         : undefined,
     }),
-    [activeTab, appliedSearch, appliedSearchType, appliedSkuType, dateRange, detailPaginated, pageType, queryCursor, queryPage, serverPaginated, showAllShopeeShipped, tabRefreshKey, queryStoreContext]
+    [activeTab, appliedSearch, appliedSearchType, appliedSkuType, dateRange, detailPaginated, pageSize, pageType, queryCursor, queryPage, serverPaginated, showAllShopeeShipped, tabRefreshKey, queryStoreContext]
   );
   const querySignature = useMemo(() => JSON.stringify(queryParams), [queryParams]);
   if (isOrderDetailReturn && detailReturnQuerySignatureRef.current === null) {
@@ -316,34 +327,40 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
 
   const pagination = useMemo(() => {
     if (serverPaginated) {
-      const visibleEnd = (page - 1) * ORDER_PAGE_SIZE + allOrders.length;
+      const visibleEnd = (page - 1) * pageSize + allOrders.length;
       const hasKnownTotal = serverPageResult?.hasKnownTotal === true;
       const total = hasKnownTotal
         ? Number(serverPageResult?.totalCount || 0)
         : visibleEnd;
       return {
         page,
-        limit: ORDER_PAGE_SIZE,
+        limit: pageSize,
         total,
         totalPages: hasKnownTotal
-          ? Math.max(1, Math.ceil(total / ORDER_PAGE_SIZE))
+          ? Math.max(1, Math.ceil(total / pageSize))
           : serverPageResult?.hasMore && serverPageResult?.nextCursor ? page + 1 : page,
         hasMore: Boolean(serverPageResult?.hasMore && serverPageResult?.nextCursor),
         serverPaginated: true,
         hasKnownTotal,
+        pageSizeInput,
+        onPageSizeInputChange: setPageSizeInput,
+        onApplyPageSize: handlePageSizeSearch,
       };
     }
 
     const total = sortedAllOrders.length;
-    const totalPages = Math.max(1, Math.ceil(total / ORDER_PAGE_SIZE));
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
     return {
       page,
-      limit: ORDER_PAGE_SIZE,
+      limit: pageSize,
       total,
       totalPages,
       hasKnownTotal: true,
+      pageSizeInput,
+      onPageSizeInputChange: setPageSizeInput,
+      onApplyPageSize: handlePageSizeSearch,
     };
-  }, [page, serverPageResult?.hasKnownTotal, serverPageResult?.hasMore, serverPageResult?.totalCount, serverPaginated, sortedAllOrders.length]);
+  }, [handlePageSizeSearch, page, pageSize, pageSizeInput, serverPageResult?.hasKnownTotal, serverPageResult?.hasMore, serverPageResult?.totalCount, serverPaginated, sortedAllOrders.length]);
 
   useEffect(() => {
     if (!hasOrderResult) return;
@@ -354,9 +371,9 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
   const orders = useMemo(() => {
     if (serverPaginated) return sortedAllOrders;
 
-    const start = (effectivePage - 1) * ORDER_PAGE_SIZE;
-    return sortedAllOrders.slice(start, start + ORDER_PAGE_SIZE);
-  }, [effectivePage, serverPaginated, sortedAllOrders]);
+    const start = (effectivePage - 1) * pageSize;
+    return sortedAllOrders.slice(start, start + pageSize);
+  }, [effectivePage, pageSize, serverPaginated, sortedAllOrders]);
 
   const invalidateOrderManagementData = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ORDER_LIST_KEYS.all() });

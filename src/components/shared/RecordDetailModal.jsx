@@ -1,4 +1,6 @@
 import { X } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { translateStaticText } from "../../i18nDomTranslator";
 
 const normalizeLabelAcronyms = (label) =>
   String(label)
@@ -53,13 +55,18 @@ export default function RecordDetailModal({
   onClose,
   showRecordId = true,
 }) {
+  const { i18n } = useTranslation();
+
   if (!open || !record) return null;
+
+  const language = i18n.resolvedLanguage || i18n.language;
 
   const rows = (fields && fields.length ? fields : Object.keys(record).slice(0, 24).map((key) => ({ key })))
     .map((field) => {
       const key = field.key || field;
       const value = field.render ? field.render(record) : record[key];
-      return { label: normalizeLabelAcronyms(field.label || formatLabel(key)), value, fullWidth: field.fullWidth };
+      const label = normalizeLabelAcronyms(field.label || formatLabel(key));
+      return { label: translateStaticText(label, language), value, fullWidth: field.fullWidth };
     });
 
   return (

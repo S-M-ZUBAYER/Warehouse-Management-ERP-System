@@ -177,6 +177,9 @@ export default function ProductTable({
   pagination,
   page,
   setPage,
+  pageSizeInput,
+  setPageSizeInput,
+  applyPageSize,
   listLoading,
   listFetching,
   isListError,
@@ -469,14 +472,37 @@ export default function ProductTable({
       </div>
 
       {/* Pagination */}
-      {!listLoading && !isListError && pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between px-5 py-4 border-t border-surface-border">
+      {!listLoading && !isListError && pagination.total > 0 && (
+        <div className="grid grid-cols-1 items-center gap-3 px-5 py-4 border-t border-surface-border md:grid-cols-3">
           <p className="text-xs text-slate-500">
             Showing {(page - 1) * pagination.limit + 1}–
             {Math.min(page * pagination.limit, pagination.total)} of{" "}
             {pagination.total} products
           </p>
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-slate-500">
+            <label className="flex items-center gap-2">
+              <span>Products per page</span>
+              <input
+                type="number"
+                min="1"
+                value={pageSizeInput ?? pagination.limit}
+                onChange={(event) => setPageSizeInput?.(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") applyPageSize?.();
+                }}
+                className="h-8 w-20 rounded-lg border border-surface-border bg-white px-2 text-xs font-semibold text-slate-700 outline-none focus:border-primary"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => applyPageSize?.()}
+              disabled={listFetching}
+              className="h-8 rounded-lg bg-primary px-3 text-xs font-semibold text-white transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {listFetching ? "Searching..." : "Search"}
+            </button>
+          </div>
+          <div className="flex items-center gap-1 md:justify-end">
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Search,
   AlertCircle,
@@ -21,6 +21,7 @@ import RecordDetailModal from "../../../components/shared/RecordDetailModal";
 import ConfirmActionModal from "../../../components/shared/ConfirmActionModal";
 import { exportRowsToCsv, exportRowsToXlsx, printRows } from "../../../utils/tableOutput";
 import ExportMenu from "../../../components/shared/ExportMenu";
+import ListPageSizePagination from "../../../components/shared/ListPageSizePagination";
 import shopeeLogo from "../../../assets/ShopPlatform/shopee.svg";
 import tiktokLogo from "../../../assets/ShopPlatform/tiktok.svg";
 import allCategoryLogo from "../../../assets/ShopPlatform/allCategories.svg";
@@ -88,6 +89,21 @@ export default function StoreAuthorizationPage() {
 
   const [actionAnchor, setActionAnchor] = useState(null);
   const [detailStore, setDetailStore] = useState(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [pageSizeInput, setPageSizeInput] = useState("10");
+  const totalStorePages = Math.max(1, Math.ceil(stores.length / pageSize));
+  const currentPage = Math.min(page, totalStorePages);
+  const paginatedStores = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return stores.slice(start, start + pageSize);
+  }, [stores, currentPage, pageSize]);
+  const applyPageSize = () => {
+    const nextPageSize = Math.max(1, Number.parseInt(pageSizeInput, 10) || 10);
+    setPageSize(nextPageSize);
+    setPageSizeInput(String(nextPageSize));
+    setPage(1);
+  };
   const selectedRows =
     selectedStores.length === selectedIds.length &&
     selectedIds.every((id) => selectedStores.some((store) => store.id === id))
@@ -320,7 +336,7 @@ console.log(stores,"Stores");
                   </td>
                 </tr>
               )}
-              {!loading && !error && stores.map((store) => (
+              {!loading && !error && paginatedStores.map((store) => (
                 <tr
                   key={store.id}
                   className="hover:bg-surface/50 transition-colors"
@@ -453,6 +469,17 @@ console.log(stores,"Stores");
             </tbody>
           </table>
         </div>
+        <ListPageSizePagination
+          page={currentPage}
+          limit={pageSize}
+          total={stores.length}
+          itemLabel="Stores"
+          pageSizeInput={pageSizeInput}
+          onPageChange={setPage}
+          onPageSizeInputChange={setPageSizeInput}
+          onApplyPageSize={applyPageSize}
+          loading={loading}
+        />
         <div className="flex justify-end gap-3 px-5 py-4 border-t border-surface-border">
           <ExportMenu
             onExportCsv={() => exportRowsToCsv(selectedRows, outputColumns, "authorized-stores.csv", "store")}

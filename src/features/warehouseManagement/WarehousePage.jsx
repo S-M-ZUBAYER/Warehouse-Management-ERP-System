@@ -6,6 +6,7 @@ import AddWarehouseModal from "./components/AddWarehouseModal";
 import Topbar from "../../components/layout/Topbar";
 import RecordDetailModal from "../../components/shared/RecordDetailModal";
 import ConfirmActionModal from "../../components/shared/ConfirmActionModal";
+import ListPageSizePagination from "../../components/shared/ListPageSizePagination";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WarehousePage — matches Figma image 1 exactly:
@@ -24,6 +25,9 @@ export default function WarehousePage() {
   // const [platformOpen, setPlatformOpen] = useState(false);
   const [detailWarehouse, setDetailWarehouse] = useState(null);
   const [warehouseSearch, setWarehouseSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [pageSizeInput, setPageSizeInput] = useState("10");
 
   const {
     warehouses,
@@ -58,11 +62,23 @@ export default function WarehousePage() {
     if (!term) return warehouses;
 
     return warehouses.filter((warehouse) =>
-      [warehouse.name, warehouse.attribute, warehouse.location]
+      [warehouse.name, warehouse.attribute, warehouse.location, warehouse.country, warehouse.state, warehouse.zipCode, warehouse.city]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(term)),
     );
   }, [warehouses, warehouseSearch]);
+  const totalWarehousePages = Math.max(1, Math.ceil(visibleWarehouses.length / pageSize));
+  const currentPage = Math.min(page, totalWarehousePages);
+  const paginatedWarehouses = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return visibleWarehouses.slice(start, start + pageSize);
+  }, [visibleWarehouses, currentPage, pageSize]);
+  const applyPageSize = () => {
+    const nextPageSize = Math.max(1, Number.parseInt(pageSizeInput, 10) || 10);
+    setPageSize(nextPageSize);
+    setPageSizeInput(String(nextPageSize));
+    setPage(1);
+  };
 
   return (
     <div className="space-y-5 font-body">
@@ -139,7 +155,7 @@ export default function WarehousePage() {
               type="text"
               value={warehouseSearch}
               onChange={(e) => setWarehouseSearch(e.target.value)}
-              placeholder="Name, attribute, location"
+              placeholder="Name, attribute, location, state, ZIP, city"
               className="w-full pl-8 pr-3 py-2 bg-white border border-surface-border rounded-lg
                          text-sm text-slate-700 placeholder-slate-400 outline-none
                          hover:border-primary/40 focus:border-primary transition-colors"
@@ -171,7 +187,7 @@ export default function WarehousePage() {
         {/* Table */}
         <div className="px-5">
           <WarehouseTable
-            warehouses={visibleWarehouses}
+            warehouses={paginatedWarehouses}
             loading={warehouseLoading}
             isError={isWarehouseError}
             errorMessage={warehouseError?.response?.data?.message || warehouseError?.message || "Failed to load warehouses"}
@@ -182,6 +198,17 @@ export default function WarehousePage() {
             onDelete={openDeleteModal}
           />
         </div>
+        <ListPageSizePagination
+          page={currentPage}
+          limit={pageSize}
+          total={visibleWarehouses.length}
+          itemLabel="Warehouses"
+          pageSizeInput={pageSizeInput}
+          onPageChange={setPage}
+          onPageSizeInputChange={setPageSizeInput}
+          onApplyPageSize={applyPageSize}
+          loading={warehouseLoading}
+        />
       </div>
 
       {/* ── Add Warehouse Modal ── */}
@@ -212,6 +239,9 @@ export default function WarehousePage() {
           { label: "Phone", key: "phoneNumber" },
           { label: "Location", key: "location" },
           { label: "Country", key: "country" },
+          { label: "State", key: "state" },
+          { label: "Zip Code", key: "zipCode" },
+          { label: "City", key: "city" },
           { label: "Total SKU", key: "totalSku" },
           { label: "Default", key: "isDefault" },
           { label: "Status", key: "status" },

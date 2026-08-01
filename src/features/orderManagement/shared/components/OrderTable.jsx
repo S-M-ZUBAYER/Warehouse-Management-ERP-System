@@ -335,14 +335,39 @@ export default function OrderTable({
         </table>
       </div>
 
-      {!loading && !isError && pagination?.totalPages > 1 && (
-        <div className="flex items-center justify-between px-5 py-4 border-t border-surface-border">
-          <p className="text-xs text-slate-500">
-            Showing {(page - 1) * pagination.limit + 1}-
-            {Math.min(page * pagination.limit, pagination.total)}
-            {pagination.hasKnownTotal === false ? " orders" : ` of ${pagination.total} orders`}
-          </p>
-          <div className="flex items-center gap-1">
+      {!loading && !isError && pagination?.total > 0 && (
+        <div className="grid grid-cols-1 items-center gap-3 px-5 py-4 border-t border-surface-border md:grid-cols-3">
+          <div className="flex flex-wrap items-center gap-3 md:justify-start">
+            <p className="text-xs text-slate-500">
+              Showing {(page - 1) * pagination.limit + 1}-
+              {Math.min(page * pagination.limit, pagination.total)}
+              {pagination.hasKnownTotal === false ? " orders" : ` of ${pagination.total} orders`}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-slate-500">
+            <label className="flex items-center gap-2">
+              <span>Orders per page</span>
+              <input
+                type="number"
+                min="1"
+                value={pagination.pageSizeInput ?? pagination.limit}
+                onChange={(event) => pagination.onPageSizeInputChange?.(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") pagination.onApplyPageSize?.();
+                }}
+                className="h-8 w-20 rounded-lg border border-surface-border bg-white px-2 text-xs font-semibold text-slate-700 outline-none focus:border-primary"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => pagination.onApplyPageSize?.()}
+              disabled={loading}
+              className="h-8 rounded-lg bg-primary px-3 text-xs font-semibold text-white transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading ? "Searching..." : "Search"}
+            </button>
+          </div>
+          <div className="flex items-center gap-1 md:justify-end">
             <button
               type="button"
               onClick={() => setPage?.((value) => Math.max(1, value - 1))}
@@ -351,12 +376,12 @@ export default function OrderTable({
             >
               Previous
             </button>
-            {pagination.serverPaginated ? (
+            {pagination.totalPages > 1 && pagination.serverPaginated ? (
               <span className="px-3 py-1.5 text-xs font-semibold text-primary">
                 Page {page}
                 {pagination.hasKnownTotal ? ` of ${pagination.totalPages}` : ""}
               </span>
-            ) : (
+            ) : pagination.totalPages > 1 ? (
               getPaginationPages(page, pagination.totalPages).map((item) =>
                 item === "ellipsis" ? (
                   <span key={`${item}-${page}`} className="px-2 text-xs text-slate-400">
@@ -377,6 +402,8 @@ export default function OrderTable({
                   </button>
                 )
               )
+            ) : (
+              <span className="px-3 py-1.5 text-xs font-semibold text-primary">Page 1</span>
             )}
             <button
               type="button"
