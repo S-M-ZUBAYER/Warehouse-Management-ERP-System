@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import api from "../../../../lib/api";
 import useDebounce from "../../../../hooks/useDebounce";
 import { MERCHANT_SKU_KEYS } from "../../../productManagement/hooks/useProductList";
+import { filterWarehousesByPermission } from "../../../../utils/permissions";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // API helpers
@@ -115,6 +116,7 @@ export function useEditSKU() {
         staleTime: 1000 * 60 * 2,
         gcTime: 1000 * 60 * 5,
         placeholderData: (prev) => prev,
+        select: (warehouses) => filterWarehousesByPermission(warehouses),
         enabled: showEditModal, // pause queries when modal is closed
     });
 

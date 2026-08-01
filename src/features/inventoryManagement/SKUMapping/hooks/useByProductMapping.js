@@ -1009,29 +1009,102 @@
 // }
 
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import api from '../../../../lib/api';
-import useDebounce from '../../../../hooks/useDebounce';
 
 export const BY_PRODUCT_KEYS = {
     all:    ()       => ['by-product'],
     list:   (params) => ['by-product', 'list', params],
+    statusList: (params) => ['by-product', 'status-list', params],
     counts: (params) => ['by-product', 'counts', params],
 };
+
+const PAGE_SIZE = 10;
+const STATUS_FETCH_LIMIT = 200;
 
 const fetchProducts = (params) => {
     const qs = new URLSearchParams();
     qs.set('page',  params.page  ?? 1);
-    qs.set('limit', params.limit ?? 20);
+    qs.set('limit', params.limit ?? 10);
     if (params.platformStoreId) qs.set('platformStoreId', params.platformStoreId);
     if (params.platform)        qs.set('platform',        params.platform);
     if (params.search?.trim())  qs.set('search',          params.search.trim());
     if (params.skuType)         qs.set('skuType',         params.skuType);
     if (params.mappingStatus && params.mappingStatus !== 'all')
         qs.set('mappingStatus', params.mappingStatus);
-    return api.get(`/platform-products?${qs.toString()}`).then((r) => r.data);
+    return api.get(`/platform-products?${qs.toString()}`);
+};
+
+const fetchAllProducts = async (params, knownTotal = 0) => {
+    const pageLimit = Math.max(100, Number(knownTotal) || Number(params.limit) || PAGE_SIZE);
+    const first = await fetchProducts({ ...params, page: 1, limit: pageLimit });
+    const totalPages = Number(first?.pagination?.totalPages) || 1;
+
+    if (totalPages <= 1) return first?.data ?? [];
+
+    const rest = await Promise.all(
+        Array.from({ length: totalPages - 1 }, (_, index) =>
+            fetchProducts({ ...params, page: index + 2, limit: pageLimit })
+        )
+    );
+
+    return [...(first?.data ?? []), ...rest.flatMap((response) => response?.data ?? [])];
+};
+
+const getResponseRows = (response) => (
+    Array.isArray(response) ? response : response?.data ?? []
+);
+
+const fetchAllProductsForStatusTabs = async (params) => {
+    const baseParams = {
+        ...params,
+        page: 1,
+        limit: STATUS_FETCH_LIMIT,
+        mappingStatus: undefined,
+    };
+    const first = await fetchProducts(baseParams);
+    const rows = [...getResponseRows(first)];
+    const totalPages = Number(first?.pagination?.totalPages) || 1;
+
+    if (totalPages <= 1) return rows;
+
+    const rest = await Promise.all(
+        Array.from({ length: totalPages - 1 }, (_, index) =>
+            fetchProducts({ ...baseParams, page: index + 2 })
+        )
+    );
+
+    return rows.concat(...rest.map(getResponseRows));
+};
+
+const isMappedProduct = (product) => (
+    !!product?.is_mapped ||
+    !!product?.mapping_id ||
+    !!product?.merchant_sku ||
+    !!product?.merchantSku ||
+    !!product?.mapped_merchant_sku
+);
+
+const filterProductByStatus = (product, status) => {
+    if (status === 'all') return product;
+
+    const shouldKeep = status === 'mapped' ? isMappedProduct : (item) => !isMappedProduct(item);
+    const children = product.children ?? [];
+
+    if (children.length > 0) {
+        const filteredChildren = children.filter(shouldKeep);
+        if (filteredChildren.length === 0) return null;
+
+        return {
+            ...product,
+            children: filteredChildren,
+            mapping_count: filteredChildren.filter(isMappedProduct).length,
+        };
+    }
+
+    return shouldKeep(product) ? product : null;
 };
 
 const fetchCounts = (params) => {
@@ -1073,6 +1146,8 @@ export function useByProductMapping() {
     const [page,             setPage]              = useState(1);
 
     const [selectedIds, setSelectedIds] = useState([]);
+    const [selectedProducts, setSelectedProducts] = useState([]);
+    const [selectionLoading, setSelectionLoading] = useState(false);
     const [expandedIds, setExpandedIds] = useState([]);
 
     // ── Sync modal state ──────────────────────────────────────────────────────
@@ -1098,7 +1173,7 @@ export function useByProductMapping() {
 
     const listParams = {
         page,
-        limit:          20,
+        limit:          PAGE_SIZE,
         platformStoreId:selectedStoreId  || undefined,
         platform:       selectedPlatform || undefined,
         search:         searchApplied    || undefined,
@@ -1112,7 +1187,7 @@ export function useByProductMapping() {
     };
 
     const {
-        data: listData, isLoading, isFetching, isError, error,
+        data: listData, isLoading, isFetching, isError, error, refetch,
     } = useQuery({
         queryKey:        BY_PRODUCT_KEYS.list(listParams),
         queryFn:         () => fetchProducts(listParams),
@@ -1120,8 +1195,23 @@ export function useByProductMapping() {
         placeholderData: (prev) => prev,
     });
 
-    const products   = listData?.data       ?? listData       ?? [];
-    const pagination = listData?.pagination ?? { total: 0, totalPages: 1, page: 1, limit: 20 };
+    const statusParams = {
+        ...listParams,
+        page: 1,
+        limit: STATUS_FETCH_LIMIT,
+        mappingStatus: undefined,
+    };
+
+    const {
+        data: statusRows = [],
+        isFetching: isStatusFetching,
+    } = useQuery({
+        queryKey: BY_PRODUCT_KEYS.statusList(statusParams),
+        queryFn: () => fetchAllProductsForStatusTabs(statusParams),
+        enabled: mappingStatus !== 'all',
+        staleTime: 1000 * 60,
+        placeholderData: (prev) => prev,
+    });
 
     const { data: counts = { all: 0, mapped: 0, unmapped: 0 } } = useQuery({
         queryKey:        BY_PRODUCT_KEYS.counts(countParams),
@@ -1129,6 +1219,42 @@ export function useByProductMapping() {
         staleTime:       1000 * 30,
         placeholderData: { all: 0, mapped: 0, unmapped: 0 },
     });
+
+    const totalForCurrentTab =
+        mappingStatus === 'mapped' ? counts.mapped
+        : mappingStatus === 'unmapped' ? counts.unmapped
+        : counts.all;
+
+    const filteredStatusRows = useMemo(() => {
+        if (mappingStatus === 'all') return [];
+        return (statusRows ?? [])
+            .map((product) => filterProductByStatus(product, mappingStatus))
+            .filter(Boolean);
+    }, [statusRows, mappingStatus]);
+
+    const products = useMemo(() => {
+        if (mappingStatus === 'all') {
+            return getResponseRows(listData);
+        }
+
+        const start = (page - 1) * PAGE_SIZE;
+        return filteredStatusRows.slice(start, start + PAGE_SIZE);
+    }, [listData, mappingStatus, filteredStatusRows, page]);
+
+    const activeTotal = Number(totalForCurrentTab) || filteredStatusRows.length || products.length;
+    const pagination = mappingStatus === 'all'
+        ? (listData?.pagination ?? {
+            total: activeTotal,
+            totalPages: Math.max(1, Math.ceil(activeTotal / PAGE_SIZE)),
+            page,
+            limit: PAGE_SIZE,
+        })
+        : {
+            total: activeTotal,
+            totalPages: Math.max(1, Math.ceil(activeTotal / PAGE_SIZE)),
+            page,
+            limit: PAGE_SIZE,
+        };
 
     // ── Mutations ─────────────────────────────────────────────────────────────
 
@@ -1184,10 +1310,63 @@ export function useByProductMapping() {
         products.flatMap((p) => p.row_type === 'parent' ? (p.children ?? []).map((c) => c.id) : [p.id])
     ), [products]);
 
-    const toggleAll = useCallback(() => {
-        const ids = getSelectableProductIds();
-        setSelectedIds(ids.length && ids.every((id) => selectedIds.includes(id)) ? [] : ids);
-    }, [getSelectableProductIds, selectedIds]);
+    const getSelectableIdsFromRows = useCallback((rows) => (
+        rows.flatMap((p) => p.row_type === 'parent' ? (p.children ?? []).map((c) => c.id) : [p.id])
+    ), []);
+
+    useEffect(() => {
+        setSelectedProducts((prev) => {
+            const rowByChildId = new Map();
+            prev.forEach((product) => {
+                const ids = product.row_type === 'parent' ? (product.children ?? []).map((child) => child.id) : [product.id];
+                ids.forEach((id) => rowByChildId.set(id, product));
+            });
+            products.forEach((product) => {
+                const ids = product.row_type === 'parent' ? (product.children ?? []).map((child) => child.id) : [product.id];
+                if (ids.some((id) => selectedIds.includes(id))) {
+                    ids.forEach((id) => rowByChildId.set(id, product));
+                }
+            });
+
+            const next = [];
+            const seenProducts = new Set();
+            selectedIds.forEach((id) => {
+                const product = rowByChildId.get(id);
+                if (product && !seenProducts.has(product.id)) {
+                    seenProducts.add(product.id);
+                    next.push(product);
+                }
+            });
+            return next;
+        });
+    }, [products, selectedIds]);
+
+    const toggleAll = useCallback(async () => {
+        setSelectionLoading(true);
+        const pageIds = getSelectableProductIds();
+        const allFilteredSelected =
+            pagination.total > 0 &&
+            selectedIds.length >= pagination.total &&
+            pageIds.every((id) => selectedIds.includes(id));
+
+        if (allFilteredSelected) {
+            setSelectedIds([]);
+            setSelectedProducts([]);
+            setSelectionLoading(false);
+            return;
+        }
+
+        try {
+            const allProducts = await fetchAllProducts(listParams, pagination.total);
+            const ids = getSelectableIdsFromRows(allProducts);
+            setSelectedProducts(allProducts);
+            setSelectedIds(ids);
+        } catch (err) {
+            toast.error(err?.response?.data?.message ?? err?.message ?? 'Failed to select all SKU mappings');
+        } finally {
+            setSelectionLoading(false);
+        }
+    }, [getSelectableProductIds, getSelectableIdsFromRows, selectedIds, pagination.total, listParams]);
 
     const toggleExpand = useCallback((id) => {
         setExpandedIds((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
@@ -1196,12 +1375,15 @@ export function useByProductMapping() {
     const handleSearch = useCallback(() => {
         setSearchApplied(searchInput.trim());
         setPage(1);
+        setSelectedIds([]);
+        setSelectedProducts([]);
     }, [searchInput]);
 
     const handleTabChange = useCallback((status) => {
         setMappingStatus(status);
         setPage(1);
         setSelectedIds([]);
+        setSelectedProducts([]);
     }, []);
 
     const handlePlatformChange = useCallback((platform) => {
@@ -1209,12 +1391,14 @@ export function useByProductMapping() {
         setSelectedStoreId('');
         setPage(1);
         setSelectedIds([]);
+        setSelectedProducts([]);
     }, []);
 
     const handleStoreChange = useCallback((storeId) => {
         setSelectedStoreId(storeId);
         setPage(1);
         setSelectedIds([]);
+        setSelectedProducts([]);
     }, []);
 
     // handleSyncClick now accepts platform/storeId from the sync modal
@@ -1272,10 +1456,10 @@ export function useByProductMapping() {
         // data
         products, pagination,
         counts,
-        isLoading, isFetching, isError, error,
+        isLoading, isFetching: isFetching || isStatusFetching, isError, error, refetch,
 
         // selection
-        selectedIds, toggleSelect, toggleAll,
+        selectedIds, selectedProducts, selectionLoading, toggleSelect, toggleAll,
         allSelected:  getSelectableProductIds().length > 0 && getSelectableProductIds().every((id) => selectedIds.includes(id)),
         someSelected: getSelectableProductIds().some((id) => selectedIds.includes(id)),
 

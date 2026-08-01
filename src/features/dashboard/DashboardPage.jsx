@@ -1,9 +1,12 @@
 import { useDashboardData } from "./hooks/useDashboardData";
+import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import KPICard from "./components/KPICard";
 import InventoryChart from "./components/InventoryChart";
 import OrderStatusChart from "./components/OrderStatusChart";
 import SalesTrendsChart from "./components/SalesTrendsChart";
 import Topbar from "../../components/layout/Topbar";
+import { buildDashboardOrderStatusNavigation } from "../orderManagement/orderProcessing/utils/dashboardOrderStatusFilter";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DashboardPage — matches Figma "Dashboard 2" layout exactly:
@@ -22,11 +25,15 @@ import Topbar from "../../components/layout/Topbar";
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
   const {
     loading,
     kpiCards,
     inventoryData,
     orderStatusData,
+    orderStatusLoading,
+    orderStatusDateRange,
     salesTrendsData,
     platforms,
     years,
@@ -42,7 +49,40 @@ export default function DashboardPage() {
     setSalesYear,
     setSalesMonth,
     setSalesPlatform,
+    setOrderStatusDateRange,
   } = useDashboardData();
+
+  const handleKpiClick = (cardId) => {
+    if (cardId === "total_products") {
+      navigate("/warehouse_management/inventory/SKU_mapping/byProduct");
+      return;
+    }
+
+    if (cardId === "today_orders") {
+      navigate("/warehouse_management/orders/processing/all_order", {
+        state: { datePreset: "today" },
+      });
+      return;
+    }
+
+    if (cardId === "low_stock") {
+      navigate("/warehouse_management/inventory/list", {
+        state: { stockAlertStatus: "low_stock" },
+      });
+      return;
+    }
+
+    if (cardId === "out_of_stock") {
+      navigate("/warehouse_management/inventory/list", {
+        state: { stockAlertStatus: "out_of_stock" },
+      });
+    }
+  };
+
+  const handleOrderStatusClick = (status) => {
+    const target = buildDashboardOrderStatusNavigation(status?.key, orderStatusDateRange);
+    if (target) navigate(target);
+  };
 
   return (
     <div className="space-y-6 font-body">
@@ -57,11 +97,11 @@ export default function DashboardPage() {
             letterSpacing: "0.5px",
           }}
         >
-          Overview
+          {t("common.overview")}
         </h2>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {kpiCards.map((card) => (
-            <KPICard key={card.id} {...card} loading={loading} />
+            <KPICard key={card.id} {...card} loading={loading} onClick={() => handleKpiClick(card.id)} />
           ))}
         </div>
       </section>
@@ -77,7 +117,13 @@ export default function DashboardPage() {
           onYearChange={setInventoryYear}
           onMonthChange={setInventoryMonth}
         />
-        <OrderStatusChart data={orderStatusData} loading={loading} />
+        <OrderStatusChart
+          data={orderStatusData}
+          loading={orderStatusLoading}
+          dateRange={orderStatusDateRange}
+          onDateRangeChange={setOrderStatusDateRange}
+          onStatusClick={handleOrderStatusClick}
+        />
       </div>
 
       {/* ── Sales Trends (full width) ── */}

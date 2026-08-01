@@ -1,8 +1,14 @@
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "../../../lib/api";
 import useDebounce from "../../../hooks/useDebounce";
 import { toast } from "sonner";
+import {
+    filterWarehousesByPermission,
+    getDefaultAllowedWarehouseId,
+    hasWarehouseRestriction,
+    resolveAllowedWarehouseId,
+} from "../../../utils/permissions";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Query keys
@@ -61,6 +67,22 @@ const fetchMerchantSkus = async (params) => {
             totalPages: 1,
         },
     };
+};
+
+const fetchAllMerchantSkus = async (params, knownTotal = 0) => {
+    const pageLimit = Math.max(100, Number(knownTotal) || 100);
+    const first = await fetchMerchantSkus({ ...params, page: 1, limit: pageLimit });
+    const totalPages = first?.pagination?.totalPages ?? 1;
+
+    if (totalPages <= 1) return first?.data ?? [];
+
+    const rest = await Promise.all(
+        Array.from({ length: totalPages - 1 }, (_, index) =>
+            fetchMerchantSkus({ ...params, page: index + 2, limit: pageLimit })
+        )
+    );
+
+    return [...(first?.data ?? []), ...rest.flatMap((response) => response?.data ?? [])];
 };
 
 /** Convert file → base64 string (strips the data:...;base64, prefix for API) */
@@ -426,8 +448,8 @@ export function useProductList() {
     // ── Filter state ──────────────────────────────────────────────────────────
     const [search, setSearch] = useState("");
     const [searchField, setSearchField] = useState("sku_name");
-    const [warehouseFilter, setWarehouseFilter] = useState("all");
-    const [warehouseFilterName, setWarehouseFilterName] = useState("All Warehouses");
+    const [warehouseFilter, setWarehouseFilter] = useState(() => getDefaultAllowedWarehouseId() || "all");
+    const [warehouseFilterName, setWarehouseFilterName] = useState(() => getDefaultAllowedWarehouseId() ? "Warehouse name" : "All Warehouses");
     const [productStatus, setProductStatus] = useState("all");
     const [country, setCountry] = useState("all");
     const [sku, setSku] = useState("");
@@ -438,6 +460,8 @@ export function useProductList() {
 
     // ── Selection state ───────────────────────────────────────────────────────
     const [selectedIds, setSelectedIds] = useState([]);
+    const [selectedProducts, setSelectedProducts] = useState([]);
+    const [selectionLoading, setSelectionLoading] = useState(false);
 
     // ── Add modal state ───────────────────────────────────────────────────────
     const [showAddModal, setShowAddModal] = useState(false);
@@ -481,16 +505,31 @@ export function useProductList() {
 
     // Build dropdown option arrays from API response
     const warehouseOptions = useMemo(() => {
-        const base = [{ label: "All Warehouses", value: "all" }];
+        const restricted = hasWarehouseRestriction();
+        const base = restricted ? [] : [{ label: "All Warehouses", value: "all" }];
         if (!dropdowns?.warehouses) return base;
+        const allowedWarehouses = filterWarehousesByPermission(dropdowns.warehouses);
         return [
             ...base,
-            ...dropdowns.warehouses.map((w) => ({
+            ...allowedWarehouses.map((w) => ({
                 label: w.name,
                 value: String(w.id),
             })),
         ];
     }, [dropdowns]);
+
+    useEffect(() => {
+        if (!hasWarehouseRestriction() || !warehouseOptions.length) return;
+        const selected = warehouseOptions.find((option) => option.value === warehouseFilter);
+        if (selected) {
+            setWarehouseFilterName(selected.label);
+            return;
+        }
+        const firstWarehouse = warehouseOptions[0];
+        setWarehouseFilter(firstWarehouse.value);
+        setWarehouseFilterName(firstWarehouse.label);
+        setPage(1);
+    }, [warehouseOptions, warehouseFilter]);
 
     const countryOptions = useMemo(() => {
         const base = [{ label: "All Countries", value: "all" }];
@@ -540,6 +579,7 @@ export function useProductList() {
         staleTime: 1000 * 60 * 2,
         gcTime: 1000 * 60 * 5,
         placeholderData: (prev) => prev,
+        select: (warehouses) => filterWarehousesByPermission(warehouses),
         enabled: showAddModal || showImportModal,  // only fetch when a modal needs warehouses
     });
 
@@ -565,6 +605,7 @@ export function useProductList() {
         isFetching: listFetching,
         isError: isListError,
         error: listError,
+        refetch: refetchList,
     } = useQuery({
         queryKey: MERCHANT_SKU_KEYS.list(listFilters),
         queryFn: () => fetchMerchantSkus(listFilters),
@@ -574,7 +615,17 @@ export function useProductList() {
     });
 
     const products = useMemo(() => listData?.data ?? [], [listData?.data]);
-    const pagination = listData?.pagination ?? { total: 0, totalPages: 1, page: 1, limit: 20 };
+    const pagination = listData?.pagination ?? { total: 0, totalPages: 1, page: 1, limit: 10 };
+
+    useEffect(() => {
+        setSelectedProducts((prev) => {
+            const rowById = new Map(prev.map((product) => [product.id, product]));
+            products.forEach((product) => {
+                if (selectedIds.includes(product.id)) rowById.set(product.id, product);
+            });
+            return selectedIds.map((id) => rowById.get(id)).filter(Boolean);
+        });
+    }, [products, selectedIds]);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Mutation: create merchant SKU
@@ -890,21 +941,50 @@ export function useProductList() {
         );
     }, []);
 
-    const toggleAll = useCallback(() => {
-        const ids = products.map((p) => p.id);
-        const allSel = ids.every((id) => selectedIds.includes(id));
-        setSelectedIds(allSel ? [] : ids);
-    }, [products, selectedIds]);
+    const toggleAll = useCallback(async ({ allPages = false } = {}) => {
+        setSelectionLoading(true);
+        if (!allPages) {
+            const ids = products.map((p) => p.id);
+            const allSel = ids.every((id) => selectedIds.includes(id));
+            setSelectedIds(allSel ? [] : ids);
+            setSelectionLoading(false);
+            return;
+        }
+
+        const pageIds = products.map((p) => p.id);
+        const allFilteredSelected =
+            pagination.total > 0 &&
+            selectedIds.length >= pagination.total &&
+            pageIds.every((id) => selectedIds.includes(id));
+
+        if (allFilteredSelected) {
+            setSelectedIds([]);
+            setSelectedProducts([]);
+            setSelectionLoading(false);
+            return;
+        }
+
+        try {
+            const allProducts = await fetchAllMerchantSkus(listFilters, pagination.total);
+            setSelectedProducts(allProducts);
+            setSelectedIds(allProducts.map((product) => product.id));
+        } catch (err) {
+            toast.error(err?.response?.data?.message ?? err?.message ?? "Failed to select all products");
+        } finally {
+            setSelectionLoading(false);
+        }
+    }, [products, selectedIds, pagination.total, listFilters]);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Filter helpers
     // ─────────────────────────────────────────────────────────────────────────
     const resetFilters = useCallback(() => {
+        const defaultWarehouseId = getDefaultAllowedWarehouseId();
         setSearch("");
         setSearchField("sku_name");
         setSku("");
-        setWarehouseFilter("all");
-        setWarehouseFilterName("All Warehouses");
+        setWarehouseFilter(defaultWarehouseId || "all");
+        setWarehouseFilterName(defaultWarehouseId ? "Warehouse name" : "All Warehouses");
         setProductStatus("all");
         setCountry("all");
         setPage(1);
@@ -917,10 +997,12 @@ export function useProductList() {
         country !== "all";
 
     const handleWarehouseFilterChange = useCallback((value, label) => {
-        setWarehouseFilter(value);
-        setWarehouseFilterName(label);
+        const nextValue = value === "all" ? "all" : resolveAllowedWarehouseId(value);
+        const nextOption = warehouseOptions.find((option) => option.value === nextValue);
+        setWarehouseFilter(nextValue);
+        setWarehouseFilterName(nextOption?.label ?? label);
         setPage(1);
-    }, []);
+    }, [warehouseOptions]);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Bulk action handler
@@ -955,9 +1037,12 @@ export function useProductList() {
         listFetching,
         isListError,
         listError,
+        refetchList,
 
         // ── selection ────────────────────────────────────────────────────────
         selectedIds,
+        selectedProducts,
+        selectionLoading,
         toggleSelect,
         toggleAll,
         allSelected: products.length > 0 && products.every((p) => selectedIds.includes(p.id)),

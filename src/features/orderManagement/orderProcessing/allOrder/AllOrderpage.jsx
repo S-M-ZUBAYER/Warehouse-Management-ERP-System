@@ -1,4 +1,4 @@
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useNavigationType } from "react-router-dom";
 import { Calendar, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import Topbar from "../../../../components/layout/Topbar";
@@ -6,30 +6,12 @@ import OrderProcessingFilterBar from "../../shared/components/OrderProcessingFil
 import OrderTable from "../../shared/components/OrderTable";
 import OrderFooter from "../../shared/components/OrderFooter";
 import { useOrderList } from "../../shared/hooks/useOrderList";
-
-const SECONDS_IN_DAY = 24 * 60 * 60;
-
-const startOfTodaySeconds = () => {
-  const now = new Date();
-  return Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000);
-};
-
-const endOfTodaySeconds = () => Math.floor(Date.now() / 1000);
-
-const getPresetRange = (preset) => {
-  const end = endOfTodaySeconds();
-  if (preset === "today") return { start: startOfTodaySeconds(), end };
-  if (preset === "last_month") return { start: end - 30 * SECONDS_IN_DAY, end };
-  return { start: end - 7 * SECONDS_IN_DAY, end };
-};
-
-const formatDateInput = (seconds) => {
-  const date = new Date(seconds * 1000);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
+import {
+  formatDateInput,
+  getDateRangeLabel,
+  getPresetRange,
+} from "../../shared/components/OrderDateRangePicker";
+import { getStoredOrderListReturnState, setOrderDetailReturnContext } from "../../shared/utils/orderApi";
 
 const dateInputToSeconds = (value, endOfDay = false) => {
   if (!value) return null;
@@ -43,19 +25,20 @@ const dateInputToSeconds = (value, endOfDay = false) => {
 export default function AllOrderPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [datePreset, setDatePreset] = useState("last_7_days");
-  const [dateRange, setDateRange] = useState(() => getPresetRange("last_7_days"));
+  const navigationType = useNavigationType();
+  const restoredPageState = useMemo(
+    () => getStoredOrderListReturnState({ pathname: location.pathname, navigationType, pageType: "all" }),
+    [location.pathname, navigationType]
+  );
+  const initialDatePreset = restoredPageState.datePreset || (location.state?.datePreset === "today" ? "today" : "last_7_days");
+  const [datePreset, setDatePreset] = useState(initialDatePreset);
+  const [dateRange, setDateRange] = useState(() => restoredPageState.dateRange || getPresetRange(initialDatePreset));
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [customStart, setCustomStart] = useState(() => formatDateInput(dateRange.start));
   const [customEnd, setCustomEnd] = useState(() => formatDateInput(dateRange.end));
-  const list = useOrderList({ pageType: "all", dateRange });
+  const list = useOrderList({ pageType: "all", datePreset, dateRange });
 
-  const dateLabel = useMemo(() => {
-    if (datePreset === "today") return "Today";
-    if (datePreset === "last_month") return "Last 1 Month";
-    if (datePreset === "custom") return `${formatDateInput(dateRange.start)} to ${formatDateInput(dateRange.end)}`;
-    return "Last 7 Days";
-  }, [datePreset, dateRange]);
+  const dateLabel = useMemo(() => getDateRangeLabel(datePreset, dateRange), [datePreset, dateRange]);
 
   const applyPreset = (preset) => {
     const nextRange = getPresetRange(preset);
@@ -77,6 +60,10 @@ export default function AllOrderPage() {
 
   const handleDetails = (order) => {
     list.cacheOrderForDetail(order);
+    setOrderDetailReturnContext({
+      fromPath: location.pathname,
+      orderId: order.id,
+    });
     navigate(`/warehouse_management/orders/detail/${encodeURIComponent(order.id)}`, {
       state: { order, fromPath: location.pathname },
     });
@@ -168,20 +155,22 @@ export default function AllOrderPage() {
           </div>
         </div>
 
-        <OrderStateMessage list={list} />
-
         <OrderTable
           orders={list.orders}
-          loading={list.isLoading || list.isFetching}
+          loading={list.isLoading}
           isError={list.isError}
-          errorMessage={list.error?.message || "Failed to load orders"}
+          errorMessage={list.error?.response?.data?.message || list.error?.message || "Failed to load orders"}
+          onRetry={list.refetch}
           selectedIds={list.selectedIds}
+          selectionLoading={list.selectionLoading}
           onToggleSelect={list.toggleSelect}
           onToggleAll={list.toggleAll}
           allSelected={list.allSelected}
           pagination={list.pagination}
           page={list.page}
           setPage={list.setPage}
+          statusSortDirection={list.statusSortDirection}
+          onStatusSortChange={list.setStatusSortDirection}
           showActionsCol={false}
           compact
           onDetails={handleDetails}
@@ -191,11 +180,4 @@ export default function AllOrderPage() {
       </div>
     </div>
   );
-}
-
-function OrderStateMessage({ list }) {
-  if (list.isError) {
-    return <div className="px-5 py-2 text-xs text-red-500">{list.error?.message || "Failed to load orders"}</div>;
-  }
-  return null;
 }

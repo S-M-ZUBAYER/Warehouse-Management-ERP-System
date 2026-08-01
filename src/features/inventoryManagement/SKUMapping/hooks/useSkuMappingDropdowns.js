@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import api from '../../../../lib/api';
+import { filterWarehousesByPermission } from '../../../../utils/permissions';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // useSkuMappingDropdowns
@@ -25,7 +26,7 @@ export function useSkuMappingDropdowns() {
     const storesByPlatform = data?.storesByPlatform ?? {};
 
     // warehouses: [{ id, label, value, is_default }]
-    const warehouses = data?.warehouses ?? [];
+    const warehouses = filterWarehousesByPermission(data?.warehouses ?? []);
 
     // Cascade: given a selected platform value, return that platform's stores
     const getStoresForPlatform = (platformValue) => {

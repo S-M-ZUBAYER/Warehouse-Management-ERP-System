@@ -341,7 +341,6 @@ export default function SelectMerchantSKUModal({
         background: "rgba(180,195,210,0.55)",
         backdropFilter: "blur(3px)",
       }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
         className="bg-white rounded-2xl shadow-2xl w-full font-body"
@@ -429,7 +428,7 @@ export default function SelectMerchantSKUModal({
                         SKU
                       </th>
                       <th className="py-2 pl-3 pr-4 text-left font-medium text-slate-500 whitespace-nowrap">
-                        Available in Inventory
+                        Current Stock in Selected Warehouse
                       </th>
                     </tr>
                   </thead>
@@ -446,8 +445,7 @@ export default function SelectMerchantSKUModal({
                     ) : (
                       pickerSkus.map((sku) => {
                         const isChecked = selectedIds.includes(sku.id);
-                        const available =
-                          sku.stock?.[0]?.qty_on_hand ?? sku.qty_on_hand ?? 0;
+                        const available = sku.qty_on_hand ?? sku.stock?.[0]?.qty_on_hand ?? 0;
                         return (
                           <tr
                             key={sku.id}

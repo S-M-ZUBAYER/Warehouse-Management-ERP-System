@@ -1,7 +1,12 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../../../lib/api';
 import { toast } from 'sonner';
+import {
+    filterWarehousesByPermission,
+    getDefaultAllowedWarehouseId,
+    resolveAllowedWarehouseId,
+} from '../../../../utils/permissions';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Query Keys
@@ -31,7 +36,7 @@ const fetchInventoryCounts = (warehouseId) => {
 const fetchInventoryList = (params) => {
     const qs = new URLSearchParams();
     qs.set('page', params.page ?? 1);
-    qs.set('limit', params.limit ?? 20);
+    qs.set('limit', params.limit ?? 10);
     if (params.warehouseId) qs.set('warehouseId', params.warehouseId);
     if (params.search?.trim()) qs.set('search', params.search.trim());
     if (params.skuType) qs.set('skuType', params.skuType);
@@ -40,6 +45,77 @@ const fetchInventoryList = (params) => {
     if (params.sortBy) qs.set('sortBy', params.sortBy);
     if (params.sortOrder) qs.set('sortOrder', params.sortOrder);
     return api.get(`/inventory?${qs.toString()}`).then((r) => r);
+};
+
+const getAlertFilterKey = (value) => String(value || '').toLowerCase().replace(/[\s-]+/g, '_');
+
+const getInventoryAlertKey = (item) => {
+    const status = getAlertFilterKey(item.stock_alert_status);
+    const qty = Number(item.qty_on_hand ?? 0);
+    const minStock = item.min_stock === null || item.min_stock === undefined ? null : Number(item.min_stock);
+
+    if (qty <= 0 || status === 'out_of_stock') return 'out_of_stock';
+    if (status === 'low_stock') return 'low_stock';
+    if (minStock !== null && Number.isFinite(minStock) && qty <= minStock) return 'low_stock';
+    return status || 'no_alert';
+};
+
+const filterInventoryRowsByAlert = (rows, stockAlertStatus) => {
+    const target = getAlertFilterKey(stockAlertStatus);
+    if (!target) return rows;
+    return rows.filter((item) => getInventoryAlertKey(item) === target);
+};
+
+const fetchInventoryListForAlert = async (params) => {
+    const requestParams = { ...params, page: 1, limit: 100 };
+    const first = await fetchInventoryList(requestParams);
+    const firstRows = first?.data ?? [];
+    const firstPagination = first?.pagination ?? {};
+    const totalPages = Number(firstPagination.totalPages || 1);
+    const allRows = [...firstRows];
+
+    if (totalPages > 1) {
+        const rest = await Promise.all(
+            Array.from({ length: Math.min(totalPages, 100) - 1 }, (_, index) =>
+                fetchInventoryList({ ...requestParams, page: index + 2 })
+            )
+        );
+        rest.forEach((response) => allRows.push(...(response?.data ?? [])));
+    }
+
+    const filteredRows = filterInventoryRowsByAlert(allRows, params.stockAlertStatus);
+    const page = Number(params.page ?? 1);
+    const limit = Number(params.limit ?? 10);
+    const start = (page - 1) * limit;
+
+    return {
+        ...first,
+        data: filteredRows.slice(start, start + limit),
+        pagination: {
+            ...firstPagination,
+            page,
+            limit,
+            total: filteredRows.length,
+            totalPages: Math.max(1, Math.ceil(filteredRows.length / limit)),
+        },
+    };
+};
+
+const fetchAllInventoryList = async (params) => {
+    const pageLimit = 100;
+    const fetcher = params.stockAlertStatus ? fetchInventoryListForAlert : fetchInventoryList;
+    const first = await fetcher({ ...params, page: 1, limit: pageLimit });
+    const totalPages = Number(first?.pagination?.totalPages) || 1;
+
+    if (totalPages <= 1) return first?.data ?? [];
+
+    const rest = await Promise.all(
+        Array.from({ length: totalPages - 1 }, (_, index) =>
+            fetcher({ ...params, page: index + 2, limit: pageLimit })
+        )
+    );
+
+    return [...(first?.data ?? []), ...rest.flatMap((response) => response?.data ?? [])];
 };
 
 /**
@@ -101,21 +177,24 @@ export const MAPPING_TABS = [
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Hook
 // ─────────────────────────────────────────────────────────────────────────────
-export function useInventoryList() {
+export function useInventoryList({ initialStockAlertStatus = '' } = {}) {
     const queryClient = useQueryClient();
 
     // ── Filter state ──────────────────────────────────────────────────────────
-    const [warehouseId, setWarehouseId] = useState('');
+    const [warehouseId, setWarehouseId] = useState(() => getDefaultAllowedWarehouseId());
     const [warehouseName, setWarehouseName] = useState('Warehouse name here');
     const [skuType, setSkuType] = useState('sku_name');
     const [skuTypeLabel, setSkuTypeLabel] = useState('SKU Name');
     const [searchInput, setSearchInput] = useState('');    // live input
     const [searchApplied, setSearchApplied] = useState('');    // sent to API on Search click
     const [mappingStatus, setMappingStatus] = useState('all');
+    const [stockAlertStatus] = useState(initialStockAlertStatus);
     const [page, setPage] = useState(1);
 
     // ── Selection ─────────────────────────────────────────────────────────────
     const [selectedIds, setSelectedIds] = useState([]);   // sku_warehouse_stock IDs
+    const [selectedItems, setSelectedItems] = useState([]);
+    const [selectionLoading, setSelectionLoading] = useState(false);
 
     // ── Modal state ───────────────────────────────────────────────────────────
     const [showStockAlertModal, setShowStockAlertModal] = useState(false);
@@ -133,13 +212,20 @@ export function useInventoryList() {
         gcTime: 1000 * 60 * 20,
     });
 
+    const allowedWarehouses = filterWarehousesByPermission(dropdownData?.warehouses ?? []);
     const warehouseOptions = [
         { label: 'Warehouse name here', value: '' },
-        ...(dropdownData?.warehouses ?? []).map((w) => ({
+        ...allowedWarehouses.map((w) => ({
             label: w.name,
             value: String(w.id),
         })),
     ];
+
+    useEffect(() => {
+        if (!warehouseId || !allowedWarehouses.length) return;
+        const selected = allowedWarehouses.find((warehouse) => String(warehouse.id) === String(warehouseId));
+        if (selected) setWarehouseName(selected.name);
+    }, [allowedWarehouses, warehouseId]);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Query: tab counts
@@ -156,11 +242,12 @@ export function useInventoryList() {
     // ─────────────────────────────────────────────────────────────────────────
     const listParams = {
         page,
-        limit: 20,
+        limit: 10,
         warehouseId: warehouseId || undefined,
         search: searchApplied || undefined,
         skuType: skuType || undefined,
         mappingStatus: mappingStatus !== 'all' ? mappingStatus : undefined,
+        stockAlertStatus: stockAlertStatus || undefined,
         sortBy: 'created_at',
         sortOrder: 'DESC',
     };
@@ -171,16 +258,27 @@ export function useInventoryList() {
         isFetching,
         isError,
         error,
+        refetch,
     } = useQuery({
         queryKey: INVENTORY_KEYS.list(listParams),
-        queryFn: () => fetchInventoryList(listParams),
+        queryFn: () => stockAlertStatus ? fetchInventoryListForAlert(listParams) : fetchInventoryList(listParams),
         staleTime: 1000 * 60,
         gcTime: 1000 * 60 * 3,
         placeholderData: (prev) => prev,
     });
 
     const items = listData?.data ?? [];
-    const pagination = listData?.pagination ?? { total: 0, totalPages: 1, page: 1, limit: 20 };
+    const pagination = listData?.pagination ?? { total: 0, totalPages: 1, page: 1, limit: 10 };
+
+    useEffect(() => {
+        setSelectedItems((prev) => {
+            const rowById = new Map(prev.map((item) => [item.id, item]));
+            items.forEach((item) => {
+                if (selectedIds.includes(item.id)) rowById.set(item.id, item);
+            });
+            return selectedIds.map((id) => rowById.get(id)).filter(Boolean);
+        });
+    }, [items, selectedIds]);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Mutation: set stock alert
@@ -191,6 +289,7 @@ export function useInventoryList() {
             toast.success(data.message ?? 'Stock alert updated');
             setShowStockAlertModal(false);
             setSelectedIds([]);
+            setSelectedItems([]);
             setMinStock('');
             queryClient.invalidateQueries({ queryKey: INVENTORY_KEYS.all() });
         },
@@ -238,6 +337,7 @@ const syncMutation = useMutation({
 
         setShowSyncModal(false);
         setSelectedIds([]);
+        setSelectedItems([]);
         queryClient.invalidateQueries({ queryKey: INVENTORY_KEYS.all() });
     },
     onError: (err) => {
@@ -252,8 +352,9 @@ const syncMutation = useMutation({
     const batchDeleteMutation = useMutation({
         mutationFn: (stockRowIds) => {
             // Resolve stock row IDs → merchant_sku_ids from current list data
+            const sourceItems = selectedItems.length ? selectedItems : items;
             const merchantSkuIds = stockRowIds
-                .map((id) => items.find((i) => i.id === id)?.merchantSku?.id)
+                .map((id) => sourceItems.find((i) => i.id === id)?.merchantSku?.id)
                 .filter(Boolean);
 
             if (!merchantSkuIds.length) {
@@ -264,6 +365,7 @@ const syncMutation = useMutation({
         onSuccess: (data) => {
             toast.success(`${data.deleted ?? selectedIds.length} item(s) deleted`);
             setSelectedIds([]);
+            setSelectedItems([]);
             setShowBatchDeleteModal(false);
             queryClient.invalidateQueries({ queryKey: INVENTORY_KEYS.all() });
         },
@@ -279,21 +381,43 @@ const syncMutation = useMutation({
         setSelectedIds((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
     }, []);
 
-    const toggleAll = useCallback(() => {
-        const ids = items.map((i) => i.id);
-        const allSel = ids.every((id) => selectedIds.includes(id));
-        setSelectedIds(allSel ? [] : ids);
-    }, [items, selectedIds]);
+    const toggleAll = useCallback(async () => {
+        const pageIds = items.map((i) => i.id);
+        const allFilteredSelected =
+            pagination.total > 0 &&
+            selectedIds.length >= pagination.total &&
+            pageIds.every((id) => selectedIds.includes(id));
+
+        if (allFilteredSelected) {
+            setSelectedIds([]);
+            setSelectedItems([]);
+            return;
+        }
+
+        setSelectionLoading(true);
+        try {
+            const allItems = await fetchAllInventoryList(listParams);
+            setSelectedItems(allItems);
+            setSelectedIds(allItems.map((item) => item.id));
+        } catch (err) {
+            toast.error(err?.response?.data?.message ?? err?.message ?? 'Failed to select all inventory items');
+        } finally {
+            setSelectionLoading(false);
+        }
+    }, [items, selectedIds, pagination.total, listParams]);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Filter helpers
     // ─────────────────────────────────────────────────────────────────────────
     const handleWarehouseSelect = useCallback((opt) => {
-        setWarehouseId(opt.value);
-        setWarehouseName(opt.label);
+        const nextWarehouseId = resolveAllowedWarehouseId(opt.value);
+        const nextOption = warehouseOptions.find((item) => item.value === nextWarehouseId);
+        setWarehouseId(nextWarehouseId);
+        setWarehouseName(nextOption?.label ?? opt.label);
         setPage(1);
         setSelectedIds([]);
-    }, []);
+        setSelectedItems([]);
+    }, [warehouseOptions]);
 
     const handleSkuTypeSelect = useCallback((opt) => {
         setSkuType(opt.value);
@@ -305,12 +429,14 @@ const syncMutation = useMutation({
         setSearchApplied(searchInput.trim());
         setPage(1);
         setSelectedIds([]);
+        setSelectedItems([]);
     }, [searchInput]);
 
     const handleTabChange = useCallback((tab) => {
         setMappingStatus(tab.value);
         setPage(1);
         setSelectedIds([]);
+        setSelectedItems([]);
     }, []);
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -353,11 +479,13 @@ const syncMutation = useMutation({
     }
 
     // Identify which items are actually selected from the data
-    const selectedItems = items.filter((item) => selectedIds.includes(item.id));
+    const currentSelectedItems = selectedItems.length === selectedIds.length
+        ? selectedItems
+        : items.filter((item) => selectedIds.includes(item.id));
     
     // Check if any selected item is unmapped 
     // (Assuming 'unmapped' means merchantSku is null/undefined based on your batchDelete logic)
-    const hasUnmapped = selectedItems.some((item) => !item.is_mapped);
+    const hasUnmapped = currentSelectedItems.some((item) => !item.is_mapped);
  
     if (hasUnmapped) {
         toast.error('Only mapped SKUs are eligible for sync.');
@@ -365,7 +493,7 @@ const syncMutation = useMutation({
     }
 
     setShowSyncModal(true);
-}, [selectedIds, items]);
+}, [selectedIds, selectedItems, items]);
 
     const confirmSync = useCallback(() => {
         // Pass selected inventory row IDs — empty = sync all
@@ -388,10 +516,10 @@ const syncMutation = useMutation({
 
         // data
         items, pagination,
-        isLoading, isFetching, isError, error,
+        isLoading, isFetching, isError, error, refetch,
 
         // selection
-        selectedIds, toggleSelect, toggleAll,
+        selectedIds, selectedItems, toggleSelect, toggleAll, selectionLoading,
         allSelected: items.length > 0 && items.every((i) => selectedIds.includes(i.id)),
         someSelected: items.some((i) => selectedIds.includes(i.id)),
 

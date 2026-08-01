@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
     Search, ChevronDown, Trash2, X, Loader2, AlertCircle, RefreshCw,
 } from 'lucide-react';
@@ -20,6 +21,8 @@ export default function InventoryListPage() {
     const [showBulkDrop,      setShowBulkDrop]      = useState(false);
     const [showSkuDrop,       setShowSkuDrop]        = useState(false);
     const [showWarehouseDrop, setShowWarehouseDrop]  = useState(false);
+    const location = useLocation();
+    const initialStockAlertStatus = location.state?.stockAlertStatus || '';
 
     const bulkRef  = useRef(null);
     const skuRef   = useRef(null);
@@ -49,10 +52,10 @@ export default function InventoryListPage() {
 
         // data
         items, pagination,
-        isLoading, isFetching, isError, error,
+        isLoading, isFetching, isError, error, refetch,
 
         // selection
-        selectedIds, toggleSelect, toggleAll,
+        selectedIds, selectedItems, toggleSelect, toggleAll, selectionLoading,
         allSelected, someSelected,
 
         // modals
@@ -73,7 +76,7 @@ export default function InventoryListPage() {
         handleSyncOpen,
         confirmSync,
         syncing,
-    } = useInventoryList();
+    } = useInventoryList({ initialStockAlertStatus });
 
     // ── Tab labels with counts ────────────────────────────────────────────────
     const tabsWithCounts = MAPPING_TABS.map((t) => ({
@@ -84,6 +87,10 @@ export default function InventoryListPage() {
             counts.mapped
         })`,
     }));
+
+    const selectedRows = selectedItems.length === selectedIds.length
+        ? selectedItems
+        : items.filter((item) => selectedIds.includes(item.id));
 
     return (
         <div className="space-y-4 font-body">
@@ -256,7 +263,10 @@ export default function InventoryListPage() {
                     ) : isError ? (
                         <TableError
                             message={error?.response?.data?.message ?? error?.message ?? 'Failed to load inventory'}
-                            onRetry={() => setPage(1)}
+                            onRetry={() => {
+                                setPage(1);
+                                refetch?.();
+                            }}
                         />
                     ) : (
                         <table className="w-full text-sm font-body">
@@ -264,13 +274,17 @@ export default function InventoryListPage() {
                                 <tr className="border-b border-surface-border">
                                     <th className="py-3 pl-5 w-36 text-left">
                                         <label className="flex items-center gap-2 cursor-pointer select-none">
-                                            <input
-                                                type="checkbox"
-                                                checked={allSelected}
-                                                ref={(el) => { if (el) el.indeterminate = someSelected && !allSelected; }}
-                                                onChange={toggleAll}
-                                                className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
-                                            />
+                                            {selectionLoading ? (
+                                                <Loader2 size={16} className="text-primary animate-spin" />
+                                            ) : (
+                                                <input
+                                                    type="checkbox"
+                                                    checked={allSelected}
+                                                    ref={(el) => { if (el) el.indeterminate = someSelected && !allSelected; }}
+                                                    onChange={toggleAll}
+                                                    className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
+                                                />
+                                            )}
                                             <span className="pl-2 text-sm font-bold text-slate-800">Select All</span>
                                         </label>
                                     </th>
@@ -391,7 +405,19 @@ export default function InventoryListPage() {
                             >
                                 Previous
                             </button>
-                            {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => i + 1).map((p) => (
+                            {Array.from(
+                                { length: Math.min(5, pagination.totalPages) },
+                                (_, i) => {
+                                    const totalPages = pagination.totalPages || 1;
+                                    const visibleCount = Math.min(5, totalPages);
+                                    const startPage = Math.min(
+                                        Math.max(1, page - Math.floor(visibleCount / 2)),
+                                        Math.max(1, totalPages - visibleCount + 1),
+                                    );
+
+                                    return startPage + i;
+                                },
+                            ).map((p) => (
                                 <button
                                     key={p}
                                     onClick={() => setPage(p)}
@@ -418,24 +444,24 @@ export default function InventoryListPage() {
                 {/* Footer */}
                 <div className="flex justify-end gap-3 px-5 py-4 border-t border-surface-border">
                     <ExportMenu
-                        onExportCsv={() => exportRowsToCsv(items.filter((item) => selectedIds.includes(item.id)), [
+                        onExportCsv={() => exportRowsToCsv(selectedRows, [
                             { label: 'Seller SKU', render: (row) => row.merchantSku?.sku_name || row.sku_name || '' },
                             { label: 'Warehouse', render: (row) => row.warehouse?.name || '' },
                             { label: 'Quantity', key: 'qty_on_hand' },
-                            { label: 'Stock Alert', key: 'alert_status' },
+                            { label: 'Stock Alert', render: deriveAlertStatus },
                         ], 'inventory-list.csv', 'inventory item')}
-                        onExportXlsx={() => exportRowsToXlsx(items.filter((item) => selectedIds.includes(item.id)), [
+                        onExportXlsx={() => exportRowsToXlsx(selectedRows, [
                             { label: 'Seller SKU', render: (row) => row.merchantSku?.sku_name || row.sku_name || '' },
                             { label: 'Warehouse', render: (row) => row.warehouse?.name || '' },
                             { label: 'Quantity', key: 'qty_on_hand' },
-                            { label: 'Stock Alert', key: 'alert_status' },
+                            { label: 'Stock Alert', render: deriveAlertStatus },
                         ], 'inventory-list.xlsx', 'inventory item')}
                     />
-                    <button onClick={() => printRows(items.filter((item) => selectedIds.includes(item.id)), [
+                    <button onClick={() => printRows(selectedRows, [
                         { label: 'Seller SKU', render: (row) => row.merchantSku?.sku_name || row.sku_name || '' },
                         { label: 'Warehouse', render: (row) => row.warehouse?.name || '' },
                         { label: 'Quantity', key: 'qty_on_hand' },
-                        { label: 'Stock Alert', key: 'alert_status' },
+                        { label: 'Stock Alert', render: deriveAlertStatus },
                     ], 'Selected Inventory Items', 'inventory item')} className="px-16 py-2.5 text-base font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors">
                         Print
                     </button>
@@ -579,13 +605,12 @@ export default function InventoryListPage() {
  */
 function deriveAlertStatus(item) {
     // Use pre-computed status from API if available
-    if (item.stock_alert_status) return item.stock_alert_status;
-
-    const qty      = item.qty_on_hand   ?? 0;
+    const qty      = Number(item.qty_on_hand   ?? 0);
     const minStock = item.min_stock     ?? null;  // null = no alert configured
 
-    if (minStock === null) return 'No Alert';
     if (qty === 0)         return 'Out of Stock';
+    if (item.stock_alert_status) return item.stock_alert_status;
+    if (minStock === null) return 'No Alert';
     if (qty <= minStock)   return 'Low Stock';
     return 'In Stock';
 }

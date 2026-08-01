@@ -1,6 +1,11 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../../../lib/api';
+import {
+    filterWarehousesByPermission,
+    getDefaultAllowedWarehouseId,
+    resolveAllowedWarehouseId,
+} from '../../../../utils/permissions';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Query keys
@@ -29,6 +34,22 @@ const fetchLedger = (params) => {
     return api.get(`/stock/ledger?${qs.toString()}`).then((r) => r);
 };
 
+const fetchAllLedger = async (params, knownTotal = 0) => {
+    const pageLimit = Math.max(100, Number(knownTotal) || Number(params.limit) || PAGE_SIZE);
+    const first = await fetchLedger({ ...params, page: 1, limit: pageLimit });
+    const totalPages = Number(first?.pagination?.totalPages) || 1;
+
+    if (totalPages <= 1) return first?.data ?? [];
+
+    const rest = await Promise.all(
+        Array.from({ length: totalPages - 1 }, (_, index) =>
+            fetchLedger({ ...params, page: index + 2, limit: pageLimit })
+        )
+    );
+
+    return [...(first?.data ?? []), ...rest.flatMap((response) => response?.data ?? [])];
+};
+
 const fetchWarehouses = () =>
     api.get('/warehouses?page=1&limit=100').then((r) => r);
 
@@ -40,14 +61,17 @@ export const MOVEMENT_TYPE_OPTIONS = [
     { value: 'history', label: 'History' },
 ];
 
-const formatDateInput = (date) => date.toISOString().slice(0, 10);
+const formatDateInput = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+const PAGE_SIZE = 10;
 
-const getLogDate = (log) => {
-    const rawDate = log.createdAt ?? log.created_at;
-    if (!rawDate) return '';
-    const parsedDate = new Date(rawDate);
-    if (Number.isNaN(parsedDate.getTime())) return '';
-    return formatDateInput(parsedDate);
+const toPositiveNumber = (value, fallback) => {
+    const number = Number(value);
+    return Number.isFinite(number) && number > 0 ? number : fallback;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -55,7 +79,7 @@ const getLogDate = (log) => {
 // ─────────────────────────────────────────────────────────────────────────────
 export function useInventoryLog() {
     // ── Filter state ────────────────────────────────────────────────────────────
-    const [warehouseId, setWarehouseId] = useState('');
+    const [warehouseId, setWarehouseId] = useState(() => getDefaultAllowedWarehouseId());
     const [movementType, setMovementType] = useState('recent');
     const [startDate, setStartDate] = useState(formatDateInput(new Date()));
     const [endDate, setEndDate] = useState(formatDateInput(new Date()));
@@ -65,15 +89,19 @@ export function useInventoryLog() {
     const [searchSku, setSearchSku] = useState("");   // actual API param
     const [page, setPage] = useState(1);
     const [selectedIds, setSelectedIds] = useState([]);
+    const [selectedItems, setSelectedItems] = useState([]);
+    const [selectionLoading, setSelectionLoading] = useState(false);
 
     // const debouncedSearch = useDebounce(skuName, 350);
 
+    const today = formatDateInput(new Date());
+
     const listParams = {
         page,
-        limit: 10,
+        limit: PAGE_SIZE,
         warehouseId: warehouseId || undefined,
-        startDate: movementType === 'recent' ? formatDateInput(new Date()) : appliedStartDate,
-        endDate: movementType === 'recent' ? formatDateInput(new Date()) : appliedEndDate,
+        startDate: movementType === 'recent' ? today : appliedStartDate,
+        endDate: movementType === 'recent' ? today : appliedEndDate,
         skuName: searchSku, // ✅ use this instead
     };
 
@@ -84,6 +112,7 @@ export function useInventoryLog() {
         isFetching,
         isError,
         error,
+        refetch,
     } = useQuery({
         queryKey: INVENTORY_LOG_KEYS.list(listParams),
         queryFn: () => fetchLedger(listParams),
@@ -99,30 +128,41 @@ export function useInventoryLog() {
         staleTime: 1000 * 60 * 5,
     });
 
-    const rawItems = useMemo(() => ledgerData?.data ?? [], [ledgerData?.data]);
     const items = useMemo(() => {
-        const today = formatDateInput(new Date());
+        if (Array.isArray(ledgerData?.data)) return ledgerData.data;
+        if (Array.isArray(ledgerData)) return ledgerData;
+        return [];
+    }, [ledgerData]);
+    const pagination = useMemo(() => {
+        const apiPagination = ledgerData?.pagination ?? {};
+        const limit = toPositiveNumber(apiPagination.limit, PAGE_SIZE);
+        const total = toPositiveNumber(
+            apiPagination.total ?? ledgerData?.total,
+            items.length,
+        );
+        const totalPages = toPositiveNumber(
+            apiPagination.totalPages,
+            Math.max(1, Math.ceil(total / limit)),
+        );
 
-        if (movementType === 'recent') {
-            return rawItems.filter((log) => getLogDate(log) === today);
-        }
+        return {
+            total,
+            totalPages,
+            page: toPositiveNumber(apiPagination.page, page),
+            limit,
+        };
+    }, [items.length, ledgerData, page]);
+    const warehouses = filterWarehousesByPermission(warehouseData?.data ?? []);
 
-        if (appliedStartDate && appliedEndDate) {
-            return rawItems.filter((log) => {
-                const logDate = getLogDate(log);
-                return logDate && logDate >= appliedStartDate && logDate <= appliedEndDate;
+    useEffect(() => {
+        setSelectedItems((prev) => {
+            const rowById = new Map(prev.map((item) => [item.id, item]));
+            items.forEach((item) => {
+                if (selectedIds.includes(item.id)) rowById.set(item.id, item);
             });
-        }
-
-        return rawItems;
-    }, [rawItems, movementType, appliedStartDate, appliedEndDate]);
-    const pagination = ledgerData?.pagination ?? {
-        total: 0,
-        totalPages: 1,
-        page: 1,
-        limit: 10,
-    };
-    const warehouses = warehouseData?.data ?? [];
+            return selectedIds.map((id) => rowById.get(id)).filter(Boolean);
+        });
+    }, [items, selectedIds]);
 
     // ── Selection ───────────────────────────────────────────────────────────────
     const toggleSelect = useCallback(
@@ -134,16 +174,38 @@ export function useInventoryLog() {
         []
     );
 
-    const toggleAll = useCallback(() => {
-        const ids = items.map((i) => i.id);
-        const allSel = ids.every((id) => selectedIds.includes(id));
-        setSelectedIds(allSel ? [] : ids);
-    }, [items, selectedIds]);
+    const toggleAll = useCallback(async () => {
+        setSelectionLoading(true);
+        const pageIds = items.map((i) => i.id);
+        const allFilteredSelected =
+            pagination.total > 0 &&
+            selectedIds.length >= pagination.total &&
+            pageIds.every((id) => selectedIds.includes(id));
+
+        if (allFilteredSelected) {
+            setSelectedIds([]);
+            setSelectedItems([]);
+            setSelectionLoading(false);
+            return;
+        }
+
+        try {
+            const allItems = await fetchAllLedger(listParams, pagination.total);
+            setSelectedItems(allItems);
+            setSelectedIds(allItems.map((item) => item.id));
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setSelectionLoading(false);
+        }
+    }, [items, selectedIds, pagination.total, listParams]);
 
     // Reset page when filters change
     const handleSetWarehouseId = useCallback((val) => {
-        setWarehouseId(val);
+        setWarehouseId(resolveAllowedWarehouseId(val));
         setPage(1);
+        setSelectedIds([]);
+        setSelectedItems([]);
     }, []);
 
     const handleSetMovementType = useCallback((val) => {
@@ -156,6 +218,8 @@ export function useInventoryLog() {
             setAppliedEndDate(today);
         }
         setPage(1);
+        setSelectedIds([]);
+        setSelectedItems([]);
     }, []);
 
     const handleSetStartDate = useCallback((val) => {
@@ -165,6 +229,8 @@ export function useInventoryLog() {
             setAppliedEndDate(endDate);
         }
         setPage(1);
+        setSelectedIds([]);
+        setSelectedItems([]);
     }, [endDate]);
 
     const handleSetEndDate = useCallback((val) => {
@@ -174,11 +240,15 @@ export function useInventoryLog() {
             setAppliedEndDate(val);
         }
         setPage(1);
+        setSelectedIds([]);
+        setSelectedItems([]);
     }, [startDate]);
 
     const handleSearch = useCallback(() => {
         setSearchSku(skuName.trim());
         setPage(1);
+        setSelectedIds([]);
+        setSelectedItems([]);
     }, [skuName]);
 
     return {
@@ -205,9 +275,12 @@ export function useInventoryLog() {
         isFetching,
         isError,
         error,
+        refetch,
 
         // selection
         selectedIds,
+        selectedItems,
+        selectionLoading,
         toggleSelect,
         toggleAll,
         allSelected:

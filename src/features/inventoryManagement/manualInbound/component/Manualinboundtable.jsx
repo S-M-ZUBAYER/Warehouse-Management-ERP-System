@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Loader2 } from 'lucide-react';
+import { AlertCircle, ChevronDown, Loader2, RefreshCw } from 'lucide-react';
 import PortalActionMenu from '../../../../components/shared/PortalActionMenu';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -10,6 +10,7 @@ import PortalActionMenu from '../../../../components/shared/PortalActionMenu';
 export default function ManualInboundTable({
     items,
     selectedIds,
+    selectionLoading = false,
     onToggleSelect,
     onToggleAll,
     actionItems,
@@ -22,6 +23,8 @@ export default function ManualInboundTable({
     const [openActionId, setOpenActionId] = useState(null);
     const [expandedId,   setExpandedId]   = useState(null);
     const actionRefs = useRef({});
+    const showActions = actionItems?.length > 0;
+    const tableColSpan = showActions ? 8 : 7;
 
     const allSelected  = items.length > 0 && items.every((i) => selectedIds.includes(i.id));
     const someSelected = items.some((i) => selectedIds.includes(i.id)) && !allSelected;
@@ -57,14 +60,16 @@ export default function ManualInboundTable({
     // ── Error state ───────────────────────────────────────────────────────────
     if (isError) {
         return (
-            <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-400">
-                <p className="text-sm">{errorMessage}</p>
+            <div className="flex flex-col items-center justify-center py-20 gap-3">
+                <AlertCircle size={36} className="text-red-400 opacity-70" />
+                <p className="text-sm font-medium text-slate-700">{errorMessage}</p>
                 {onRetry && (
                     <button
+                        type="button"
                         onClick={onRetry}
-                        className="text-xs text-primary hover:underline"
+                        className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-primary border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors"
                     >
-                        Retry
+                        <RefreshCw size={12} /> Retry
                     </button>
                 )}
             </div>
@@ -77,15 +82,27 @@ export default function ManualInboundTable({
                 <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                     <tr className="border-b border-surface-border">
                         <th className="py-3 pl-5 w-12 text-left">
-                            <input
-                                type="checkbox"
-                                checked={allSelected}
-                                ref={(el) => { if (el) el.indeterminate = someSelected; }}
-                                onChange={onToggleAll}
-                                className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
-                            />
+                            {selectionLoading ? (
+                                <Loader2 size={16} className="text-primary animate-spin" />
+                            ) : (
+                                <input
+                                    type="checkbox"
+                                    checked={allSelected}
+                                    ref={(el) => { if (el) el.indeterminate = someSelected; }}
+                                    onChange={onToggleAll}
+                                    className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
+                                />
+                            )}
                         </th>
-                        {['Inbound ID', 'Image', 'Warehouse Name', 'Supplier', 'Received Date', 'Details', 'Actions'].map((h) => (
+                        {[
+                            'Inbound ID',
+                            'Image',
+                            'Warehouse Name',
+                            'Supplier',
+                            'Received Date',
+                            'Details',
+                            ...(showActions ? ['Actions'] : []),
+                        ].map((h) => (
                             <th key={h} className="py-3 pr-4 text-left text-sm font-semibold text-slate-700">{h}</th>
                         ))}
                     </tr>
@@ -94,7 +111,7 @@ export default function ManualInboundTable({
                 <tbody className="divide-y divide-surface-border">
                     {items.length === 0 ? (
                         <tr>
-                            <td colSpan={8} className="py-14 text-center text-sm text-slate-400">
+                            <td colSpan={tableColSpan} className="py-14 text-center text-sm text-slate-400">
                                 {isFetching ? (
                                     <span className="flex items-center justify-center gap-2">
                                         <Loader2 size={14} className="animate-spin" /> Loading...
@@ -170,44 +187,45 @@ export default function ManualInboundTable({
                                             </button>
                                         </td>
 
-                                        {/* 3-dot actions */}
-                                        <td className="py-3 pr-5">
-                                            <div className="relative" ref={(el) => (actionRefs.current[item.id] = el)}>
-                                                <button
-                                                    onClick={() => setOpenActionId(openActionId === item.id ? null : item.id)}
-                                                    className="flex items-center gap-0.5 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-surface-card transition-colors"
-                                                >
-                                                    {[1, 2, 3].map((d) => (
-                                                        <span key={d} className="w-1 h-1 rounded-full bg-current mx-px" />
-                                                    ))}
-                                                </button>
+                                        {showActions && (
+                                            <td className="py-3 pr-5">
+                                                <div className="relative" ref={(el) => (actionRefs.current[item.id] = el)}>
+                                                    <button
+                                                        onClick={() => setOpenActionId(openActionId === item.id ? null : item.id)}
+                                                        className="flex items-center gap-0.5 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-surface-card transition-colors"
+                                                    >
+                                                        {[1, 2, 3].map((d) => (
+                                                            <span key={d} className="w-1 h-1 rounded-full bg-current mx-px" />
+                                                        ))}
+                                                    </button>
 
-                                                <PortalActionMenu
-                                                    open={openActionId === item.id && actionItems?.length > 0}
-                                                    anchorRef={{ current: actionRefs.current[item.id] }}
-                                                    onClose={() => setOpenActionId(null)}
-                                                    width={144}
-                                                    className="py-1.5"
-                                                >
-                                                    {actionItems?.map(({ label, onClick, danger, icon: Icon }) => (
-                                                        <button
-                                                            key={label}
-                                                            onClick={() => { onClick?.(item); setOpenActionId(null); }}
-                                                            className={`flex items-center gap-2.5 w-full text-left px-4 py-2 text-xs transition-colors ${danger ? 'text-red-500 hover:bg-red-50' : 'text-slate-700 hover:bg-surface-card'}`}
-                                                        >
-                                                            {Icon && <Icon size={13} className="text-slate-400" />}
-                                                            {label}
-                                                        </button>
-                                                    ))}
-                                                </PortalActionMenu>
-                                            </div>
-                                        </td>
+                                                    <PortalActionMenu
+                                                        open={openActionId === item.id && showActions}
+                                                        anchorRef={{ current: actionRefs.current[item.id] }}
+                                                        onClose={() => setOpenActionId(null)}
+                                                        width={144}
+                                                        className="py-1.5"
+                                                    >
+                                                        {actionItems.map(({ label, onClick, danger, icon: Icon }) => (
+                                                            <button
+                                                                key={label}
+                                                                onClick={() => { onClick?.(item); setOpenActionId(null); }}
+                                                                className={`flex items-center gap-2.5 w-full text-left px-4 py-2 text-xs transition-colors ${danger ? 'text-red-500 hover:bg-red-50' : 'text-slate-700 hover:bg-surface-card'}`}
+                                                            >
+                                                                {Icon && <Icon size={13} className="text-slate-400" />}
+                                                                {label}
+                                                            </button>
+                                                        ))}
+                                                    </PortalActionMenu>
+                                                </div>
+                                            </td>
+                                        )}
                                     </tr>
 
                                     {/* ── Expanded detail row ── */}
                                     {expandedId === item.id && (
                                         <tr key={`${item.id}-exp`} className="bg-surface/50">
-                                            <td colSpan={8} className="px-10 py-4">
+                                            <td colSpan={tableColSpan} className="px-10 py-4">
                                                 {/* Summary fields */}
                                                 <div className="grid grid-cols-4 gap-4 text-xs mb-3">
                                                     <div>

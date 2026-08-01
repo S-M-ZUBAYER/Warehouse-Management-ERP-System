@@ -16,7 +16,11 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import { router } from "./router";
 import { queryClient } from "./lib/queryClient";
+import "./i18n";
+import { startDomTranslator } from "./i18nDomTranslator";
 import "./styles/globals.css";
+
+startDomTranslator();
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

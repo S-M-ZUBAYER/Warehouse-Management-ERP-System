@@ -64,6 +64,13 @@ export function Pagination({ page, totalPages, total, limit, onPageChange }) {
     if (totalPages <= 1) return null;
     const from = ((page - 1) * limit) + 1;
     const to   = Math.min(page * limit, total);
+    const visibleCount = Math.min(5, totalPages);
+    const startPage = Math.min(
+        Math.max(1, page - Math.floor(visibleCount / 2)),
+        Math.max(1, totalPages - visibleCount + 1),
+    );
+    const pageNumbers = Array.from({ length: visibleCount }, (_, i) => startPage + i);
+
     return (
         <div className="flex items-center justify-between px-5 py-3 border-t border-surface-border">
             <p className="text-xs text-slate-500">{from}–{to} of {total}</p>
@@ -73,7 +80,7 @@ export function Pagination({ page, totalPages, total, limit, onPageChange }) {
                     disabled={page === 1}
                     className="px-3 py-1.5 text-xs border border-surface-border rounded-lg disabled:opacity-40 hover:bg-surface-card transition-colors"
                 >Previous</button>
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => i + 1).map((p) => (
+                {pageNumbers.map((p) => (
                     <button
                         key={p}
                         onClick={() => onPageChange(p)}

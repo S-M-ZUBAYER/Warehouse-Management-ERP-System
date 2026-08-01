@@ -1,4 +1,12 @@
 import { ArrowRight } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { translateStaticText } from "../../../i18nDomTranslator";
+
+function translateNode(node, language) {
+  if (typeof node === "string") return translateStaticText(node, language);
+  if (Array.isArray(node)) return node.map((child) => translateNode(child, language));
+  return node;
+}
 
 export default function PrimaryButton({
   loading = false,
@@ -7,6 +15,8 @@ export default function PrimaryButton({
   variant = "primary",
   ...props
 }) {
+  const { i18n } = useTranslation();
+  const language = i18n.resolvedLanguage || i18n.language;
   const variants = {
     primary: {
       background: "#004368",
@@ -66,7 +76,7 @@ export default function PrimaryButton({
         />
       ) : (
         <>
-          {children}
+          {translateNode(children, language)}
           {variant === "primary" && <ArrowRight size={15} />}
         </>
       )}

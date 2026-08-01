@@ -272,9 +272,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Bell, ChevronRight, User, KeyRound, Lock, LogOut, X } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
+import LanguageSelector from '../shared/LanguageSelector';
+import { getPageTitleKey } from '../../i18n';
 
 const parseJson = (value) => {
     try { return value ? JSON.parse(value) : null; } catch { return null; }
@@ -282,15 +285,54 @@ const parseJson = (value) => {
 
 const getFirstValue = (...values) => values.find((value) => value !== undefined && value !== null && String(value).trim() !== '');
 
+const getAuthAssetOrigin = () => {
+    const configured = String(import.meta.env.VITE_AUTH_BASE_URL || window.location.origin || '').trim();
+    try {
+        const url = new URL(configured, window.location.origin);
+        return url.origin;
+    } catch {
+        return configured.replace(/\/api\/v\d+\/?$/i, '').replace(/\/+$/, '');
+    }
+};
+
 const normalizeImageSrc = (image) => {
     if (!image) return '';
-    const src = String(image);
+    const src = String(image).trim();
     if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('data:image')) return src;
+    if (src.startsWith('/uploads/') || src.startsWith('uploads/')) {
+        return `${getAuthAssetOrigin()}${src.startsWith('/') ? src : `/${src}`}`;
+    }
     return `data:image/jpeg;base64,${src}`;
+};
+
+const formatListValue = (value) => {
+    if (!value) return '';
+    if (Array.isArray(value)) {
+        return value
+            .map((item) => {
+                if (!item || typeof item !== 'object') return item;
+                return item.name || item.label || item.shopName || item.storeName || item.warehouseName || item.id;
+            })
+            .filter(Boolean)
+            .join(', ');
+    }
+    if (typeof value === 'object') {
+        return value.name || value.label || value.shopName || value.storeName || value.warehouseName || '';
+    }
+    return value;
+};
+
+const summarizePermissions = (permissions) => {
+    if (!permissions || typeof permissions !== 'object') return '';
+    return Object.entries(permissions)
+        .filter(([, value]) => value === true || value?.access === true)
+        .map(([key]) => key.replace(/_/g, ' '))
+        .join(', ');
 };
 
 export default function Topbar({ PageTitle, showBack = false, onBack }) {
     const navigate = useNavigate();
+    const { t } = useTranslation();
     const [showDropdown, setShowDropdown] = useState(false);
     const [showProfileModal, setShowProfileModal] = useState(false);
     const dropdownRef = useRef(null);
@@ -316,7 +358,7 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
             storedWarehouseUser.userName,
             storedWarehouseUser.name,
             email,
-            'User'
+            t('topbar.user')
         );
 
         const image = getFirstValue(
@@ -373,6 +415,45 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
         );
         const department = getFirstValue(oldApiUser.department, zustandUser.department, storedWarehouseUser.department);
         const designation = getFirstValue(oldApiUser.designation, zustandUser.designation, storedWarehouseUser.designation);
+        const companyName = getFirstValue(
+            oldApiUser.companyName,
+            oldApiUser.shopName,
+            oldApiUser.company?.name,
+            zustandUser.companyName,
+            zustandUser.shopName,
+            zustandUser.company?.name,
+            storedWarehouseUser.companyName,
+            storedWarehouseUser.shopName,
+            storedWarehouseUser.company?.name
+        );
+        const timezone = getFirstValue(oldApiUser.timezone, zustandUser.timezone, storedWarehouseUser.timezone);
+        const createdDate = getFirstValue(
+            oldApiUser.createdAt,
+            oldApiUser.created_at,
+            zustandUser.createdAt,
+            zustandUser.created_at,
+            storedWarehouseUser.createdAt,
+            storedWarehouseUser.created_at
+        );
+        const lastLogin = getFirstValue(
+            oldApiUser.lastLogin,
+            oldApiUser.last_login,
+            oldApiUser.lastLoginAt,
+            zustandUser.lastLogin,
+            zustandUser.last_login,
+            zustandUser.lastLoginAt,
+            storedWarehouseUser.lastLogin,
+            storedWarehouseUser.last_login,
+            storedWarehouseUser.lastLoginAt
+        );
+        const emailVerified = getFirstValue(
+            oldApiUser.emailVerified,
+            oldApiUser.email_verified,
+            zustandUser.emailVerified,
+            zustandUser.email_verified,
+            storedWarehouseUser.emailVerified,
+            storedWarehouseUser.email_verified
+        );
         const warehouse = getFirstValue(
             oldApiUser.warehouse?.name,
             oldApiUser.warehouseName,
@@ -380,6 +461,28 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
             zustandUser.warehouseName,
             storedWarehouseUser.warehouse?.name,
             storedWarehouseUser.warehouseName
+        );
+        const assignedWarehouses = formatListValue(getFirstValue(
+            oldApiUser.warehouses,
+            oldApiUser.assignedWarehouses,
+            zustandUser.warehouses,
+            zustandUser.assignedWarehouses,
+            storedWarehouseUser.warehouses,
+            storedWarehouseUser.assignedWarehouses
+        ));
+        const storeAccess = formatListValue(getFirstValue(
+            oldApiUser.stores,
+            oldApiUser.platformStores,
+            oldApiUser.storeAccess,
+            zustandUser.stores,
+            zustandUser.platformStores,
+            zustandUser.storeAccess,
+            storedWarehouseUser.stores,
+            storedWarehouseUser.platformStores,
+            storedWarehouseUser.storeAccess
+        ));
+        const permissionSummary = summarizePermissions(
+            oldApiUser.permissions || zustandUser.permissions || storedWarehouseUser.permissions
         );
 
         return {
@@ -391,9 +494,17 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
             phone,
             department,
             designation,
+            companyName,
+            timezone,
+            createdDate,
+            lastLogin,
+            emailVerified: typeof emailVerified === 'boolean' ? (emailVerified ? 'Verified' : 'Not verified') : emailVerified,
             warehouse,
+            assignedWarehouses,
+            storeAccess,
+            permissionSummary,
         };
-    }, [authUser, authTokenData]);
+    }, [authUser, authTokenData, t]);
 
     useEffect(() => {
         const handler = (e) => {
@@ -406,8 +517,11 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
     }, []);
 
     const handleLogout = () => {
+        localStorage.removeItem('whmAccessToken');
+        localStorage.removeItem('whmRefreshToken');
+        localStorage.removeItem('warehouseUser');
         logout();
-        navigate('/warehouse_management/login');
+        navigate('/warehouse_management/login', { replace: true });
     };
 
     const initials = profile.fullName
@@ -419,19 +533,26 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
         .slice(0, 2) || 'U';
 
     const profileRows = [
-        ['Name', profile.fullName],
-        ['Email', profile.email],
-        ['Account ID', profile.accountId],
-        ['Role', profile.role],
-        ['Phone', profile.phone],
-        ['Department', profile.department],
-        ['Designation', profile.designation],
-        ['Warehouse', profile.warehouse],
+        [t('topbar.name'), profile.fullName],
+        [t('topbar.email'), profile.email],
+        [t('topbar.role'), profile.role],
+        [t('topbar.phone'), profile.phone],
+        ['Company / Shop', profile.companyName],
+        [t('topbar.department'), profile.department],
+        [t('topbar.designation'), profile.designation],
+        [t('topbar.warehouse'), profile.warehouse],
+        ['Assigned Warehouses', profile.assignedWarehouses],
+        ['Store Access', profile.storeAccess],
+        ['Permissions', profile.permissionSummary],
+        ['Timezone', profile.timezone],
+        ['Created Date', profile.createdDate],
+        ['Last Login', profile.lastLogin],
+        ['Email Verified', profile.emailVerified],
     ];
 
     const dropdownItems = [
         {
-            icon: User, label: 'Profile Info',
+            icon: User, label: t('topbar.profileInfo'),
             onClick: () => { setShowProfileModal(true); setShowDropdown(false); },
         },
         // {
@@ -442,8 +563,12 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
         //     icon: Lock, label: 'Set Password',
         //     onClick: () => { navigate('/warehouse_management/settings/password'); setShowDropdown(false); },
         // },
-        { icon: LogOut, label: 'Log Out', onClick: handleLogout, danger: true },
+        { icon: LogOut, label: t('topbar.logOut'), onClick: handleLogout, danger: true },
     ];
+    const translatedPageTitle = typeof PageTitle === 'string'
+        ? t(getPageTitleKey(PageTitle), { defaultValue: PageTitle })
+        : PageTitle;
+    const pageTitleAriaLabel = typeof translatedPageTitle === 'string' ? translatedPageTitle : undefined;
 
     return (
         <header className="flex items-center justify-between flex-shrink-0" style={{ height: '64px' }}>
@@ -454,27 +579,28 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
                             type="button"
                             onClick={onBack}
                             className="group flex items-center gap-3 rounded-lg text-primary-text transition-colors hover:text-primary"
-                            aria-label={PageTitle}
+                            aria-label={pageTitleAriaLabel}
                         >
                             <span className="flex h-9 w-9 items-center justify-center rounded-full border border-surface-border bg-white text-slate-600 transition-colors group-hover:bg-surface-card group-hover:text-primary">
                                 <ArrowLeft size={18} />
                             </span>
                             <span className="text-[26px] font-semibold font-display">
-                                {PageTitle}
+                                {translatedPageTitle}
                             </span>
                         </button>
                     ) : (
                         <h1 className="text-[26px] font-semibold font-display text-primary-text">
-                            {PageTitle}
+                            {translatedPageTitle}
                         </h1>
                     )}
                 </div>
             )}
 
             <div className="flex items-center gap-3 ml-auto">
-                <button className="relative w-11 h-11 flex items-center justify-center rounded-full transition-colors bg-white cursor-pointer hover:bg-slate-200">
+                <LanguageSelector />
+                {/* <button className="relative w-11 h-11 flex items-center justify-center rounded-full transition-colors bg-white cursor-pointer hover:bg-slate-200">
                     <Bell size={18} className="text-primary" strokeWidth={1.8} />
-                </button>
+                </button> */}
 
                 <div className="relative bg-white rounded-3xl" ref={dropdownRef}>
                     <button
@@ -529,11 +655,11 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
             </div>
             {showProfileModal && (
                 <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
-                    <div className="w-full max-w-xl bg-white rounded-2xl shadow-2xl overflow-hidden">
+                    <div className="w-full max-w-3xl max-h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
                         <div className="flex items-start justify-between px-6 py-4 border-b border-surface-border">
                             <div>
-                                <h2 className="text-lg font-bold text-slate-800 font-display">Profile Info</h2>
-                                <p className="text-xs text-slate-500 mt-1">Signed-in account details</p>
+                                <h2 className="text-lg font-bold text-slate-800 font-display">{t('topbar.profileInfo')}</h2>
+                                <p className="text-xs text-slate-500 mt-1">{t('topbar.signedInAccountDetails')}</p>
                             </div>
                             <button
                                 onClick={() => setShowProfileModal(false)}
@@ -543,7 +669,7 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
                             </button>
                         </div>
 
-                        <div className="p-6">
+                        <div className="p-6 overflow-y-auto">
                             <div className="flex items-center gap-4 mb-5">
                                 <div
                                     className="w-16 h-16 border-2 border-primary rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 text-base font-bold"
@@ -557,11 +683,11 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
                                 </div>
                                 <div className="min-w-0">
                                     <p className="text-base font-bold text-slate-800 truncate">{profile.fullName}</p>
-                                    <p className="text-xs text-slate-500 truncate">{profile.email || 'No email found'}</p>
+                                    <p className="text-xs text-slate-500 truncate">{profile.email || t('topbar.noEmailFound')}</p>
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 gap-3">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 {profileRows.map(([label, value]) => (
                                     <div key={label} className="rounded-xl border border-surface-border bg-slate-50/70 px-4 py-3">
                                         <p className="text-[11px] uppercase tracking-wide text-slate-400 font-semibold mb-1">{label}</p>
@@ -576,7 +702,7 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
                                 onClick={() => setShowProfileModal(false)}
                                 className="px-5 py-2 text-sm font-semibold rounded-lg bg-primary text-white hover:bg-primary-dark"
                             >
-                                Close
+                                {t('topbar.close')}
                             </button>
                         </div>
                     </div>

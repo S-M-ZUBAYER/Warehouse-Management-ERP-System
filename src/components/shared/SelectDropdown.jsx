@@ -1,5 +1,7 @@
 import { ChevronDown } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { translateStaticText } from "../../i18nDomTranslator";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SelectDropdown — matches Figma filter dropdowns (Warehouse, Status, Country, SKU)
@@ -14,8 +16,13 @@ export default function SelectDropdown({
   onChange,
   className = "",
 }) {
+  const { i18n } = useTranslation();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
+  const translate = (value) =>
+    typeof value === "string"
+      ? translateStaticText(value, i18n.resolvedLanguage || i18n.language)
+      : value;
 
   useEffect(() => {
     const handler = (e) => {
@@ -31,7 +38,7 @@ export default function SelectDropdown({
     <div className={`relative ${className}`} ref={ref}>
       {label && (
         <p className="text-xs font-semibold text-slate-600 mb-1.5 font-body">
-          {label}
+          {translate(label)}
         </p>
       )}
       <button
@@ -46,7 +53,7 @@ export default function SelectDropdown({
             display ? "text-slate-700 font-body" : "text-slate-400 font-body"
           }
         >
-          {display || placeholder}
+          {translate(display || placeholder)}
         </span>
         <ChevronDown
           size={14}
@@ -70,7 +77,7 @@ export default function SelectDropdown({
               className={`w-full text-left px-4 py-2 text-sm transition-colors font-body
                 ${value === opt ? "text-primary font-semibold bg-blue-50" : "text-slate-700 hover:bg-surface-card"}`}
             >
-              {opt}
+              {translate(opt)}
             </button>
           ))}
         </div>

@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useNavigationType } from "react-router-dom";
 import { Calendar, X } from "lucide-react";
 import { useMemo } from "react";
 import Topbar from "../../../../components/layout/Topbar";
@@ -8,37 +8,19 @@ import OrderProcessingFilterBar from "../../shared/components/OrderProcessingFil
 import OrderTable from "../../shared/components/OrderTable";
 import OrderFooter from "../../shared/components/OrderFooter";
 import { useOrderList } from "../../shared/hooks/useOrderList";
-import { fetchCanceledOrderTabCounts } from "../../shared/utils/orderApi";
+import {
+  formatDateInput,
+  getDateRangeLabel,
+  getPresetRange,
+} from "../../shared/components/OrderDateRangePicker";
+import { fetchCanceledOrderTabCounts, getStoredOrderListReturnState, setOrderDetailReturnContext } from "../../shared/utils/orderApi";
+import { getDashboardOrderStatusFilter } from "../utils/dashboardOrderStatusFilter";
 
 const SUB_TABS = [
   { label: "All", count: "00" },
   { label: "Cancelation Request", count: "00" },
   { label: "Cancelled", count: "00" },
 ];
-
-const SECONDS_IN_DAY = 24 * 60 * 60;
-
-const startOfTodaySeconds = () => {
-  const now = new Date();
-  return Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000);
-};
-
-const endOfTodaySeconds = () => Math.floor(Date.now() / 1000);
-
-const getPresetRange = (preset) => {
-  const end = endOfTodaySeconds();
-  if (preset === "today") return { start: startOfTodaySeconds(), end };
-  if (preset === "last_month") return { start: end - 30 * SECONDS_IN_DAY, end };
-  return { start: end - 7 * SECONDS_IN_DAY, end };
-};
-
-const formatDateInput = (seconds) => {
-  const date = new Date(seconds * 1000);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
 
 const dateInputToSeconds = (value, endOfDay = false) => {
   if (!value) return null;
@@ -52,13 +34,28 @@ const dateInputToSeconds = (value, endOfDay = false) => {
 export default function CanceledOrder() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState("All");
-  const [datePreset, setDatePreset] = useState("last_7_days");
-  const [dateRange, setDateRange] = useState(() => getPresetRange("last_7_days"));
+  const navigationType = useNavigationType();
+  const dashboardFilter = useMemo(
+    () => getDashboardOrderStatusFilter(location),
+    [location.search, location.state]
+  );
+  const restoredPageState = useMemo(
+    () => getStoredOrderListReturnState({ pathname: location.pathname, navigationType, pageType: "canceled" }),
+    [location.pathname, navigationType]
+  );
+  const [activeTab, setActiveTab] = useState(() =>
+    SUB_TABS.some((tab) => tab.label === restoredPageState.activeTab)
+      ? restoredPageState.activeTab
+      : SUB_TABS.some((tab) => tab.label === dashboardFilter.tab)
+        ? dashboardFilter.tab
+        : "All"
+  );
+  const [datePreset, setDatePreset] = useState(() => restoredPageState.datePreset || dashboardFilter.datePreset || "last_7_days");
+  const [dateRange, setDateRange] = useState(() => restoredPageState.dateRange || dashboardFilter.dateRange || getPresetRange("last_7_days"));
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [customStart, setCustomStart] = useState(() => formatDateInput(dateRange.start));
   const [customEnd, setCustomEnd] = useState(() => formatDateInput(dateRange.end));
-  const list = useOrderList({ pageType: "canceled", activeTab, dateRange });
+  const list = useOrderList({ pageType: "canceled", activeTab, datePreset, dateRange });
   const { data: tabCounts = {} } = useQuery({
     queryKey: [
       "order-management",
@@ -80,15 +77,26 @@ export default function CanceledOrder() {
         tabs: SUB_TABS.map((tab) => tab.label),
       }),
     enabled: list.hasStore,
-    staleTime: 1000 * 30,
+    staleTime: 1000 * 60 * 30,
+    gcTime: 1000 * 60 * 30,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
-  const dateLabel = useMemo(() => {
-    if (datePreset === "today") return "Today";
-    if (datePreset === "last_month") return "Last 1 Month";
-    if (datePreset === "custom") return `${formatDateInput(dateRange.start)} to ${formatDateInput(dateRange.end)}`;
-    return "Last 7 Days";
-  }, [datePreset, dateRange]);
+  useEffect(() => {
+    if (!restoredPageState.activeTab && SUB_TABS.some((tab) => tab.label === dashboardFilter.tab)) {
+      setActiveTab(dashboardFilter.tab);
+    }
+
+    if (!restoredPageState.dateRange && dashboardFilter.dateRange) {
+      setDatePreset(dashboardFilter.datePreset || "custom");
+      setDateRange(dashboardFilter.dateRange);
+      setCustomStart(formatDateInput(dashboardFilter.dateRange.start));
+      setCustomEnd(formatDateInput(dashboardFilter.dateRange.end));
+    }
+  }, [dashboardFilter, restoredPageState.activeTab, restoredPageState.dateRange]);
+
+  const dateLabel = useMemo(() => getDateRangeLabel(datePreset, dateRange), [datePreset, dateRange]);
 
   const applyPreset = (preset) => {
     const nextRange = getPresetRange(preset);
@@ -110,6 +118,10 @@ export default function CanceledOrder() {
 
   const handleDetails = (order) => {
     list.cacheOrderForDetail(order);
+    setOrderDetailReturnContext({
+      fromPath: location.pathname,
+      orderId: order.id,
+    });
     navigate(`/warehouse_management/orders/detail/${encodeURIComponent(order.id)}`, {
       state: { order, fromPath: location.pathname },
     });
@@ -220,20 +232,22 @@ export default function CanceledOrder() {
           </div>
         </div>
 
-        <OrderStateMessage list={list} />
-
         <OrderTable
           orders={list.orders}
-          loading={list.isLoading || list.isFetching}
+          loading={list.isLoading}
           isError={list.isError}
-          errorMessage={list.error?.message || "Failed to load orders"}
+          errorMessage={list.error?.response?.data?.message || list.error?.message || "Failed to load orders"}
+          onRetry={list.refetch}
           selectedIds={list.selectedIds}
+          selectionLoading={list.selectionLoading}
           onToggleSelect={list.toggleSelect}
           onToggleAll={list.toggleAll}
           allSelected={list.allSelected}
           pagination={list.pagination}
           page={list.page}
           setPage={list.setPage}
+          statusSortDirection={list.statusSortDirection}
+          onStatusSortChange={list.setStatusSortDirection}
           showActionsCol={false}
           compact
           onDetails={handleDetails}
@@ -248,9 +262,4 @@ export default function CanceledOrder() {
 function formatCount(value) {
   const count = Number(value || 0);
   return String(Number.isFinite(count) ? count : 0).padStart(2, "0");
-}
-
-function OrderStateMessage({ list }) {
-  if (list.isError) return <div className="px-5 py-2 text-xs text-red-500">{list.error?.message || "Failed to load orders"}</div>;
-  return null;
 }

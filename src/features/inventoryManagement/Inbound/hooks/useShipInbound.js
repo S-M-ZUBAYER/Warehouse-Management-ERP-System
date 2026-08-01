@@ -10,11 +10,17 @@ import api from '../../../../lib/api';
 const shipInbound = ({ id, body }) =>
     api.put(`/inbound/${id}/ship`, body).then((r) => r.data);
 
+const shipInboundTargets = async ({ targets, body }) => {
+    const rows = Array.isArray(targets) ? targets : [targets];
+    const results = await Promise.all(rows.map((row) => shipInbound({ id: row.id, body })));
+    return { results, count: rows.length };
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Hook — manages the Ship modal form and mutation
 // Used by InboundDraftPage (ship action from 3-dot menu or Ship button)
 // ─────────────────────────────────────────────────────────────────────────────
-export function useShipInbound() {
+export function useShipInbound({ onSuccess } = {}) {
     const queryClient = useQueryClient();
 
     const [shipTarget, setShipTarget] = useState(null);
@@ -29,8 +35,8 @@ export function useShipInbound() {
     });
     const [shipErrors, setShipErrors] = useState({});
 
-    const openShipModal = useCallback((item) => {
-        setShipTarget(item);
+    const openShipModal = useCallback((itemOrItems) => {
+        setShipTarget(itemOrItems);
         setShipForm({
             trackingNumber: '',
             purchaseCurrency: 'USD',
@@ -58,12 +64,17 @@ export function useShipInbound() {
     }, [shipForm]);
 
     const shipMutation = useMutation({
-        mutationFn: shipInbound,
-        onSuccess: (data) => {
-            toast.success(`Inbound ${data.inbound_id} is now On The Way`);
+        mutationFn: shipInboundTargets,
+        onSuccess: ({ results = [], count = 0 }) => {
+            if (count > 1) {
+                toast.success(`${count} inbound orders are now On The Way`);
+            } else {
+                toast.success(`Inbound ${results[0]?.inbound_id ?? ''} is now On The Way`);
+            }
             queryClient.invalidateQueries({ queryKey: INBOUND_KEYS.all() });
             setShowShipModal(false);
             setShipTarget(null);
+            onSuccess?.();
         },
         onError: (err) => {
             const msg = err?.response?.data?.message ?? 'Failed to ship inbound';
@@ -80,8 +91,13 @@ export function useShipInbound() {
     const confirmShip = useCallback(() => {
         const e = validateShip();
         if (Object.keys(e).length) { setShipErrors(e); return; }
+        const targets = Array.isArray(shipTarget) ? shipTarget : [shipTarget].filter(Boolean);
+        if (targets.length === 0) {
+            toast.error('Please select at least one inbound order');
+            return;
+        }
         shipMutation.mutate({
-            id: shipTarget.id,
+            targets,
             body: {
                 trackingNumber: shipForm.trackingNumber.trim(),
                 purchaseCurrency: shipForm.purchaseCurrency.trim(),

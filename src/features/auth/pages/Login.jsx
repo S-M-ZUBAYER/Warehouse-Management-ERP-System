@@ -7,8 +7,12 @@ import AuthLayout from "../components/AuthLayout";
 import InputField from "../components/InputField";
 import PrimaryButton from "../components/PrimaryButton";
 import { SuccessAlert } from "../components/Alerts";
+import { useTranslation } from "react-i18next";
+import { translateStaticText } from "../../../i18nDomTranslator";
 
 export default function Login() {
+  const { i18n } = useTranslation();
+  const translate = (value) => translateStaticText(value, i18n.resolvedLanguage || i18n.language);
   const [showModal, setShowModal] = useState(false);
 
   const {
@@ -41,7 +45,7 @@ export default function Login() {
         {/* Page heading */}
         <div className="mb-8">
           <h1 className="text-3xl text-center font-bold mb-1.5 text-primary font-display">
-            Log In
+            {translate("Log In")}
           </h1>
         </div>
 
@@ -100,7 +104,7 @@ export default function Login() {
                 border: "none",
               }}
             >
-              Forgot password?
+              {translate("Forgot password?")}
             </button>
           </div>
 
@@ -111,12 +115,12 @@ export default function Login() {
 
         {/* Register link */}
         <p className="text-center mt-12 text-sm" style={{ color: "#64748B" }}>
-          Don't have an account?{" "}
+          {translate("Don't have an account?")}{" "}
           <Link
             to="/warehouse_management/register"
             className="font-bold transition-colors text-primary font-body"
           >
-            Create account
+            {translate("Create account")}
           </Link>
         </p>
       </div>
@@ -144,11 +148,11 @@ export default function Login() {
                 <Lock size={18} />
               </div>
               <h2 className="text-xl font-bold text-primary font-display">
-                Reset Password
+                {translate("Reset Password")}
               </h2>
             </div>
             <p className="text-sm mb-6" style={{ color: "#64748B" }}>
-              Enter your email and we'll send you a reset code.
+              {translate("Enter your email and we'll send you a reset code.")}
             </p>
 
             <form onSubmit={handleForgotSubmit}>
@@ -176,7 +180,7 @@ export default function Login() {
                     color: "#64748B",
                   }}
                 >
-                  Cancel
+                  {translate("Cancel")}
                 </button>
                 <PrimaryButton
                   type="submit"

@@ -4,13 +4,13 @@
 //          Total SKU | Set As Default (toggle)
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useRef, useState } from "react";
-import { MoreHorizontal, Pencil, Trash2, Eye } from "lucide-react";
+import { useState } from "react";
+import { AlertCircle, MoreHorizontal, Pencil, RefreshCw, Trash2, Eye } from "lucide-react";
 import PortalActionMenu from "../../../components/shared/PortalActionMenu";
 
-export default function WarehouseTable({ warehouses, onToggleDefault, onDetails, onEdit, onDelete }) {
+export default function WarehouseTable({ warehouses, loading = false, isError = false, errorMessage = "Failed to load warehouses", onRetry, onToggleDefault, onDetails, onEdit, onDelete }) {
   const [openActionId, setOpenActionId] = useState(null);
-  const actionRefs = useRef({});
+  const [openActionAnchor, setOpenActionAnchor] = useState(null);
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-base font-body">
@@ -38,7 +38,27 @@ export default function WarehouseTable({ warehouses, onToggleDefault, onDetails,
         </thead>
 
         <tbody className="divide-y text-sm divide-surface-border">
-          {warehouses.length === 0 ? (
+          {loading ? (
+            <WarehouseTableSkeleton />
+          ) : isError ? (
+            <tr>
+              <td colSpan={6} className="py-20 text-center">
+                <div className="flex flex-col items-center justify-center gap-3">
+                  <AlertCircle size={36} className="text-red-400 opacity-70" />
+                  <p className="text-sm font-medium text-slate-700">{errorMessage}</p>
+                  {onRetry && (
+                    <button
+                      type="button"
+                      onClick={onRetry}
+                      className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-primary border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors"
+                    >
+                      <RefreshCw size={12} /> Retry
+                    </button>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ) : warehouses.length === 0 ? (
             <tr>
               <td
                 colSpan={6}
@@ -82,17 +102,23 @@ export default function WarehouseTable({ warehouses, onToggleDefault, onDetails,
                   />
                 </td>
                 <td className="py-3.5">
-                  <div className="relative" ref={(el) => (actionRefs.current[wh.id] = el)}>
+                  <div className="relative">
                     <button
-                      onClick={() => setOpenActionId(openActionId === wh.id ? null : wh.id)}
+                      onClick={(event) => {
+                        setOpenActionAnchor(event.currentTarget);
+                        setOpenActionId(openActionId === wh.id ? null : wh.id);
+                      }}
                       className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100"
                     >
                       <MoreHorizontal size={16} />
                     </button>
                     <PortalActionMenu
                       open={openActionId === wh.id}
-                      anchorRef={{ current: actionRefs.current[wh.id] }}
-                      onClose={() => setOpenActionId(null)}
+                      anchorRef={{ current: openActionAnchor }}
+                      onClose={() => {
+                        setOpenActionId(null);
+                        setOpenActionAnchor(null);
+                      }}
                       width={140}
                     >
                       <button onClick={() => { setOpenActionId(null); onDetails?.(wh); }} className="w-full flex items-center gap-2 px-4 py-2 text-xs text-slate-700 hover:bg-slate-50">
@@ -117,6 +143,31 @@ export default function WarehouseTable({ warehouses, onToggleDefault, onDetails,
 }
 
 // ── Pill toggle switch matching Figma grey pill style ──────────────────────
+function WarehouseTableSkeleton() {
+  return Array.from({ length: 6 }).map((_, index) => (
+    <tr key={index} className="animate-pulse">
+      <td className="py-3.5 pr-6 pl-1">
+        <div className="h-4 w-36 rounded bg-slate-200" />
+      </td>
+      <td className="py-3.5 pr-6">
+        <div className="h-4 w-28 rounded bg-slate-200" />
+      </td>
+      <td className="py-3.5 pr-6">
+        <div className="h-4 w-52 rounded bg-slate-200" />
+      </td>
+      <td className="py-3.5 pr-6">
+        <div className="h-4 w-14 rounded bg-slate-200" />
+      </td>
+      <td className="py-3.5">
+        <div className="h-5 w-9 rounded-full bg-slate-200" />
+      </td>
+      <td className="py-3.5">
+        <div className="h-8 w-8 rounded-lg bg-slate-200" />
+      </td>
+    </tr>
+  ));
+}
+
 function ToggleSwitch({ checked, onChange }) {
   return (
     <button

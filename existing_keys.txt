@@ -1,0 +1,386 @@
+(select warehouse first)
+*Choose a file or drag & drop it here
+*Product Details
+*Product Name
+*Product Price
+*SKU Name
+*Select Warehouse
+*Size (cm)
+*Weight (kg)
+30 Days left
+6-character code
+? This action cannot be undone.
+AWB
+Account ID
+Account Password here
+Action
+Actions
+Active
+Active filters applied
+Add
+Add Product via Template
+Add Products
+Add Single Merchant SKU
+Add Single Product
+Add a new Merchant SKU to your inventory.
+Address
+Address here
+AfterShip Content
+AfterShip Courier Rates
+AfterShip Status
+All
+All Countries
+All Platforms
+All Shops
+All Status
+All Stores
+All mapped and not-mapped platform SKU rows for selected store(s). Select not-mapped rows or rows mapped to another Merchant SKU to map/change to this Merchant SKU.
+Already mapped
+Any additional notes about this receipt...
+Applies to
+Apply
+Archived
+Are you sure you want to cancel this upload? The selected file will be cleared.
+Are you sure you want to unlink
+Area
+Area name here
+Attribute
+Authorization Status
+Auto Mapping
+Auto generated order number
+Available
+Available For Platform
+Available Inventory
+Available in Inventory
+Batch Delete
+Batch Export
+Batch Print
+Batch Stock Alert Setting
+Browse File
+Bulk Action
+Buyer / Receiver Information
+Buyer Name
+Buyer address here
+Buyer name here
+COD Amount
+COD Status
+Cancel
+Cancel Template Import?
+Cancelled Orders
+Change File
+Choose XLSX file
+Choose a file or drag & drop it here
+Choose which platform and store to sync, or leave blank to sync all.
+City
+City name here
+Clear all
+Clear filters
+Close
+Code
+Combine SKU
+Combine SKU Details
+Company
+Company / warehouse name
+Completed Inbound List
+Completed Orders
+Confirm new password
+Confirm password
+Cost Price
+Country
+Country name here
+Courier
+Create Time
+Created
+Currency Type
+Current SKU is child in this group
+Current mapped
+Daily sales for selected month
+Daily stock-in and stock-out for selected month
+Date Field
+Date From
+Date To
+Default
+Default Warehouse
+Delete
+Delete Product
+Delete Selected Products
+Department
+Department here
+Describe the role
+Description
+Designation
+Designation here
+Destination Country
+Details
+Download Template
+Download template again
+EasyParcel Content
+EasyParcel Courier Rates
+Edit
+Edit Merchant SKU
+Email
+End date
+Enter Your Email Address
+Enter Your User Name
+Enter new password
+Enter password
+Enter your password
+Estimated Arrival
+Export
+Failed to load AfterShip parcels
+Failed to load SKUs
+Failed to load manual orders
+Failed to load products
+Failed to load warehouses
+Fill sender, receiver and package information to show available courier companies and prices.
+Full pickup address
+GTIN here
+Generate Merchant SKU
+Generated SKU
+Group Sync Child SKUs
+Group Sync Merchant SKU List
+Height
+ID here
+IN dashboard these mutilanguage not work
+Image
+In Transit
+In Transit Inventory
+In transit Inventory
+Inactive
+Inbound ID
+Input role name here
+Inventory Status
+Items
+JPEG or PNG, less than 5MB
+Label ID
+Last 30 days
+Last 7 days
+Last 90 days
+Length
+Live Status
+Loading
+Loading AfterShip parcels...
+Loading Merchant SKUs...
+Loading child SKUs...
+Loading eligible SKUs...
+Loading store products...
+Loading warehouses...
+Loading...
+Location
+Lock Quantity
+Low Stock
+Manager
+Manager name here
+Manual Inbound List
+Manual Order Details
+Manual Order List
+Manual Order Status
+Manual orders are shown only here and are not mixed with Order Processing orders.
+Mapped
+Mapped Products
+Mapped Store & Platform Product List
+Mapping Results
+Marketplace
+Merchant SKU
+Merchant SKU ID
+Minimum Stock Quantity here
+Name
+Name here
+New Orders
+Next
+No AfterShip parcels found for this status.
+No SKU found
+No active stores found
+No data
+No eligible same-warehouse SKUs found
+No group sync SKU added yet
+No manual orders found for this status.
+No mapped product found
+No merchant SKUs found for this warehouse
+No product SKU found in selected store(s)
+No products found
+No same-warehouse child SKU found
+No status history yet.
+No stores synced
+No warehouses found
+Not Mapped
+Not mapped
+Notes
+Open ID
+Open Waybill
+Order No
+Order Number
+Order Status
+Origin Country
+Out of Stock
+Package No.
+Package Size
+Package Weight
+Package weight kg
+Parent SKU:
+Particulars
+Payment
+Payment Certificate
+Payment Information
+Pending Orders
+Phone
+Phone Number
+Phone Number Here
+Pickup Address
+Pickup Orders
+Platform
+Platform (optional - blank = all)
+Please enter a valid minimum stock quantity
+Please select at least one product first.
+Please select products first
+Popup blocked. Please allow popups to print.
+Postcode
+Prepaid
+Previous
+Price
+Print
+Processed Orders
+Processing Orders
+Product
+Product Details
+Product Name
+Product SKU
+Product Status
+Product Status here
+Product details here
+Product details or JSON, e.g. {"platform":"tiktok","seller_sku":"Aface01N"}
+Product list
+Product weight
+Product weight here
+Products used in Combine SKUs or with stock on hand cannot be deleted.
+Qty
+Quantity
+Received Amount
+Received Date
+Receiver
+Retry
+Role
+Role Name
+SKU
+SKU Mapping By Merchant
+SKU Mapping By Product
+SKU Mapping by Merchant SKU
+SKU Mapping by Product
+SKU Name
+SKU Title
+SKU created successfully
+SKU deleted successfully
+SKU name here
+SKU updated successfully
+SKU/Model ID
+Sales
+Sales Trends
+Same-warehouse merchant SKUs are shown. A SKU can be child in multiple groups and can also be another parent SKU.
+Save
+Saving...
+Search
+Search SKU name...
+Search SKU or product name...
+Search Type
+Search child SKU by name...
+Search product name / SKU / ID
+Search sub-account, full name, email, or role
+Search warehouse...
+Search warehouses...
+Select
+Select All
+Select Country
+Select Date
+Select Date Range
+Select Payment Type
+Select Platform
+Select SKUs from the left panel
+Select Shop
+Select Time
+Select Warehouse
+Select a warehouse...
+Select role
+Select store first
+Select warehouse
+Selected Merchant SKU Products
+Selected SKU(s) deleted successfully
+Seller SKU
+Sender / Pickup Information
+Sender Name
+Sender phone
+Set
+Set Stock Alert
+Set minimum Stock
+Shipment Status
+Shipped Orders
+Shop ID
+Shop Platform
+Showing AfterShip label parcels and label statuses from the Shipping API.
+Shows parent and child merchant SKUs connected with this SKU.
+Size
+Start date
+State
+Status
+Stock
+Stock alert updated
+Stock-In
+Stock-Out
+Store
+Store (optional - blank = all stores)
+Store ID
+Store Nickname
+Store Nickname here
+Sub Account Link
+Sub Account Linking Status
+Supplier Name
+Supplier Reference
+Supplier Reference / PO No.
+Supplier name
+Sync
+Sync Products
+Sync completed
+Synchronize Results
+Syncing
+Syncing...
+This action cannot be undone.
+This merchant SKU is mapped with these store/product SKU rows.
+Today
+Today Orders
+Total
+Total Products
+Total SKU
+Total SKUs
+Tracking No.
+Tracking Number
+Unit
+Unit Price
+Unlink Store Mapping
+Unmapped
+Update this Merchant SKU without leaving the page.
+Updated
+Updated Time
+Updates per store
+Upload the completed Merchant SKU XLSX template with imageUrl or imageBase64.
+Use the downloaded template format.
+Used only for AfterShip rates and booking
+Used only for EasyParcel rates and booking
+User Count
+Variation
+Warehouse
+Warehouse ID
+Warehouse Name
+Warehouse contact name
+Warehouse here
+Warehouse name here
+Weight
+Width
+Write SKU here
+Write email here
+Write product name here
+Yes, Cancel
+Zip Code
+Zip code here
+product(s) exported successfully.
+selected product(s)
+to
+units

@@ -7,6 +7,8 @@ import {
   Loader2,
 } from "lucide-react";
 import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { translateStaticText } from "../../../../i18nDomTranslator";
 
 const formatDetailsForEdit = (value) => {
   if (value === null || value === undefined) return "";
@@ -94,14 +96,29 @@ export function AddSkuModal({
   handleSave,
   handleCloseModal,
   saving,
+  readOnlyWarehouse = false,
   warehouseSearch,
   setWarehouseSearch,
   modalWarehouses,
   warehouseLoading,
   isWarehouseError,
 }) {
+  const { i18n } = useTranslation();
   const [warehouseDropdownOpen, setWarehouseDropdownOpen] = useState(false);
   const modalScrollRef = useRef(null);
+  const translate = (value) =>
+    typeof value === "string"
+      ? translateStaticText(value, i18n.resolvedLanguage || i18n.language)
+      : value;
+  const isWarehouseSelected = Boolean(form.warehouseId);
+  const isImageSelected = Boolean(form.photoFile || form.photoPreview);
+  const hasValue = (value) => String(value ?? "").trim().length > 0;
+  const areRequiredFieldsComplete =
+    isImageSelected &&
+    isWarehouseSelected &&
+    ["productPrice", "weight", "length", "width", "height"].every((name) =>
+      hasValue(form[name])
+    );
 
   return (
     <div
@@ -110,9 +127,6 @@ export function AddSkuModal({
         background: "rgba(200,210,220,0.55)",
         backdropFilter: "blur(3px)",
       }}
-      onClick={(e) =>
-        e.target === e.currentTarget && !saving && handleCloseModal()
-      }
     >
       <div
         ref={modalScrollRef}
@@ -128,10 +142,10 @@ export function AddSkuModal({
         <div className="flex items-start justify-between px-7 pt-7 pb-2">
           <div>
             <h2 className="text-lg font-bold text-slate-800 font-display">
-              {title}
+              {translate(title)}
             </h2>
             <p className="text-xs text-slate-500 mt-1">
-              {subtitle}
+              {translate(subtitle)}
             </p>
           </div>
           <button
@@ -184,7 +198,7 @@ export function AddSkuModal({
               <>
                 <UploadCloud size={28} className="text-slate-400 mb-2" />
                 <p className="text-sm font-semibold text-slate-700">
-                  Choose a file or drag & drop it here
+                  *Choose a file or drag & drop it here
                 </p>
                 <p className="text-xs text-slate-400 mt-0.5">
                   JPEG or PNG, less than 5MB
@@ -219,33 +233,34 @@ export function AddSkuModal({
               },
               { label: "GTIN", name: "gtin", placeholder: "GTIN here" },
               {
-                label: "Product Price",
+                label: "*Product Price",
                 name: "productPrice",
                 placeholder: "$0000",
               },
               {
-                label: "Weight (kg)",
+                label: "*Weight (kg)",
                 name: "weight",
                 placeholder: "Product weight",
               },
             ].map(({ label, name, placeholder }) => (
               <div key={name}>
                 <label className="block text-xs text-slate-600 mb-1">
-                  {label}
+                  {translate(label)}
                 </label>
                 <input
                   type="text"
                   name={name}
+                  required={["productPrice", "weight"].includes(name)}
                   value={form[name]}
                   onChange={handleFormChange}
-                  placeholder={placeholder}
+                  placeholder={translate(placeholder)}
                   disabled={saving}
                   className={`w-full px-3 py-2 text-sm border rounded-lg bg-white text-slate-700 placeholder-slate-400 outline-none transition-all disabled:opacity-60
                     ${errors[name] ? "border-red-300 focus:border-red-400 bg-red-50/30" : "border-surface-border focus:border-primary focus:ring-2 focus:ring-primary/10"}`}
                 />
                 {errors[name] && (
                   <p className="text-xs text-red-500 mt-0.5 flex items-center gap-1">
-                    <AlertCircle size={10} /> {errors[name]}
+                    <AlertCircle size={10} /> {translate(errors[name])}
                   </p>
                 )}
               </div>
@@ -253,13 +268,13 @@ export function AddSkuModal({
 
             <div className="col-span-2">
               <label className="block text-xs text-slate-600 mb-1">
-                *Product Details
+                {translate("*Product Details")}
               </label>
               <textarea
                 name="productDetails"
                 value={formatDetailsForEdit(form.productDetails)}
                 onChange={handleFormChange}
-                placeholder='Product details or JSON, e.g. {"platform":"tiktok","seller_sku":"Aface01N"}'
+                placeholder={translate('Product details or JSON, e.g. {"platform":"tiktok","seller_sku":"Aface01N"}')}
                 rows={7}
                 disabled={saving}
                 className={`w-full px-3 py-2 text-sm border rounded-lg bg-white text-slate-700 placeholder-slate-400 outline-none transition-all resize-y font-mono leading-5 disabled:opacity-60
@@ -267,7 +282,7 @@ export function AddSkuModal({
               />
               {errors.productDetails && (
                 <p className="text-xs text-red-500 mt-0.5 flex items-center gap-1">
-                  <AlertCircle size={10} /> {errors.productDetails}
+                  <AlertCircle size={10} /> {translate(errors.productDetails)}
                 </p>
               )}
             </div>
@@ -275,7 +290,7 @@ export function AddSkuModal({
             {/* Size */}
             <div>
               <label className="block text-xs text-slate-600 mb-1">
-                Size (cm)
+                {translate("*Size (cm)")}
               </label>
               <div className="grid grid-cols-3 gap-1.5">
                 {[
@@ -287,9 +302,10 @@ export function AddSkuModal({
                     key={name}
                     type="text"
                     name={name}
+                    required
                     value={form[name]}
                     onChange={handleFormChange}
-                    placeholder={ph}
+                    placeholder={translate(ph)}
                     disabled={saving}
                     className="w-full px-2 py-2 text-xs border border-surface-border rounded-lg bg-white text-slate-700 placeholder-slate-400 outline-none focus:border-primary disabled:opacity-60"
                   />
@@ -300,13 +316,14 @@ export function AddSkuModal({
             {/* Warehouse Selector */}
             <div>
               <label className="block text-xs text-slate-600 mb-1">
-                Select Warehouse
+                {translate("*Select Warehouse")}
               </label>
               <div className="relative">
                 <button
                   type="button"
-                  disabled={saving}
+                  disabled={saving || readOnlyWarehouse}
                   onClick={() => {
+                    if (readOnlyWarehouse) return;
                     setWarehouseDropdownOpen((p) => {
                       const next = !p;
                       if (next) {
@@ -320,14 +337,14 @@ export function AddSkuModal({
                       return next;
                     });
                   }}
-                  className="w-full flex items-center justify-between px-3 py-2 text-xs border border-surface-border rounded-lg bg-white text-slate-700 outline-none focus:border-primary disabled:opacity-60"
+                  className="w-full flex items-center justify-between px-3 py-2 text-xs border border-surface-border rounded-lg bg-white text-slate-700 outline-none focus:border-primary disabled:opacity-100 disabled:cursor-not-allowed"
                 >
                   <span
                     className={
                       form.warehouseId ? "text-slate-700" : "text-slate-400"
                     }
                   >
-                    {form.warehouseName || "Select a warehouse..."}
+                    {translate(form.warehouseName) || translate("Select a warehouse...")}
                   </span>
                   <Search
                     size={13}
@@ -335,7 +352,7 @@ export function AddSkuModal({
                   />
                 </button>
 
-                {warehouseDropdownOpen && (
+                {!readOnlyWarehouse && warehouseDropdownOpen && (
                   <div className="mt-2 w-full bg-white border border-surface-border rounded-lg shadow-lg overflow-hidden">
                     <div className="p-2 border-b border-surface-border">
                       <div className="relative">
@@ -345,7 +362,7 @@ export function AddSkuModal({
                         />
                         <input
                           type="text"
-                          placeholder="Search warehouse..."
+                          placeholder={translate("Search warehouse...")}
                           value={warehouseSearch}
                           onChange={(e) => setWarehouseSearch(e.target.value)}
                           className="w-full pl-7 pr-3 py-1.5 text-xs border border-surface-border rounded-md bg-white text-slate-700 placeholder-slate-400 outline-none focus:border-primary"
@@ -355,16 +372,16 @@ export function AddSkuModal({
                     <div className="max-h-40 overflow-y-auto">
                       {isWarehouseError ? (
                         <div className="px-3 py-2 text-xs text-red-500 flex items-center gap-1.5">
-                          <AlertCircle size={11} /> Failed to load warehouses
+                          <AlertCircle size={11} /> {translate("Failed to load warehouses")}
                         </div>
                       ) : warehouseLoading && modalWarehouses.length === 0 ? (
                         <div className="px-3 py-3 flex items-center justify-center gap-2 text-xs text-slate-400">
                           <Loader2 size={12} className="animate-spin" />{" "}
-                          Loading...
+                          {translate("Loading...")}
                         </div>
                       ) : modalWarehouses.length === 0 ? (
                         <div className="px-3 py-2 text-xs text-slate-400">
-                          No warehouses found
+                          {translate("No warehouses found")}
                         </div>
                       ) : (
                         modalWarehouses.map((wh) => (
@@ -390,7 +407,7 @@ export function AddSkuModal({
                             <div className="flex items-center gap-1.5">
                               {wh.is_default && (
                                 <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">
-                                  Default
+                                  {translate("Default")}
                                 </span>
                               )}
                               {form.warehouseId === String(wh.id) && (
@@ -406,7 +423,7 @@ export function AddSkuModal({
               </div>
               {errors.warehouseId && (
                 <p className="text-xs text-red-500 mt-0.5 flex items-center gap-1">
-                  <AlertCircle size={10} /> {errors.warehouseId}
+                  <AlertCircle size={10} /> {translate(errors.warehouseId)}
                 </p>
               )}
             </div>
@@ -419,19 +436,19 @@ export function AddSkuModal({
               disabled={saving}
               className="px-6 py-2.5 text-sm font-semibold border border-surface-border rounded-xl text-slate-700 bg-white hover:bg-surface-card transition-colors disabled:opacity-50"
             >
-              Cancel
+              {translate("Cancel")}
             </button>
             <button
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || !areRequiredFieldsComplete}
               className="px-6 py-2.5 text-sm font-semibold bg-primary hover:bg-primary-dark text-white rounded-xl transition-colors disabled:opacity-60 flex items-center gap-2 min-w-[80px] justify-center"
             >
               {saving ? (
                 <>
-                  <Loader2 size={14} className="animate-spin" /> Saving...
+                  <Loader2 size={14} className="animate-spin" /> {translate("Saving...")}
                 </>
               ) : (
-                "Save"
+                translate("Save")
               )}
             </button>
           </div>

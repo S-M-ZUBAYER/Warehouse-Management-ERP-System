@@ -169,6 +169,7 @@ import api from "../../../lib/api";
 import { toast } from "sonner";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import useDebounce from "../../../hooks/useDebounce";
+import { filterWarehousesByPermission } from "../../../utils/permissions";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants — defined outside the hook for stable references (no re-creation
@@ -252,13 +253,14 @@ export function useWarehouse() {
         isLoading: warehouseLoading,
         isError: isWarehouseError,
         error: warehouseError,
+        refetch: refetchWarehouses,
     } = useQuery({
         queryKey: WAREHOUSE_QUERY_KEY(debouncedSearch),
         queryFn: () => fetchAllWarehouses(debouncedSearch),
         staleTime: 1000 * 60 * 2,
         gcTime: 1000 * 60 * 5,          // keep cache 5 min after unmount
         placeholderData: (prev) => prev, // show stale while refetching
-        select: selectWarehouses,        // stable reference — React Query memoises
+        select: (data) => filterWarehousesByPermission(selectWarehouses(data)),
     });
 
     // ── Add warehouse mutation ────────────────────────────────────────────────
@@ -420,6 +422,7 @@ export function useWarehouse() {
         warehouseLoading,
         isWarehouseError,
         warehouseError,
+        refetchWarehouses,
         // platform selector
         platform,
         setPlatform,

@@ -51,6 +51,8 @@ export const routePermissionMap = [
   ['/warehouse_management/orders/processing/completed', 'completed_order'],
   ['/warehouse_management/orders/processing/all_order', 'all_order'],
   ['/warehouse_management/orders/processing/canceled', 'canceled_order'],
+  ['/warehouse_management/orders/aftership_manual_order', 'manual_order'],
+  ['/warehouse_management/orders/platform_manual_order', 'manual_order'],
   ['/warehouse_management/orders/manual_order', 'manual_order'],
   ['/warehouse_management/warehouse', 'warehouse_management'],
   ['/warehouse_management/config/store_authorization', 'store_authorization'],
@@ -60,10 +62,93 @@ export const routePermissionMap = [
 
 export const getStoredWarehouseUser = () => {
   try { return JSON.parse(localStorage.getItem('warehouseUser') || '{}') || {}; }
-  catch (_) { return {}; }
+  catch { return {}; }
 };
 
 export const isOwnerUser = (user) => String(user?.role || '').toLowerCase() === 'owner' || user?.isOwner === true || user?.is_owner === true;
+
+const getWarehouseIdFromValue = (value) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value !== 'object') return String(value).trim();
+  return String(
+    value.warehouseId ??
+    value.warehouse_id ??
+    value.id ??
+    value.value ??
+    value.warehouse?.id ??
+    value.warehouse?.warehouseId ??
+    value.warehouse?.warehouse_id ??
+    ''
+  ).trim();
+};
+
+const collectWarehouseIds = (values, target) => {
+  if (!Array.isArray(values)) return;
+  values.forEach((item) => {
+    if (item && typeof item === 'object' && item.canView === false) return;
+    const id = getWarehouseIdFromValue(item);
+    if (id) target.add(id);
+  });
+};
+
+export const getUserWarehousePermissionIds = (user = getStoredWarehouseUser()) => {
+  if (isOwnerUser(user)) return null;
+
+  const ids = new Set();
+  let hasWarehouseScope = false;
+  const sources = [
+    user?.warehousePermissions,
+    user?.warehouse_permissions,
+    user?.warehouseIds,
+    user?.warehouse_ids,
+    user?.warehouses,
+    user?.allowedWarehouses,
+    user?.allowed_warehouses,
+    user?.assignedWarehouses,
+    user?.assigned_warehouses,
+  ];
+
+  sources.forEach((source) => {
+    if (Array.isArray(source)) {
+      hasWarehouseScope = true;
+      collectWarehouseIds(source, ids);
+    }
+  });
+
+  const singleWarehouseId = getWarehouseIdFromValue(user?.warehouseId ?? user?.warehouse_id);
+  if (singleWarehouseId) {
+    hasWarehouseScope = true;
+    ids.add(singleWarehouseId);
+  }
+
+  return hasWarehouseScope ? ids : null;
+};
+
+export const hasWarehouseRestriction = (user = getStoredWarehouseUser()) =>
+  getUserWarehousePermissionIds(user) !== null;
+
+export const canAccessWarehouse = (warehouseId, user = getStoredWarehouseUser()) => {
+  const ids = getUserWarehousePermissionIds(user);
+  if (ids === null) return true;
+  const id = getWarehouseIdFromValue(warehouseId);
+  return Boolean(id && ids.has(id));
+};
+
+export const getDefaultAllowedWarehouseId = (user = getStoredWarehouseUser()) => {
+  const ids = getUserWarehousePermissionIds(user);
+  return ids === null ? '' : [...ids][0] || '';
+};
+
+export const resolveAllowedWarehouseId = (warehouseId, user = getStoredWarehouseUser()) => {
+  if (canAccessWarehouse(warehouseId, user)) return String(warehouseId || '');
+  return getDefaultAllowedWarehouseId(user);
+};
+
+export const filterWarehousesByPermission = (warehouses = [], user = getStoredWarehouseUser()) => {
+  const ids = getUserWarehousePermissionIds(user);
+  if (ids === null) return warehouses;
+  return (warehouses || []).filter((warehouse) => ids.has(getWarehouseIdFromValue(warehouse)));
+};
 
 export const getRoutePermissionKey = (pathname) => {
   if (pathname === '/warehouse_management' || pathname === '/warehouse_management/') return 'dashboard';

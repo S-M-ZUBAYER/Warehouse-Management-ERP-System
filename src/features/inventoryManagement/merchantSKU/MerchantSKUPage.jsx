@@ -107,6 +107,18 @@ const detailField = (key, fallbackKey) => ({
   },
 });
 
+const tableHeadings = [
+  { label: "Image" },
+  { label: "SKU Name" },
+  { label: "SKU Title" },
+  { label: "Weight", className: "w-16 whitespace-nowrap" },
+  { label: "Size", className: "w-28 whitespace-nowrap" },
+  { label: "Creation Time", className: "w-24 whitespace-nowrap" },
+  { label: "Update Time", className: "w-24 whitespace-nowrap" },
+  { label: "Details", className: "w-16 min-w-[56px] whitespace-nowrap text-center" },
+  { label: "Actions", className: "w-16 min-w-[56px] whitespace-nowrap text-center" },
+];
+
 export default function MerchantSKUPage() {
   const [skuType, setSkuType] = useState("sku_name");
   const [searchDraft, setSearchDraft] = useState("");
@@ -125,7 +137,12 @@ export default function MerchantSKUPage() {
     setPage,
     listLoading,
     listFetching,
+    isListError,
+    listError,
+    refetchList,
     selectedIds,
+    selectedProducts,
+    selectionLoading,
     toggleSelect,
     toggleAll,
     allSelected,
@@ -225,6 +242,10 @@ export default function MerchantSKUPage() {
     return () => document.removeEventListener("mousedown", handler);
   }, [openActionId, actionAnchor]);
 
+  const selectedRows = selectedProducts.length === selectedIds.length
+    ? selectedProducts
+    : products.filter((sku) => selectedIds.includes(sku.id));
+
   return (
     <div className="space-y-4 font-body">
       <Topbar PageTitle="Merchant SKU" />
@@ -305,11 +326,11 @@ export default function MerchantSKUPage() {
                   </button>
                   <button
                     onClick={() => {
-                      exportRowsToXlsx(products.filter((sku) => selectedIds.includes(sku.id)), [
+                      exportRowsToXlsx(selectedRows, [
                         { label: 'SKU', render: (row) => row.sku_name || row.skuName || '' },
                         { label: 'Product Name', render: (row) => row.sku_title || row.skuTitle || '' },
                         { label: 'Weight', key: 'weight' },
-                        { label: 'Size', render: (row) => [row.length, row.width, row.height].filter(Boolean).join(' Ã— ') },
+                        { label: 'Size', render: (row) => [row.length, row.width, row.height].filter(Boolean).join(' x ') },
                         { label: 'Created', render: (row) => row.created_at || row.createdAt || '' },
                       ], 'merchant-sku-list.xlsx', 'merchant SKU');
                       setShowBulkDrop(false);
@@ -343,36 +364,30 @@ export default function MerchantSKUPage() {
               <tr className="border-b border-surface-border">
                 <th className="py-3 pl-5 w-36 text-left">
                   <label className="flex items-center gap-2 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={allSelected}
-                      ref={(el) => {
-                        if (el) el.indeterminate = someSelected && !allSelected;
-                      }}
-                      onChange={toggleAll}
-                      className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
-                    />
+                    {selectionLoading ? (
+                      <Loader2 size={16} className="text-primary animate-spin" />
+                    ) : (
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = someSelected && !allSelected;
+                        }}
+                        onChange={() => toggleAll({ allPages: true })}
+                        className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
+                      />
+                    )}
                     <span className="pl-2 text-sm font-bold text-slate-800">
                       Select All
                     </span>
                   </label>
                 </th>
-                {[
-                  "Image",
-                  "SKU Name",
-                  "SKU Title",
-                  "Weight",
-                  "Size",
-                  "Creation Time",
-                  "Update Time",
-                  "Details",
-                  "Actions",
-                ].map((h) => (
+                {tableHeadings.map((heading) => (
                   <th
-                    key={h}
-                    className="py-3 pr-4 text-left text-sm font-bold text-slate-800"
+                    key={heading.label}
+                    className={`py-3 pr-4 text-left text-sm font-bold text-slate-800 ${heading.className || ""}`}
                   >
-                    {h}
+                    {heading.label}
                   </th>
                 ))}
               </tr>
@@ -394,6 +409,24 @@ export default function MerchantSKUPage() {
                     ))}
                   </tr>
                 ))
+              ) : isListError ? (
+                <tr>
+                  <td colSpan={11} className="py-20 text-center">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <AlertCircle size={36} className="text-red-400 opacity-70" />
+                      <p className="text-sm font-medium text-slate-700">
+                        {listError?.response?.data?.message ?? listError?.message ?? "Failed to load SKUs"}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={refetchList}
+                        className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-primary border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors"
+                      >
+                        <RefreshCw size={12} /> Retry
+                      </button>
+                    </div>
+                  </td>
+                </tr>
               ) : products.length === 0 ? (
                 <tr>
                   <td
@@ -450,14 +483,14 @@ export default function MerchantSKUPage() {
                     <td className="py-3 pr-4 text-slate-500 text-xs">
                       {formatDateTime(sku.updated_at || sku.updatedAt)}
                     </td>
-                    <td className="py-3 pr-4">
-                      <button onClick={() => setDetailSku(sku)} className="text-xs font-semibold text-primary hover:underline">
+                    <td className="py-3 pr-4 w-16 min-w-[56px] text-center whitespace-nowrap">
+                      <button onClick={() => setDetailSku(sku)} className="text-xs font-semibold text-primary hover:underline whitespace-nowrap">
                         Details
                       </button>
                     </td>
-                    <td className="py-3 pr-5">
+                    <td className="py-3 pr-5 w-16 min-w-[56px] text-center whitespace-nowrap">
                       <div
-                        className="relative"
+                        className="relative flex justify-center"
                       >
                         <button
                           onClick={(e) => {
@@ -535,7 +568,13 @@ export default function MerchantSKUPage() {
               {Array.from(
                 { length: Math.min(5, pagination.totalPages) },
                 (_, i) => {
-                  const p = i + 1;
+                  const totalPages = pagination.totalPages || 1;
+                  const visibleCount = Math.min(5, totalPages);
+                  const startPage = Math.min(
+                    Math.max(1, page - Math.floor(visibleCount / 2)),
+                    Math.max(1, totalPages - visibleCount + 1),
+                  );
+                  const p = startPage + i;
                   return (
                     <button
                       key={p}
@@ -568,26 +607,26 @@ export default function MerchantSKUPage() {
         {/* Footer buttons */}
         <div className="flex justify-end gap-3 px-5 py-4 border-t border-surface-border">
           <ExportMenu
-            onExportCsv={() => exportRowsToCsv(products.filter((sku) => selectedIds.includes(sku.id)), [
+            onExportCsv={() => exportRowsToCsv(selectedRows, [
               { label: 'SKU', render: (row) => row.sku_name || row.skuName || '' },
               { label: 'Product Name', render: (row) => row.sku_title || row.skuTitle || '' },
               { label: 'Weight', key: 'weight' },
-              { label: 'Size', render: (row) => [row.length, row.width, row.height].filter(Boolean).join(' × ') },
+              { label: 'Size', render: (row) => [row.length, row.width, row.height].filter(Boolean).join(' x ') },
               { label: 'Created', render: (row) => row.created_at || row.createdAt || '' },
             ], 'merchant-sku-list.csv', 'merchant SKU')}
-            onExportXlsx={() => exportRowsToXlsx(products.filter((sku) => selectedIds.includes(sku.id)), [
+            onExportXlsx={() => exportRowsToXlsx(selectedRows, [
               { label: 'SKU', render: (row) => row.sku_name || row.skuName || '' },
               { label: 'Product Name', render: (row) => row.sku_title || row.skuTitle || '' },
               { label: 'Weight', key: 'weight' },
-              { label: 'Size', render: (row) => [row.length, row.width, row.height].filter(Boolean).join(' × ') },
+              { label: 'Size', render: (row) => [row.length, row.width, row.height].filter(Boolean).join(' x ') },
               { label: 'Created', render: (row) => row.created_at || row.createdAt || '' },
             ], 'merchant-sku-list.xlsx', 'merchant SKU')}
           />
-          <button onClick={() => printRows(products.filter((sku) => selectedIds.includes(sku.id)), [
+          <button onClick={() => printRows(selectedRows, [
             { label: 'SKU', render: (row) => row.sku_name || row.skuName || '' },
             { label: 'Product Name', render: (row) => row.sku_title || row.skuTitle || '' },
             { label: 'Weight', key: 'weight' },
-            { label: 'Size', render: (row) => [row.length, row.width, row.height].filter(Boolean).join(' × ') },
+            { label: 'Size', render: (row) => [row.length, row.width, row.height].filter(Boolean).join(' x ') },
             { label: 'Created', render: (row) => row.created_at || row.createdAt || '' },
           ], 'Selected Merchant SKUs', 'merchant SKU')} className="px-16 py-2.5 text-base font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors">
             Print
@@ -608,7 +647,6 @@ export default function MerchantSKUPage() {
           { label: 'Details', render: (row) => firstValue(row.product_details, row.productDetails), fullWidth: true },
           { label: 'GTIN', key: 'gtin' },
           { label: 'Weight', key: 'weight' },
-          { label: 'Size', render: (row) => [row.length, row.width, row.height].filter(Boolean).join(' × ') || '—' },
           { label: 'Price', key: 'price' },
           { label: 'Status', key: 'status' },
           { label: 'Cost Price', render: (row) => firstValue(row.cost_price, row.costPrice) },

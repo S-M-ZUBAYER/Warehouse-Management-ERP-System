@@ -312,21 +312,8 @@ export default function EditMerchantSKUModal({
               </label>
               <button
                 type="button"
-                onClick={() => {
-                  setShowWarehousePicker((p) => {
-                    const next = !p;
-                    if (next) {
-                      setTimeout(() => {
-                        modalBodyRef.current?.scrollTo({
-                          top: modalBodyRef.current.scrollHeight,
-                          behavior: "smooth",
-                        });
-                      }, 0);
-                    }
-                    return next;
-                  });
-                }}
-                className={`w-full flex items-center justify-between px-3 py-2 text-sm border rounded-lg bg-white text-left outline-none transition-all cursor-pointer
+                disabled
+                className={`w-full flex items-center justify-between px-3 py-2 text-sm border rounded-lg bg-white text-left outline-none transition-all cursor-not-allowed disabled:opacity-100
                   ${
                     errors.warehouseId
                       ? "border-red-300"
@@ -351,7 +338,7 @@ export default function EditMerchantSKUModal({
                 </p>
               )}
 
-              {showWarehousePicker && (
+              {false && showWarehousePicker && (
                 <div className="mt-2 bg-white rounded-xl border border-surface-border shadow-lg overflow-hidden">
                   <div className="p-2 border-b border-surface-border">
                     <div className="relative">

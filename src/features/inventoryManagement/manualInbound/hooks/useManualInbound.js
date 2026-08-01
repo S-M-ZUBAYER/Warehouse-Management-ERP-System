@@ -219,6 +219,7 @@ import { toast } from 'sonner';
 import api from '../../../../lib/api';
 import { INBOUND_KEYS } from '../../Inbound/hooks/useInboundList';
 import useDebounce from '../../../../hooks/useDebounce';
+import { withManualInboundNoteMark } from '../manualInboundConstants';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // API helpers
@@ -379,6 +380,7 @@ export function useManualInbound({ onSuccess } = {}) {
         onSuccess: (data) => {
             toast.success(`Manual inbound ${data.inbound_id ?? ''} created successfully`);
             queryClient.invalidateQueries({ queryKey: INBOUND_KEYS.all() });
+            queryClient.invalidateQueries({ queryKey: ['manual_inbound'] });
             setForm(EMPTY_FORM);
             setLines([]);
             onSuccess?.();
@@ -406,7 +408,7 @@ export function useManualInbound({ onSuccess } = {}) {
             warehouseId: Number(form.warehouseId),
             supplierName: form.supplierName || undefined,
             supplierReference: form.supplierReference || undefined,
-            notes: form.notes || undefined,
+            notes: withManualInboundNoteMark(form.notes),
             // ✅ API expects lines[].qtyReceived
             lines: lines.map((l) => ({
                 merchantSkuId: l.merchantSkuId,

@@ -1,8 +1,14 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { Pencil, Search, X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import Topbar from "../../../../../components/layout/Topbar";
 import { useOrderDetail } from "../../../shared/hooks/useOrderDetail";
+import {
+  clearOrderDetailReturnContext,
+  removeWithdrawOrders,
+  setOrderDetailReturnContext,
+} from "../../../shared/utils/orderApi";
 
 function parseOrderRouteParam(param = "") {
   const decoded = decodeURIComponent(param);
@@ -16,9 +22,11 @@ function parseOrderRouteParam(param = "") {
 
 function InfoRow({ label, value }) {
   return (
-    <div>
+    <div className="min-w-0">
       <p className="mb-1 text-[10px] text-slate-400">{label}</p>
-      <p className="text-xs font-semibold text-slate-900 break-words">{value || "-"}</p>
+      <p className="text-xs font-semibold leading-relaxed text-slate-900 break-words [overflow-wrap:anywhere]">
+        {value || "-"}
+      </p>
     </div>
   );
 }
@@ -38,9 +46,11 @@ function Section({ title, children, className = "", rightSlot = null }) {
 function RightInfoRow({ label, value }) {
   const displayValue = label === "Address" ? truncateWords(value, 50) : value;
   return (
-    <div className="flex items-center justify-between gap-4">
+    <div className="grid grid-cols-[minmax(96px,0.8fr)_minmax(0,1.4fr)] items-start gap-3">
       <span className="text-[11px] text-slate-500">{label}</span>
-      <span className="max-w-[64%] text-xs font-semibold text-slate-900 text-right break-words">{displayValue || "-"}</span>
+      <span className="min-w-0 text-right text-xs font-semibold leading-relaxed text-slate-900 break-words [overflow-wrap:anywhere]">
+        {displayValue || "-"}
+      </span>
     </div>
   );
 }
@@ -61,11 +71,34 @@ const getWarehouseName = (value) =>
   value?.raw?.warehouseName ||
   "-";
 
+const getSkuTotalAvailable = (sku) => Number(sku?.totalAvailable ?? sku?.onHand ?? 0);
+const getOrderItemQuantity = (item) => Number(item?.quantity || 1);
+const CAN_CHANGE_MAPPING_TABS = ["To Pack", "Pack Failed", "Out Of Stock"];
+
 export default function OrderDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const params = useParams();
   const { platform, orderId } = parseOrderRouteParam(params.id || params.orderId || "");
+  const canChangeAndPack =
+    location.state?.pageType === "new" &&
+    CAN_CHANGE_MAPPING_TABS.includes(location.state?.activeTab);
+  const canChangeWithdrawMapping =
+    location.state?.pageType === "processed" &&
+    location.state?.activeTab === "Withdraw";
+  const canChangeMapping =
+    canChangeAndPack || canChangeWithdrawMapping;
+  const packAfterMapping =
+    canChangeAndPack;
+
+  useEffect(() => {
+    if (!location.state?.fromPath) return;
+    setOrderDetailReturnContext({
+      fromPath: location.state.fromPath,
+      orderId,
+    });
+  }, [location.state?.fromPath, orderId]);
 
   const {
     order,
@@ -82,6 +115,9 @@ export default function OrderDetailPage() {
     handleMappingSearch,
     merchantSkus,
     mappingWarehouse,
+    warehouseOptions,
+    selectedWarehouseId,
+    handleWarehouseChange,
     merchantSkusLoading,
     selectedSkuId,
     setSelectedSkuId,
@@ -89,10 +125,34 @@ export default function OrderDetailPage() {
     openMappingModal,
     confirmMapping,
     mappingSaving,
-  } = useOrderDetail({ platform, orderId, initialOrder: location.state?.order });
+  } = useOrderDetail({
+    platform,
+    orderId,
+    initialOrder: location.state?.order,
+    packAfterMapping,
+    skuOverrideOnly: canChangeWithdrawMapping,
+    onPackAfterMappingSuccess: async ({ order: packedOrder, context, platform: packedPlatform } = {}) => {
+      if (canChangeWithdrawMapping) {
+        const packedOrderId = packedOrder?.rawId || packedOrder?.orderNo || packedOrder?.id || orderId;
+        await removeWithdrawOrders({
+          context,
+          platform: packedPlatform,
+          orderIds: [packedOrderId],
+        });
+        queryClient.removeQueries({ queryKey: ["order-management", "processed-order-tab-counts"] });
+        clearOrderDetailReturnContext();
+        return;
+      }
+
+      navigate("/warehouse_management/orders/processing/new_order");
+    },
+  });
 
   const items = order?.items || [];
   const firstItem = items[0];
+  const mappingGridClass = canChangeMapping
+    ? "grid-cols-[1.7fr_0.8fr_0.8fr_0.5fr]"
+    : "grid-cols-[1.7fr_0.8fr_0.8fr]";
   const totalQty = useMemo(
     () => items.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
     [items]
@@ -141,22 +201,16 @@ export default function OrderDetailPage() {
             </div>
           </Section>
 
-          <Section
-            title="Logistic Information"
-            rightSlot={
-              <button className="text-slate-400 hover:text-slate-600 transition-colors">
-                <Pencil size={15} />
-              </button>
-            }
-          >
-            <div className="grid grid-cols-3 gap-4">
+          <Section title="Logistic Information">
+            <div className="grid grid-cols-4 gap-4">
               <InfoRow label="Buyer designated logistic" value={order.logistics?.buyerLogistic} />
               <InfoRow label="Logistics Name" value={order.logistics?.logisticsName} />
               <InfoRow label="Tracking No." value={order.logistics?.trackingNo || order.trackingNo} />
+              <InfoRow label="Estimated Delivery Time" value={order.logistics?.estimatedDeliveryTime} />
             </div>
           </Section>
 
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[0.72fr_1.28fr]">
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.05fr_0.95fr]">
             <div className="bg-white rounded-lg p-5">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-bold text-slate-800 font-display">Items</h3>
@@ -167,16 +221,26 @@ export default function OrderDetailPage() {
                   <p className="text-xs text-slate-400">No item data</p>
                 ) : (
                   items.map((item) => (
-                    <div key={item.id} className="flex items-center gap-3">
-                      <img src={item.image} alt={item.sku} className="w-12 h-12 rounded object-cover" />
+                    <div key={item.id} className="flex items-start gap-3">
+                      <img src={item.image} alt={item.sku} className="w-12 h-12 rounded object-cover flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-semibold text-slate-700 truncate">SKU-{item.sku}</p>
-                        <p className="text-xs text-slate-500 truncate">{item.name}</p>
+                        <p
+                          className="text-xs leading-4 text-slate-500 break-words"
+                          style={{
+                            display: "-webkit-box",
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: "vertical",
+                            overflow: "hidden",
+                          }}
+                        >
+                          {item.name}
+                        </p>
                         <p className="text-xs text-slate-400">
                           {item.currency || "USD"}{item.unitPrice || 0} × {item.quantity || 1}
                         </p>
                       </div>
-                      <span className="text-sm font-semibold text-slate-800 whitespace-nowrap">
+                      <span className="text-sm font-semibold text-slate-800 whitespace-nowrap pt-5">
                         $ {item.subtotal || 0}
                       </span>
                     </div>
@@ -186,20 +250,20 @@ export default function OrderDetailPage() {
             </div>
 
             <div className="bg-white rounded-lg p-5">
-              <div className="grid grid-cols-[1.7fr_0.8fr_0.8fr_0.5fr] gap-2 text-xs font-semibold text-slate-800 mb-3">
+              <div className={`grid ${mappingGridClass} gap-2 text-xs font-semibold text-slate-800 mb-3`}>
                 <span className="col-span-1">Merchant Mapping</span>
                 <span>To Allocate /Deduct</span>
                 <span>Allocate /Deduct</span>
-                <span>Action</span>
+                {canChangeMapping && <span>Action</span>}
               </div>
               <div className="space-y-3">
                 {(items.length ? items : [firstItem]).filter(Boolean).map((item) => (
-                  <div key={item.id} className="grid grid-cols-[1.7fr_0.8fr_0.8fr_0.5fr] gap-2 items-center">
+                  <div key={item.id} className={`grid ${mappingGridClass} gap-2 items-center`}>
                     <div className="flex items-center gap-2 min-w-0">
                       <img src={item.image} alt={item.sku} className="w-10 h-10 rounded object-cover" />
                       <div className="min-w-0">
                         <p className="text-xs font-medium text-slate-700 truncate">SKU-{item.sku}</p>
-                        <p className="text-xs text-slate-400 truncate">Available Inventory: {item.available ?? "--"}</p>
+                        <p className="text-xs text-slate-400 truncate">{`Available Inventory: ${item.available ?? "--"}`}</p>
                       </div>
                     </div>
                     <div className="flex items-center justify-center">
@@ -208,12 +272,14 @@ export default function OrderDetailPage() {
                       </span>
                     </div>
                     <span className="text-sm text-slate-700 text-center">{item.quantity || 1}</span>
-                    <button
-                      onClick={() => openMappingModal(item)}
-                      className="text-xs font-semibold text-primary hover:underline"
-                    >
-                      Change
-                    </button>
+                    {canChangeMapping && (
+                      <button
+                        onClick={() => openMappingModal(item)}
+                        className="text-xs font-semibold text-primary hover:underline"
+                      >
+                        Change
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -239,7 +305,7 @@ export default function OrderDetailPage() {
             </div>
             <div className="mt-2 ml-4">
               <p className="text-xs text-slate-400 leading-relaxed">
-                The platform status is - {order.platformLabel} - {order.rawStatus || order.status}. Total item quantity: {totalQty || 0}
+                {`The platform status is - ${order.platformLabel} - ${order.rawStatus || order.status}. Total item quantity: ${totalQty || 0}`}
               </p>
             </div>
           </div>
@@ -292,7 +358,7 @@ export default function OrderDetailPage() {
           <div className="bg-white rounded-[24px] shadow-2xl w-full font-body overflow-hidden" style={{ maxWidth: "980px", animation: "popIn 0.18s ease both" }}>
             <div className="px-6 pt-6 pb-4 flex items-center justify-between">
               <h2 className="text-sm font-bold text-slate-800 font-display">
-                Change Mapping _ Warehouse Package No: {order.pkgNo}
+                {`Change Mapping _ Warehouse Package No: ${order.pkgNo}`}
               </h2>
               <button onClick={() => setShowMappingModal(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
                 <X size={18} />
@@ -305,9 +371,21 @@ export default function OrderDetailPage() {
                 <div className="min-w-0">
                   <p className="max-w-[340px] truncate text-xs font-medium text-slate-800">{mappingTargetItem?.name || firstItem?.name}</p>
                   <p className="mt-1 text-xs text-slate-700 font-mono">{mappingTargetItem?.sku || firstItem?.sku}</p>
-                  <p className="mt-1 text-[11px] font-medium text-slate-500">
-                    ERP Warehouse: {mappingWarehouse?.name || getWarehouseName(mappingTargetItem || firstItem)}
-                  </p>
+                  <div className="mt-1 flex items-center gap-2 text-[11px] font-medium text-slate-500">
+                    <span>ERP Warehouse:</span>
+                    <select
+                      value={selectedWarehouseId || mappingWarehouse?.id || ""}
+                      onChange={(e) => handleWarehouseChange(e.target.value)}
+                      className="h-7 min-w-36 rounded border border-surface-border bg-white px-2 text-[11px] text-slate-600 outline-none focus:border-primary"
+                    >
+                      {mappingWarehouse?.id && !warehouseOptions.some((warehouse) => String(warehouse.id) === String(mappingWarehouse.id)) && (
+                        <option value={mappingWarehouse.id}>{mappingWarehouse.name || getWarehouseName(mappingTargetItem || firstItem)}</option>
+                      )}
+                      {warehouseOptions.map((warehouse) => (
+                        <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
             </div>
@@ -341,9 +419,9 @@ export default function OrderDetailPage() {
               <h3 className="text-sm font-bold text-slate-800 font-display mb-6">Select Merchant SKU</h3>
               <div className="overflow-auto" style={{ maxHeight: "260px" }}>
                 <table className="w-full text-sm">
-                  <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
+                  <thead className="sticky top-0 z-10 bg-white [&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                     <tr className="border-b border-surface-border">
-                      {["Select", "Image", "Product Name", "SKU", "Warehouse", "On Hand", "Allocated", "Available"].map((h) => (
+                      {["Select", "Image", "Product Name", "SKU", "Warehouse", "Total Available", "Available For Platform", "Lock"].map((h) => (
                         <th key={h} className="py-2.5 text-left text-xs font-semibold text-slate-600 pr-4">{h}</th>
                       ))}
                     </tr>
@@ -354,25 +432,31 @@ export default function OrderDetailPage() {
                     ) : merchantSkus.length === 0 ? (
                       <tr><td colSpan={8} className="py-8 text-center text-xs text-slate-400">No merchant SKU found</td></tr>
                     ) : (
-                      merchantSkus.map((sku) => (
-                        <tr key={sku.id} className="hover:bg-surface/50 transition-colors">
-                          <td className="py-2.5 pr-4">
-                            <input
-                              type="checkbox"
-                              checked={String(selectedSkuId) === String(sku.id)}
-                              onChange={() => setSelectedSkuId(sku.id)}
-                              className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
-                            />
-                          </td>
-                          <td className="py-2.5 pr-4"><img src={sku.image} alt={sku.name} className="w-8 h-8 rounded object-cover" /></td>
-                          <td className="py-2.5 pr-4 text-xs text-slate-700"><span className="block max-w-44 truncate">{sku.name}</span></td>
-                          <td className="py-2.5 pr-4 font-mono text-xs text-slate-600">{sku.sku}</td>
-                          <td className="py-2.5 pr-4 text-xs text-slate-600"><span className="block max-w-36 truncate">{sku.warehouseName}</span></td>
-                          <td className="py-2.5 pr-4 text-xs text-slate-600">{sku.onHand}</td>
-                          <td className="py-2.5 pr-4 text-xs text-slate-600">{sku.allocated}</td>
-                          <td className="py-2.5 pr-4 text-xs text-slate-600">{sku.available} units</td>
-                        </tr>
-                      ))
+                      merchantSkus.map((sku) => {
+                        const totalAvailable = getSkuTotalAvailable(sku);
+                        const canSelectSku = totalAvailable >= getOrderItemQuantity(mappingTargetItem || firstItem);
+                        return (
+                          <tr key={sku.id} className={`transition-colors ${canSelectSku ? "hover:bg-surface/50" : "bg-slate-50 opacity-60"}`}>
+                            <td className="py-2.5 pr-4">
+                              <input
+                                type="checkbox"
+                                checked={String(selectedSkuId) === String(sku.id)}
+                                disabled={!canSelectSku}
+                                onChange={() => canSelectSku && setSelectedSkuId(sku.id)}
+                                title={canSelectSku ? "Select SKU" : "Total available quantity is not enough"}
+                                className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer disabled:cursor-not-allowed"
+                              />
+                            </td>
+                            <td className="py-2.5 pr-4"><img src={sku.image} alt={sku.name} className="w-8 h-8 rounded object-cover" /></td>
+                            <td className="py-2.5 pr-4 text-xs text-slate-700"><span className="block max-w-44 truncate">{sku.name}</span></td>
+                            <td className="py-2.5 pr-4 font-mono text-xs text-slate-600">{sku.sku}</td>
+                            <td className="py-2.5 pr-4 text-xs text-slate-600"><span className="block max-w-36 truncate">{sku.warehouseName}</span></td>
+                            <td className="py-2.5 pr-4 text-xs text-slate-600">{totalAvailable.toLocaleString()}</td>
+                            <td className="py-2.5 pr-4 text-xs text-slate-600">{Number(sku.availableForPlatform ?? sku.available ?? 0).toLocaleString()}</td>
+                            <td className="py-2.5 pr-4 text-xs text-slate-600">{Number(sku.lockQuantity ?? sku.allocated ?? 0).toLocaleString()}</td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
@@ -388,7 +472,7 @@ export default function OrderDetailPage() {
                 disabled={mappingSaving}
                 className="h-10 min-w-32 rounded-lg bg-primary px-7 text-sm font-semibold text-white transition-colors hover:bg-primary-dark disabled:opacity-60"
               >
-                {mappingSaving ? "Saving..." : "Confirm"}
+                {mappingSaving ? "Saving..." : packAfterMapping ? "Confirm & Pack" : "Confirm"}
               </button>
             </div>
           </div>
