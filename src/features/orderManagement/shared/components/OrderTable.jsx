@@ -1,6 +1,8 @@
-import { Loader2, MoreHorizontal, Search } from "lucide-react";
-import { useState } from "react";
+import { AlertCircle, ArrowDownAZ, ArrowUpAZ, Loader2, MoreHorizontal, RefreshCw, Search } from "lucide-react";
+import { useEffect, useState } from "react";
 import RecordDetailModal from "../../../../components/shared/RecordDetailModal";
+import shopeeLogo from "../../../../assets/ShopPlatform/shopee.svg";
+import tiktokLogo from "../../../../assets/ShopPlatform/tiktok.svg";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OrderTable — shared table component for all order list pages
@@ -17,8 +19,8 @@ export default function OrderTable({
   orders,
   loading = false,
   isError = false,
-  errorMessage = "Failed to load orders",
   selectedIds = [],
+  selectionLoading = false,
   onToggleSelect,
   onToggleAll,
   allSelected,
@@ -30,7 +32,12 @@ export default function OrderTable({
   rowActions,
   onDetails,
   statusLabel = "Status",
+  statusSortDirection,
+  onStatusSortChange,
+  errorMessage = "Failed to load orders",
+  onRetry,
   showActionsCol = true,
+  actionMenuPlacement = "down",
   compact = false,
 }) {
   const someSelected =
@@ -42,7 +49,30 @@ export default function OrderTable({
     ? "text-sm font-bold text-slate-800"
     : "text-base font-semibold text-primary-text";
   const smallCellTextClass = compact ? "text-sm" : "text-xs";
-  const totalColumns = showActionsCol && actionLabel ? 11 : 10;
+  const totalColumns = showActionsCol && actionLabel ? 13 : 12;
+  const nextStatusSortDirection = statusSortDirection === "asc" ? "desc" : "asc";
+
+  useEffect(() => {
+    if (openMenuId === null) return;
+
+    const closeOnOutsidePress = (event) => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest("[data-row-actions-menu]")
+      ) {
+        return;
+      }
+      setOpenMenuId(null);
+    };
+
+    document.addEventListener("mousedown", closeOnOutsidePress);
+    document.addEventListener("touchstart", closeOnOutsidePress);
+
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutsidePress);
+      document.removeEventListener("touchstart", closeOnOutsidePress);
+    };
+  }, [openMenuId]);
 
   return (
     <div className="font-body">
@@ -51,25 +81,31 @@ export default function OrderTable({
           <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
             <tr className="border-b border-surface-border">
               <th className="py-3 pl-5 text-left max-w-40 flex items-center">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  disabled={loading || isError || orders.length === 0}
-                  ref={(el) => {
-                    if (el) el.indeterminate = someSelected;
-                  }}
-                  onChange={onToggleAll}
-                  className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
-                />
+                {selectionLoading ? (
+                  <Loader2 size={16} className="text-primary animate-spin" />
+                ) : (
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    disabled={loading || isError || orders.length === 0}
+                    ref={(el) => {
+                      if (el) el.indeterminate = someSelected;
+                    }}
+                    onChange={() => onToggleAll?.({ allPages: true })}
+                    className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                  />
+                )}
                 <span className={`pl-2 ${headerTextClass}`}>
                   Select All
                 </span>
               </th>
               {[
-                "Warehouse package No.",
                 "Image",
                 "SKU",
                 "Order Number",
+                "Platform",
+                "Store",
+                "Warehouse package No.",
                 "Tracking Number",
                 "Price",
                 "Create Time",
@@ -80,7 +116,24 @@ export default function OrderTable({
                   key={h}
                   className={`py-3 pr-4 text-left ${headerTextClass}`}
                 >
-                  {h}
+                  {h === statusLabel && onStatusSortChange ? (
+                    <button
+                      type="button"
+                      onClick={() => onStatusSortChange(nextStatusSortDirection)}
+                      className="inline-flex items-center gap-1.5 text-left transition-colors hover:text-primary"
+                      aria-label={`Sort ${statusLabel} ${nextStatusSortDirection === "asc" ? "A to Z" : "Z to A"}`}
+                      title={`Sort ${statusLabel} ${nextStatusSortDirection === "asc" ? "A to Z" : "Z to A"}`}
+                    >
+                      <span>{h}</span>
+                      {statusSortDirection === "desc" ? (
+                        <ArrowDownAZ size={15} />
+                      ) : (
+                        <ArrowUpAZ size={15} className={statusSortDirection === "asc" ? "" : "opacity-45"} />
+                      )}
+                    </button>
+                  ) : (
+                    h
+                  )}
                 </th>
               ))}
               {showActionsCol && actionLabel && (
@@ -96,9 +149,19 @@ export default function OrderTable({
               <TableSkeleton colSpan={totalColumns} />
             ) : isError ? (
               <tr>
-                <td colSpan={totalColumns} className="py-16 text-center">
-                  <div className="flex flex-col items-center gap-2 text-red-400">
-                    <p className="text-sm font-medium">{errorMessage}</p>
+                <td colSpan={totalColumns} className="py-20 text-center">
+                  <div className="flex flex-col items-center justify-center gap-3">
+                    <AlertCircle size={36} className="text-red-400 opacity-70" />
+                    <p className="text-sm font-medium text-slate-700">{errorMessage}</p>
+                    {onRetry && (
+                      <button
+                        type="button"
+                        onClick={onRetry}
+                        className="flex items-center gap-1.5 rounded-lg border border-primary/30 px-4 py-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/5"
+                      >
+                        <RefreshCw size={12} /> Retry
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -117,6 +180,7 @@ export default function OrderTable({
             ) : (
               orders.map((order) => {
               const isSelected = selectedIds.includes(order.id);
+              const rowActionLabel = typeof actionLabel === "function" ? actionLabel(order) : actionLabel;
               return (
                 <tr
                   key={order.id}
@@ -130,11 +194,6 @@ export default function OrderTable({
                       onChange={() => onToggleSelect(order.id)}
                       className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
                     />
-                  </td>
-
-                  {/* Package No */}
-                  <td className="py-3 pr-4 text-slate-700 font-medium">
-                    {order.pkgNo}
                   </td>
 
                   {/* Image */}
@@ -156,6 +215,23 @@ export default function OrderTable({
                   {/* Order Number */}
                   <td className={`py-3 pr-4 text-primary-text font-mono ${smallCellTextClass}`}>
                     {order.orderNo}
+                  </td>
+
+                  {/* Platform */}
+                  <td className="py-3 pr-4">
+                    <PlatformBadge order={order} />
+                  </td>
+
+                  {/* Store */}
+                  <td className={`py-3 pr-4 text-slate-600 ${smallCellTextClass}`}>
+                    <span className="block max-w-36 truncate" title={order.storeName || order.storeContext?.store || "-"}>
+                      {order.storeName || order.storeContext?.store || "-"}
+                    </span>
+                  </td>
+
+                  {/* Package No */}
+                  <td className="py-3 pr-4 text-slate-700 font-medium">
+                    {order.pkgNo}
                   </td>
 
                   {/* Tracking Number */}
@@ -207,10 +283,10 @@ export default function OrderTable({
                   </td>
 
                   {/* Action */}
-                  {showActionsCol && actionLabel && (
+                  {showActionsCol && rowActionLabel && (
                     <td className="relative py-3 pr-5">
                       {rowActions?.length ? (
-                        <>
+                        <div data-row-actions-menu>
                           <button
                             type="button"
                             onClick={() => setOpenMenuId((current) => (current === order.id ? null : order.id))}
@@ -220,7 +296,11 @@ export default function OrderTable({
                           </button>
 
                           {openMenuId === order.id && (
-                            <div className="absolute right-5 top-10 z-20 min-w-32 overflow-hidden rounded-lg border border-surface-border bg-white py-1 shadow-lg">
+                            <div
+                              className={`absolute right-5 z-20 min-w-32 overflow-hidden rounded-lg border border-surface-border bg-white py-1 shadow-lg ${
+                                actionMenuPlacement === "up" ? "bottom-10" : "top-10"
+                              }`}
+                            >
                               {rowActions.map((action) => (
                                 <button
                                   key={action.label}
@@ -236,13 +316,13 @@ export default function OrderTable({
                               ))}
                             </div>
                           )}
-                        </>
+                        </div>
                       ) : (
                         <button
                           onClick={() => onAction?.(order)}
                           className={`${smallCellTextClass} font-semibold text-primary hover:underline transition-colors`}
                         >
-                          {actionLabel}
+                          {rowActionLabel}
                         </button>
                       )}
                     </td>
@@ -319,6 +399,8 @@ export default function OrderTable({
         record={detailOrder}
         onClose={() => setDetailOrder(null)}
         fields={[
+          { label: "Platform", key: "platformLabel" },
+          { label: "Store", key: "storeName" },
           { label: "Package No.", key: "pkgNo" },
           { label: "SKU", key: "sku" },
           { label: "Order Number", key: "orderNo" },
@@ -328,6 +410,19 @@ export default function OrderTable({
           { label: "Status", key: "status" },
         ]}
       />
+    </div>
+  );
+}
+
+function PlatformBadge({ order }) {
+  const platform = String(order?.platform || order?.storeContext?.platform || "").toLowerCase();
+  const logo = platform.includes("shopee") ? shopeeLogo : platform.includes("tik") ? tiktokLogo : "";
+  const label = order?.platformLabel || (platform.includes("shopee") ? "Shopee" : platform.includes("tik") ? "TikTok" : "-");
+
+  return (
+    <div>
+      {logo ? <img src={logo} alt={label} className="h-8 w-14 object-contain" /> : null}
+      {!logo && <span className="text-xs font-semibold text-slate-700">{label}</span>}
     </div>
   );
 }

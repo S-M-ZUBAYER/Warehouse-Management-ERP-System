@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useMemo, useState } from "react";
 import {
   Plus,
   Printer,
@@ -77,9 +77,13 @@ function DraftListPage({ onCreateClick }) {
     isFetching,
     isError,
     error,
+    refetch,
     selectedIds,
+    selectedItems: selectedInboundItems,
+    selectionLoading,
     toggleSelect,
     toggleAll,
+    clearSelected,
     openCancelModal,
     showCancelModal,
     setShowCancelModal,
@@ -99,7 +103,39 @@ function DraftListPage({ onCreateClick }) {
     confirmShip,
     shipping,
     shipTarget,
-  } = useShipInbound();
+  } = useShipInbound({ onSuccess: clearSelected });
+
+  const selectedItems = useMemo(
+    () => selectedInboundItems.length === selectedIds.length
+      ? selectedInboundItems
+      : items.filter((item) => selectedIds.includes(item.id)),
+    [items, selectedIds, selectedInboundItems],
+  );
+  const outputItems = selectedItems.length > 0 ? selectedItems : items;
+
+  const openSelectedShipModal = () => {
+    if (selectedItems.length === 0) {
+      toast.error("Please select at least one inbound order");
+      return;
+    }
+
+    openShipModal(selectedItems);
+  };
+
+  const openSelectedCancelModal = () => {
+    if (selectedItems.length === 0) {
+      toast.error("Please select at least one inbound order");
+      return;
+    }
+
+    openCancelModal(selectedItems);
+  };
+
+  const cancelTargetCount = Array.isArray(actionTarget) ? actionTarget.length : actionTarget ? 1 : 0;
+  const cancelTargetLabel =
+    cancelTargetCount > 1
+      ? `${cancelTargetCount} selected inbound orders`
+      : actionTarget?.inbound_id ?? "selected inbound";
 
   // 3-dot action items for draft rows
   const actionItems = [
@@ -138,7 +174,8 @@ function DraftListPage({ onCreateClick }) {
             <div className="flex items-center gap-2">
               {/* Ship selected */}
               <button
-                disabled={selectedIds.length === 0}
+                onClick={openSelectedShipModal}
+                disabled={selectedIds.length === 0 || shipping}
                 className="px-4 py-1.5 text-sm font-semibold border border-surface-border rounded-lg text-slate-700 bg-white hover:bg-surface-card transition-colors disabled:opacity-50"
               >
                 Ship
@@ -148,7 +185,7 @@ function DraftListPage({ onCreateClick }) {
               <div className="relative" ref={bulkRef}>
                 <button
                   onClick={() => setShowBulkDrop((p) => !p)}
-                  disabled={selectedIds.length === 0}
+                  disabled={selectedIds.length === 0 || cancelling}
                   className="flex items-center gap-2 px-4 py-1.5 text-sm font-semibold border border-surface-border rounded-lg text-slate-700 bg-white hover:bg-surface-card transition-colors disabled:opacity-50"
                 >
                   Bulk Action
@@ -162,7 +199,11 @@ function DraftListPage({ onCreateClick }) {
                     {["Ship", "Cancel"].map((a) => (
                       <button
                         key={a}
-                        onClick={() => setShowBulkDrop(false)}
+                        onClick={() => {
+                          setShowBulkDrop(false);
+                          if (a === "Ship") openSelectedShipModal();
+                          if (a === "Cancel") openSelectedCancelModal();
+                        }}
                         className={`w-full text-left px-4 py-2 text-sm transition-colors ${a === "Cancel" ? "text-red-500 hover:bg-red-50" : "text-slate-700 hover:bg-surface-card"}`}
                       >
                         {a}
@@ -191,6 +232,7 @@ function DraftListPage({ onCreateClick }) {
         <InboundTable
           items={items}
           selectedIds={selectedIds}
+          selectionLoading={selectionLoading}
           onToggleSelect={toggleSelect}
           onToggleAll={toggleAll}
           actionItems={actionItems}
@@ -200,7 +242,10 @@ function DraftListPage({ onCreateClick }) {
           errorMessage={
             error?.response?.data?.message ?? "Failed to load draft inbounds"
           }
-          onRetry={() => setPage(1)}
+          onRetry={() => {
+            setPage(1);
+            refetch?.();
+          }}
         />
 
         {/* Pagination */}
@@ -234,11 +279,11 @@ function DraftListPage({ onCreateClick }) {
 
         <div className="flex justify-end gap-3 px-5 py-4 border-t border-surface-border">
           <ExportMenu
-            onExportCsv={() => exportRowsToCsv(buildInboundOutputRows(items), inboundOutputColumns, "draft-inbounds.csv", "inbound")}
-            onExportXlsx={() => exportRowsToXlsx(buildInboundOutputRows(items), inboundOutputColumns, "draft-inbounds.xlsx", "inbound")}
+            onExportCsv={() => exportRowsToCsv(buildInboundOutputRows(outputItems), inboundOutputColumns, "draft-inbounds.csv", "inbound")}
+            onExportXlsx={() => exportRowsToXlsx(buildInboundOutputRows(outputItems), inboundOutputColumns, "draft-inbounds.xlsx", "inbound")}
           />
           <button
-            onClick={() => printRows(buildInboundOutputRows(items), inboundOutputColumns, "Draft Inbounds", "inbound")}
+            onClick={() => printRows(buildInboundOutputRows(outputItems), inboundOutputColumns, "Draft Inbounds", "inbound")}
             className="px-16 py-2.5 text-base font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors"
           >
             Print
@@ -253,7 +298,7 @@ function DraftListPage({ onCreateClick }) {
           message={
             <>
               Cancel inbound{" "}
-              <span className="font-semibold">{actionTarget.inbound_id}</span>?
+              <span className="font-semibold">{cancelTargetLabel}</span>?
               This will reverse any qty_inbound already incremented.
             </>
           }
@@ -314,6 +359,7 @@ function CreateInboundPage({ onBack }) {
   } = useCreateInbound({ onSuccess: onBack });
 
   const { warehouseOptions } = useInboundDropdowns();
+  const hasWarehouse = Boolean(form.warehouseId);
 
   const handleConfirmModal = () => {
     confirmSkuSelection();
@@ -419,14 +465,16 @@ function CreateInboundPage({ onBack }) {
             )}
           </div>
           <button
+            type="button"
+            disabled={!hasWarehouse}
             onClick={() => {
-              if (form.warehouseId) {
+              if (hasWarehouse) {
                 setShowSkuModal(true);
               } else {
                 toast.error("Please select the warehouse first");
               }
             }}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors"
+            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 disabled:hover:bg-slate-300"
           >
             <Plus size={14} /> Select Merchant SKU
           </button>
@@ -566,6 +614,12 @@ function ShipModal({
   loading,
 }) {
   const CURRENCIES = ["USD", "MYR", "SGD", "THB", "IDR", "PHP", "VND", "CNY"];
+  const targetCount = Array.isArray(target) ? target.length : target ? 1 : 0;
+  const targetLabel =
+    targetCount > 1
+      ? `${targetCount} selected inbound orders`
+      : target?.inbound_id ?? "selected inbound";
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -583,7 +637,7 @@ function ShipModal({
         </h3>
         <p className="text-xs text-slate-500 mb-5">
           Confirm shipment details for{" "}
-          <span className="font-semibold">{target?.inbound_id}</span>
+          <span className="font-semibold">{targetLabel}</span>
         </p>
 
         <div className="space-y-3">

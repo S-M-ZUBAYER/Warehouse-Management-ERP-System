@@ -1,7 +1,6 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import useDebounce from '../../../../hooks/useDebounce';
 import api from '../../../../lib/api';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -14,6 +13,9 @@ export const BY_MERCHANT_KEYS = {
     picker: (params) => ['by-merchant', 'picker', params],
 };
 
+const PAGE_SIZE = 10;
+const LOCAL_SEARCH_FETCH_LIMIT = 500;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // API helpers
 // ─────────────────────────────────────────────────────────────────────────────
@@ -22,12 +24,28 @@ export const BY_MERCHANT_KEYS = {
 const fetchMerchantList = (params) => {
     const qs = new URLSearchParams();
     qs.set('page',  params.page  ?? 1);
-    qs.set('limit', params.limit ?? 20);
+    qs.set('limit', params.limit ?? PAGE_SIZE);
     if (params.search?.trim()) qs.set('search',        params.search.trim());
     if (params.skuType)        qs.set('skuType',       params.skuType);
     if (params.mappingStatus && params.mappingStatus !== 'all')
         qs.set('mappingStatus', params.mappingStatus);
     return api.get(`/sku-mapping/by-merchant?${qs.toString()}`).then((r) => r);
+};
+
+const fetchAllMerchantList = async (params, knownTotal = 0) => {
+    const pageLimit = Math.max(100, Number(knownTotal) || Number(params.limit) || PAGE_SIZE);
+    const first = await fetchMerchantList({ ...params, page: 1, limit: pageLimit });
+    const totalPages = Number(first?.pagination?.totalPages) || 1;
+
+    if (totalPages <= 1) return first?.data ?? [];
+
+    const rest = await Promise.all(
+        Array.from({ length: totalPages - 1 }, (_, index) =>
+            fetchMerchantList({ ...params, page: index + 2, limit: pageLimit })
+        )
+    );
+
+    return [...(first?.data ?? []), ...rest.flatMap((response) => response?.data ?? [])];
 };
 
 // GET /api/v1/sku-mapping/by-merchant/counts
@@ -98,6 +116,8 @@ export function useByMerchantMapping() {
 
     // ── Selection ─────────────────────────────────────────────────────────────
     const [selectedIds, setSelectedIds] = useState([]);
+    const [selectedMerchantSkus, setSelectedMerchantSkus] = useState([]);
+    const [selectionLoading, setSelectionLoading] = useState(false);
 
     // ── Expanded rows (mapping details dropdown per row) ──────────────────────
     const [expandedIds, setExpandedIds] = useState([]);
@@ -120,12 +140,10 @@ export function useByMerchantMapping() {
     const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false);
     const [unlinkTarget,      setUnlinkTarget]      = useState(null);  // { mappingId, skuName }
 
-    const debouncedModalSearch = useDebounce(modalSearchApplied, 0);  // already applied on button
-
     // ── Query: merchant SKU list ──────────────────────────────────────────────
     const listParams = {
         page,
-        limit:         LOCAL_MAPPING_SEARCH_TYPES.has(skuType) && searchApplied ? 500 : 20,
+        limit:         LOCAL_MAPPING_SEARCH_TYPES.has(skuType) && searchApplied ? LOCAL_SEARCH_FETCH_LIMIT : PAGE_SIZE,
         search:        LOCAL_MAPPING_SEARCH_TYPES.has(skuType) ? undefined : searchApplied || undefined,
         skuType:       LOCAL_MAPPING_SEARCH_TYPES.has(skuType) ? undefined : skuType || undefined,
         mappingStatus: mappingStatus !== 'all' ? mappingStatus : undefined,
@@ -137,6 +155,7 @@ export function useByMerchantMapping() {
         isFetching,
         isError,
         error,
+        refetch,
     } = useQuery({
         queryKey:        BY_MERCHANT_KEYS.list(listParams),
         queryFn:         () => fetchMerchantList(listParams),
@@ -144,8 +163,8 @@ export function useByMerchantMapping() {
         placeholderData: (prev) => prev,
     });
 
-    const rawMerchantSkus = listData?.data ?? [];
-    const merchantSkus = useMemo(() => {
+    const rawMerchantSkus = useMemo(() => listData?.data ?? [], [listData]);
+    const filteredMerchantSkus = useMemo(() => {
         if (!LOCAL_MAPPING_SEARCH_TYPES.has(skuType) || !searchApplied.trim()) {
             return rawMerchantSkus;
         }
@@ -155,10 +174,6 @@ export function useByMerchantMapping() {
             matchesLocalMappingSearch(sku, skuType, query)
         );
     }, [rawMerchantSkus, skuType, searchApplied]);
-    const rawPagination = listData?.pagination ?? { total: 0, totalPages: 1, page: 1, limit: 20 };
-    const pagination = LOCAL_MAPPING_SEARCH_TYPES.has(skuType) && searchApplied.trim()
-        ? { ...rawPagination, total: merchantSkus.length, totalPages: 1, page: 1, limit: merchantSkus.length || 20 }
-        : rawPagination;
 
     // ── Query: counts ─────────────────────────────────────────────────────────
     const { data: counts = { all: 0, mapped: 0, unmapped: 0 } } = useQuery({
@@ -169,6 +184,51 @@ export function useByMerchantMapping() {
     });
 
     // ── Query: product picker (inside Add Mapping modal) ──────────────────────
+    const isLocalSearch = LOCAL_MAPPING_SEARCH_TYPES.has(skuType) && searchApplied.trim();
+    const merchantSkus = useMemo(() => {
+        if (!isLocalSearch) return filteredMerchantSkus;
+
+        const start = (page - 1) * PAGE_SIZE;
+        return filteredMerchantSkus.slice(start, start + PAGE_SIZE);
+    }, [filteredMerchantSkus, isLocalSearch, page]);
+
+    const totalForCurrentTab =
+        mappingStatus === 'mapped' ? counts.mapped
+        : mappingStatus === 'unmapped' ? counts.unmapped
+        : counts.all;
+
+    const fallbackTotal = Number(totalForCurrentTab) || filteredMerchantSkus.length;
+    const rawPagination = listData?.pagination ?? {
+        total: fallbackTotal,
+        totalPages: Math.max(1, Math.ceil(fallbackTotal / PAGE_SIZE)),
+        page,
+        limit: PAGE_SIZE,
+    };
+    const pagination = isLocalSearch
+        ? {
+            ...rawPagination,
+            total: filteredMerchantSkus.length,
+            totalPages: Math.max(1, Math.ceil(filteredMerchantSkus.length / PAGE_SIZE)),
+            page,
+            limit: PAGE_SIZE,
+        }
+        : {
+            ...rawPagination,
+            total: rawPagination.total ?? fallbackTotal,
+            totalPages: rawPagination.totalPages ?? Math.max(1, Math.ceil(fallbackTotal / PAGE_SIZE)),
+            limit: Number(rawPagination.limit) || PAGE_SIZE,
+        };
+
+    useEffect(() => {
+        setSelectedMerchantSkus((prev) => {
+            const rowById = new Map(prev.map((sku) => [sku.id, sku]));
+            merchantSkus.forEach((sku) => {
+                if (selectedIds.includes(sku.id)) rowById.set(sku.id, sku);
+            });
+            return selectedIds.map((id) => rowById.get(id)).filter(Boolean);
+        });
+    }, [merchantSkus, selectedIds]);
+
     const pickerParams = {
         platformStoreId: modalStoreId    || undefined,
         mappingStatus:   modalStatus === 'Not Mapped' ? 'not_mapped' : 'all',
@@ -235,7 +295,7 @@ export function useByMerchantMapping() {
     });
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-    const resetModalState = () => {
+    const resetModalState = useCallback(() => {
         setModalStoreId('');
         setModalStoreName('Store name here');
         setModalPlatform('');
@@ -247,13 +307,13 @@ export function useByMerchantMapping() {
         setModalSelectedIds([]);
         setModalSelectedMap({});
         setAddModalTarget(null);
-    };
+    }, []);
 
     const openAddModal = useCallback((merchantSku) => {
         resetModalState();
         setAddModalTarget(merchantSku);
         setShowAddModal(true);
-    }, []);
+    }, [resetModalState]);
 
     const handleModalSearch = useCallback(() => {
         setModalSearchApplied(modalSearchInput.trim());
@@ -298,11 +358,34 @@ export function useByMerchantMapping() {
         setSelectedIds((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
     }, []);
 
-    const toggleAll = useCallback(() => {
-        const ids    = merchantSkus.map((s) => s.id);
-        const allSel = ids.every((id) => selectedIds.includes(id));
-        setSelectedIds(allSel ? [] : ids);
-    }, [merchantSkus, selectedIds]);
+    const toggleAll = useCallback(async () => {
+        setSelectionLoading(true);
+        const pageIds = merchantSkus.map((s) => s.id);
+        const allFilteredSelected =
+            pagination.total > 0 &&
+            selectedIds.length >= pagination.total &&
+            pageIds.every((id) => selectedIds.includes(id));
+
+        if (allFilteredSelected) {
+            setSelectedIds([]);
+            setSelectedMerchantSkus([]);
+            setSelectionLoading(false);
+            return;
+        }
+
+        try {
+            const allRows = await fetchAllMerchantList(listParams, pagination.total);
+            const filteredRows = LOCAL_MAPPING_SEARCH_TYPES.has(skuType) && searchApplied.trim()
+                ? allRows.filter((sku) => matchesLocalMappingSearch(sku, skuType, searchApplied.trim().toLowerCase()))
+                : allRows;
+            setSelectedMerchantSkus(filteredRows);
+            setSelectedIds(filteredRows.map((sku) => sku.id));
+        } catch (err) {
+            toast.error(err?.response?.data?.message ?? err?.message ?? 'Failed to select all SKU mappings');
+        } finally {
+            setSelectionLoading(false);
+        }
+    }, [merchantSkus, selectedIds, pagination.total, listParams, skuType, searchApplied]);
 
     const toggleExpand = useCallback((id) => {
         setExpandedIds((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
@@ -311,12 +394,15 @@ export function useByMerchantMapping() {
     const handleSearch = useCallback(() => {
         setSearchApplied(searchInput.trim());
         setPage(1);
+        setSelectedIds([]);
+        setSelectedMerchantSkus([]);
     }, [searchInput]);
 
     const handleTabChange = useCallback((status) => {
         setMappingStatus(status);
         setPage(1);
         setSelectedIds([]);
+        setSelectedMerchantSkus([]);
     }, []);
 
     return {
@@ -329,10 +415,10 @@ export function useByMerchantMapping() {
         // data
         merchantSkus, pagination,
         counts,
-        isLoading, isFetching, isError, error,
+        isLoading, isFetching, isError, error, refetch,
 
         // selection
-        selectedIds, toggleSelect, toggleAll,
+        selectedIds, selectedMerchantSkus, selectionLoading, toggleSelect, toggleAll,
         allSelected:  merchantSkus.length > 0 && merchantSkus.every((s) => selectedIds.includes(s.id)),
         someSelected: merchantSkus.some((s) => selectedIds.includes(s.id)),
 

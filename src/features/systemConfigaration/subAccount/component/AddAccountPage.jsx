@@ -563,6 +563,14 @@ export default function AddAccountPage({
 }) {
   const isEdit = !!editAccount;
   const [showPassword, setShowPassword] = useState(false);
+  const isSelectedByAnyId = (selectedIds = [], candidates = []) =>
+    selectedIds.some((selectedId) =>
+      candidates.some((candidate) =>
+        candidate !== null &&
+        candidate !== undefined &&
+        String(selectedId) === String(candidate)
+      )
+    );
 
   return (
     <div className="space-y-4 font-body">
@@ -670,6 +678,8 @@ export default function AddAccountPage({
                 value: String(w?.id), // ✅ ensure string to match form state
               }))}
               placeholder="Select warehouse"
+              required
+              error={errors.warehouseId}
             />
 
             <FormInput
@@ -754,6 +764,8 @@ export default function AddAccountPage({
                   ? "Leave blank to keep current Email"
                   : "Write email here"
               }
+              required
+              error={errors.email}
             />
 
             <FormInput
@@ -783,7 +795,8 @@ export default function AddAccountPage({
                     <select
                       value={storeMarketplace}
                       onChange={(e) => setStoreMarketplace(e.target.value)}
-                      className="appearance-none px-3 py-2 text-xs border border-surface-border rounded-lg bg-white text-slate-700 outline-none pr-7 w-full"
+                      disabled={isEdit}
+                      className="appearance-none px-3 py-2 text-xs border border-surface-border rounded-lg bg-white text-slate-700 outline-none pr-7 w-full disabled:bg-slate-50 disabled:cursor-not-allowed"
                     >
                       {storeMarketplaceOptions.map((marketplace) => (
                         <option key={marketplace} value={marketplace}>
@@ -807,11 +820,15 @@ export default function AddAccountPage({
                     placeholder="Search"
                     value={storeSearch}
                     onChange={(e) => setStoreSearch(e.target.value)}
+                    disabled={isEdit}
                     className="w-full pl-7 pr-3 py-2 text-xs border border-surface-border rounded-lg
-                               text-slate-700 placeholder-slate-400 outline-none focus:border-primary"
+                               text-slate-700 placeholder-slate-400 outline-none focus:border-primary disabled:bg-slate-50 disabled:cursor-not-allowed"
                   />
                 </div>
-                <button className="mt-4 px-4 py-2 text-xs font-semibold bg-primary text-white rounded-lg hover:bg-primary-dark">
+                <button
+                  disabled={isEdit}
+                  className="mt-4 px-4 py-2 text-xs font-semibold bg-primary text-white rounded-lg hover:bg-primary-dark disabled:opacity-60 disabled:cursor-not-allowed"
+                >
                   Search
                 </button>
               </div>
@@ -857,9 +874,21 @@ export default function AddAccountPage({
                       <td className="py-2.5 pl-5">
                         <input
                           type="checkbox"
-                          checked={selectedStores.includes(s.id)}
-                          onChange={() => onToggleStore(s.id)}
-                          className="w-3.5 h-3.5 rounded border-slate-300 accent-primary cursor-pointer"
+                          checked={isSelectedByAnyId(selectedStores, [
+                            s.id,
+                            s.connectionId,
+                            s.connection_id,
+                            s.storeId,
+                            s.store_id,
+                            s.raw?.id,
+                            s.raw?.connectionId,
+                            s.raw?.connection_id,
+                            s.raw?.external_store_id,
+                            s.raw?.store_shop_id,
+                          ])}
+                          onChange={() => !isEdit && onToggleStore(s.id)}
+                          disabled={isEdit}
+                          className="w-3.5 h-3.5 rounded border-slate-300 accent-primary cursor-pointer disabled:cursor-not-allowed"
                         />
                       </td>
                       <td className="py-2.5 text-slate-700">{s.marketplace}</td>
@@ -943,7 +972,12 @@ export default function AddAccountPage({
                       <td className="py-2.5 pl-5">
                         <input
                           type="checkbox"
-                          checked={selectedWarehouses.includes(w.id)}
+                          checked={isSelectedByAnyId(selectedWarehouses, [
+                            w.id,
+                            w.warehouseId,
+                            w.warehouse_id,
+                            w.value,
+                          ])}
                           onChange={() => onToggleWarehouse(w.id)}
                           className="w-3.5 h-3.5 rounded border-slate-300 accent-primary cursor-pointer"
                         />

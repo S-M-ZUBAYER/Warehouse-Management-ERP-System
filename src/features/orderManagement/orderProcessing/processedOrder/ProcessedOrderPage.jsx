@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useNavigationType } from "react-router-dom";
 import { toast } from "sonner";
 import Topbar from "../../../../components/layout/Topbar";
 import OrderProcessingFilterBar from "../../shared/components/OrderProcessingFilterBar";
@@ -8,18 +8,44 @@ import OrderTable from "../../shared/components/OrderTable";
 import OrderFooter from "../../shared/components/OrderFooter";
 import WaybillPrintModal from "../../shared/components/WaybillPrintModal";
 import OrderActionModals from "../../shared/components/OrderActionModals";
+import OrderDateRangePicker, { getPresetRange } from "../../shared/components/OrderDateRangePicker";
+import ConfirmActionModal from "../../../../components/shared/ConfirmActionModal";
 import { useOrderList } from "../../shared/hooks/useOrderList";
-import { fetchProcessedOrderTabCounts } from "../../shared/utils/orderApi";
+import { fetchProcessedOrderTabCounts, getStoredOrderListReturnState, setOrderDetailReturnContext } from "../../shared/utils/orderApi";
+import { getDashboardOrderStatusFilter } from "../utils/dashboardOrderStatusFilter";
 
 const SUB_TABS = ["Pushing", "Pushed Successful", "Withdraw"];
+const PROCESSED_ORDER_TAB_COUNT_GC_TIME = 1000 * 60 * 5;
 
 export default function ProcessedOrderPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState("Pushing");
+  const navigationType = useNavigationType();
+  const dashboardFilter = useMemo(
+    () => getDashboardOrderStatusFilter(location),
+    [location.search, location.state]
+  );
+  const restoredPageState = useMemo(
+    () => getStoredOrderListReturnState({ pathname: location.pathname, navigationType, pageType: "processed" }),
+    [location.pathname, navigationType]
+  );
+  const [activeTab, setActiveTab] = useState(() =>
+    SUB_TABS.includes(restoredPageState.activeTab)
+      ? restoredPageState.activeTab
+      : SUB_TABS.includes(dashboardFilter.tab)
+        ? dashboardFilter.tab
+        : "Pushing"
+  );
+  const [datePreset, setDatePreset] = useState(() => restoredPageState.datePreset || dashboardFilter.datePreset || "last_7_days");
+  const [dateRange, setDateRange] = useState(() => restoredPageState.dateRange || dashboardFilter.dateRange || getPresetRange("last_7_days"));
   const [waybillOpen, setWaybillOpen] = useState(false);
-  const list = useOrderList({ pageType: "processed", activeTab });
+  const [withdrawOrder, setWithdrawOrder] = useState(null);
+  const [withdrawLoading, setWithdrawLoading] = useState(false);
+  const [packConfirmRows, setPackConfirmRows] = useState(null);
+  const [tabRefreshKey, setTabRefreshKey] = useState(0);
+  const list = useOrderList({ pageType: "processed", activeTab, datePreset, dateRange, tabRefreshKey });
   const isWithdrawTab = activeTab === "Withdraw";
+  const isPushingTab = activeTab === "Pushing";
   const isPushedSuccessfulTab = activeTab === "Pushed Successful";
   const isShopee = String(list.storeContext?.platform || "").toLowerCase().includes("shopee");
   const isTikTok = String(list.storeContext?.platform || "").toLowerCase().includes("tik");
@@ -27,19 +53,30 @@ export default function ProcessedOrderPage() {
   const tikTokPrintLabel = isPushedSuccessfulTab ? "Print AWB Again" : "Push";
   const topActionName = isWithdrawTab ? "pack" : "push";
   const topActionLabel = isShopee && topActionName === "push" ? shopeePrintLabel : isTikTok && topActionName === "push" ? tikTokPrintLabel : isWithdrawTab ? "Pack" : "Push";
-  const rowActionName = (isShopee || isTikTok) && !isWithdrawTab ? "push" : isWithdrawTab ? "pack" : "withdraw";
-  const rowActionLabel = isShopee && rowActionName === "push" ? shopeePrintLabel : isTikTok && rowActionName === "push" ? tikTokPrintLabel : isWithdrawTab ? "Pack" : "Withdraw";
-  const showTopActionButton = !isShopee || topActionName !== "pack";
-  const showRowActions = isShopee || isTikTok ? rowActionName === "push" : !isPushedSuccessfulTab;
-  const hasPushingRowMenu = activeTab === "Pushing" && (isShopee || isTikTok);
-  const { data: tabCounts = {} } = useQuery({
+  const rowActionName = isWithdrawTab ? "pack" : "push";
+  const rowActionLabel = isPushedSuccessfulTab ? "Print AWB Again" : isShopee && rowActionName === "push" ? shopeePrintLabel : isTikTok && rowActionName === "push" ? tikTokPrintLabel : isWithdrawTab ? "Pack" : "Push";
+  const showTopActionButton = isWithdrawTab || !isShopee || topActionName !== "pack";
+  const showRowActions = isPushedSuccessfulTab || isWithdrawTab || (isShopee || isTikTok ? rowActionName === "push" : !isPushedSuccessfulTab);
+  const rowActions = isPushingTab
+    ? [
+        { label: rowActionLabel, onClick: (order) => list.runAction("push", [order]) },
+        { label: "Withdraw", onClick: (order) => setWithdrawOrder(order) },
+      ]
+    : undefined;
+  const {
+    data: tabCounts = {},
+    isLoading: tabCountsLoading,
+    isFetching: tabCountsFetching,
+  } = useQuery({
     queryKey: [
       "order-management",
       "processed-order-tab-counts",
+      tabRefreshKey,
       list.storeContext,
       list.appliedSearch,
       list.appliedSearchType,
       list.appliedSkuType,
+      list.dateRange,
     ],
     queryFn: () =>
       fetchProcessedOrderTabCounts({
@@ -47,16 +84,43 @@ export default function ProcessedOrderPage() {
         search: list.appliedSearch,
         searchType: list.appliedSearchType,
         skuType: list.appliedSkuType,
+        dateRange: list.dateRange,
         tabs: SUB_TABS,
-      }),
+    }),
     enabled: list.hasStore,
-    staleTime: 1000 * 30,
+    staleTime: 0,
+    gcTime: PROCESSED_ORDER_TAB_COUNT_GC_TIME,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: false,
   });
+  const activeTabCount = list.isLoading
+    ? tabCounts[activeTab]
+    : list.pagination?.total ?? list.allOrders?.length ?? list.orders.length;
+  const handleTabChange = (tab) => {
+    if (tab === activeTab) return;
+    setTabRefreshKey((current) => current + 1);
+    setActiveTab(tab);
+  };
+
+  useEffect(() => {
+    if (!restoredPageState.activeTab && SUB_TABS.includes(dashboardFilter.tab)) {
+      setActiveTab(dashboardFilter.tab);
+    }
+
+    if (!restoredPageState.dateRange && dashboardFilter.dateRange) {
+      setDatePreset(dashboardFilter.datePreset || "custom");
+      setDateRange(dashboardFilter.dateRange);
+    }
+  }, [dashboardFilter, restoredPageState.activeTab, restoredPageState.dateRange]);
 
   const handleDetails = (order) => {
     list.cacheOrderForDetail(order);
+    setOrderDetailReturnContext({
+      fromPath: location.pathname,
+      orderId: order.id,
+    });
     navigate(`/warehouse_management/orders/detail/${encodeURIComponent(order.id)}`, {
-      state: { order, fromPath: location.pathname },
+      state: { order, fromPath: location.pathname, pageType: "processed", activeTab },
     });
   };
 
@@ -69,6 +133,38 @@ export default function ProcessedOrderPage() {
     setWaybillOpen(true);
   };
 
+  const handleConfirmWithdraw = async () => {
+    if (!withdrawOrder) return;
+
+    setWithdrawLoading(true);
+    try {
+      await list.markWithdraw([withdrawOrder]);
+      setWithdrawOrder(null);
+    } finally {
+      setWithdrawLoading(false);
+    }
+  };
+
+  const handlePackClick = (rows = list.selectedRows) => {
+    if (!isWithdrawTab) {
+      list.runAction(rowActionName, rows);
+      return;
+    }
+
+    if (!rows.length) {
+      list.runAction("pack", rows);
+      return;
+    }
+
+    setPackConfirmRows(rows);
+  };
+
+  const handleConfirmPack = () => {
+    const rows = packConfirmRows || [];
+    setPackConfirmRows(null);
+    list.runAction("pack", rows);
+  };
+
   return (
     <div className="space-y-4 font-body">
       <Topbar PageTitle="Order Processing" />
@@ -76,12 +172,20 @@ export default function ProcessedOrderPage() {
 
       <div className="bg-white rounded-xl border border-surface-border overflow-hidden">
         <div className="px-5 pt-5 pb-0">
-          <h2 className="text-xl font-bold text-slate-800 font-display mb-4">Processed Orders</h2>
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <h2 className="text-xl font-bold text-slate-800 font-display">Processed Orders</h2>
+            <OrderDateRangePicker
+              datePreset={datePreset}
+              setDatePreset={setDatePreset}
+              dateRange={dateRange}
+              setDateRange={setDateRange}
+            />
+          </div>
 
           {showTopActionButton && (
             <div className="mb-3">
               <button
-                onClick={() => list.runAction(topActionName)}
+                onClick={() => (isWithdrawTab ? handlePackClick() : list.runAction(topActionName))}
                 disabled={list.actionLoading}
                 className="px-4 py-1.5 text-sm font-semibold border border-surface-border rounded-lg text-slate-700 bg-white hover:bg-surface-card transition-colors disabled:opacity-60"
               >
@@ -91,48 +195,54 @@ export default function ProcessedOrderPage() {
           )}
 
           <div className="flex items-center gap-5 border-b border-surface-border">
-            {SUB_TABS.map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`pb-3 text-sm font-medium whitespace-nowrap transition-colors relative ${
-                  activeTab === tab
-                    ? "text-primary font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-primary"
-                    : "text-slate-500 hover:text-slate-700"
-                }`}
-              >
-                {tab} ({formatCount(tabCounts[tab])})
-              </button>
-            ))}
+            {SUB_TABS.map((tab) => {
+              const isActive = activeTab === tab;
+              const displayCount = isActive ? activeTabCount : tabCounts[tab];
+              const isCountLoading = !isActive && (tabCountsLoading || tabCountsFetching);
+              const count = Number(displayCount || 0);
+              const hasWithdrawOrders = tab === "Withdraw" && count > 0;
+              const tabColor = hasWithdrawOrders ? "text-amber-600 hover:text-amber-700" : "text-slate-500 hover:text-slate-700";
+              const activeColor = hasWithdrawOrders ? "text-amber-600 after:bg-amber-500" : "text-primary after:bg-primary";
+
+              return (
+                <button
+                  key={tab}
+                  onClick={() => handleTabChange(tab)}
+                  className={`pb-3 text-sm font-medium whitespace-nowrap transition-colors relative ${
+                    isActive
+                      ? `${activeColor} font-semibold after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5`
+                      : tabColor
+                  }`}
+                >
+                  {tab} ({formatCount(displayCount, isCountLoading)})
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        <OrderStateMessage list={list} />
-
         <OrderTable
           orders={list.orders}
-          loading={list.isLoading || list.isFetching}
+          loading={list.isLoading}
           isError={list.isError}
-          errorMessage={list.error?.message || "Failed to load orders"}
+          errorMessage={list.error?.response?.data?.message || list.error?.message || "Failed to load orders"}
+          onRetry={list.refetch}
           selectedIds={list.selectedIds}
+          selectionLoading={list.selectionLoading}
           onToggleSelect={list.toggleSelect}
           onToggleAll={list.toggleAll}
           allSelected={list.allSelected}
           pagination={list.pagination}
           page={list.page}
           setPage={list.setPage}
+          statusSortDirection={list.statusSortDirection}
+          onStatusSortChange={list.setStatusSortDirection}
           showActionsCol={showRowActions}
-          actionLabel={hasPushingRowMenu ? "Actions" : rowActionLabel}
-          rowActions={
-            hasPushingRowMenu
-              ? [
-                  { label: "Push", onClick: (order) => list.runAction("push", [order]) },
-                  { label: "Withdraw", onClick: (order) => list.markWithdraw([order]) },
-                ]
-              : undefined
-          }
+          actionLabel={rowActionLabel}
+          rowActions={rowActions}
+          actionMenuPlacement="up"
           compact
-          onAction={(order) => list.runAction(rowActionName, [order])}
+          onAction={(order) => (isWithdrawTab ? handlePackClick([order]) : list.runAction(rowActionName, [order]))}
           onDetails={handleDetails}
         />
 
@@ -145,17 +255,53 @@ export default function ProcessedOrderPage() {
         onClose={() => setWaybillOpen(false)}
       />
 
+      <ConfirmActionModal
+        open={!!withdrawOrder}
+        title="Confirm Withdraw"
+        message={
+          <div className="space-y-2">
+            <p>Are you sure you want to withdraw this order?</p>
+            <p className="font-semibold text-slate-800">
+              Order Number: {withdrawOrder?.orderNo || withdrawOrder?.id || "-"}
+            </p>
+          </div>
+        }
+        confirmLabel="Confirm"
+        cancelLabel="Cancel"
+        danger
+        loading={withdrawLoading}
+        onCancel={() => setWithdrawOrder(null)}
+        onConfirm={handleConfirmWithdraw}
+      />
+
+      <ConfirmActionModal
+        open={!!packConfirmRows}
+        title="Confirm Pack"
+        message={
+          <div className="space-y-2">
+            <p>Are you sure you want to pack this withdraw order?</p>
+            <p className="font-semibold text-slate-800">
+              {packConfirmRows?.length === 1
+                ? `Order Number: ${packConfirmRows[0]?.orderNo || packConfirmRows[0]?.id || "-"}`
+                : `${packConfirmRows?.length || 0} order(s) selected`}
+            </p>
+          </div>
+        }
+        confirmLabel="Confirm"
+        cancelLabel="Cancel"
+        loading={list.actionLoading}
+        onCancel={() => setPackConfirmRows(null)}
+        onConfirm={handleConfirmPack}
+      />
+
       <OrderActionModals list={list} />
     </div>
   );
 }
 
-function formatCount(value) {
+function formatCount(value, isLoading = false) {
+  if (isLoading) return "_ _";
+
   const count = Number(value || 0);
   return String(Number.isFinite(count) ? count : 0).padStart(2, "0");
-}
-
-function OrderStateMessage({ list }) {
-  if (list.isError) return <div className="px-5 py-2 text-xs text-red-500">{list.error?.message || "Failed to load orders"}</div>;
-  return null;
 }

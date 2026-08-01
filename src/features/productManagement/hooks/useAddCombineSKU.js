@@ -11,7 +11,7 @@ import useDebounce from "../../../hooks/useDebounce";
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** GET /combine-skus/picker — searchable merchant SKU list with stock */
-const fetchAllSkuPicker = async ({ search, limit = 10 }) => {
+const fetchAllSkuPicker = async ({ search, warehouseId, limit = 10 }) => {
     // Helper to build query string
     const buildQuery = (page) => {
         const qs = new URLSearchParams({
@@ -19,6 +19,7 @@ const fetchAllSkuPicker = async ({ search, limit = 10 }) => {
             limit: limit.toString()
         });
         if (search?.trim()) qs.set("search", search.trim());
+        if (warehouseId) qs.set("warehouseId", String(warehouseId));
         return qs.toString();
     };
 
@@ -109,18 +110,20 @@ export function useAddCombineSKU() {
         isFetching: pickerFetching,
         isError: isPickerError,
     } = useQuery({
-        queryKey: COMBINE_SKU_KEYS.picker(debouncedSkuSearch, 'all'),
+        queryKey: COMBINE_SKU_KEYS.picker(debouncedSkuSearch, form.warehouseId || "none"),
         queryFn: () => fetchAllSkuPicker({
             search: debouncedSkuSearch,
+            warehouseId: form.warehouseId,
             limit: 10  // Fetch 10 items per request, but will get all pages
         }),
+        enabled: Boolean(form.warehouseId),
         staleTime: 1000 * 60 * 2,
         gcTime: 1000 * 60 * 5,
         placeholderData: (prev) => prev,
     });
 
-    // filteredSkus will now contain ALL data from all pages
-    const filteredSkus = pickerData?.filter(sku => sku?.warehouse?.id == form?.warehouseId) ?? [];
+    // The API returns SKUs available in the selected warehouse's stock rows.
+    const filteredSkus = pickerData ?? [];
 
 
 
@@ -206,6 +209,9 @@ export function useAddCombineSKU() {
             warehouseId: String(wh.id),
             warehouseName: wh.name,
         }));
+        setSelectedIds([]);
+        setQuantities({});
+        setSkuMap({});
         if (errors.warehouseId) setErrors((p) => ({ ...p, warehouseId: "" }));
     }, [errors]);
 

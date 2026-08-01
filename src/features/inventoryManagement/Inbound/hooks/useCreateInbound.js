@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { INBOUND_KEYS } from './useInboundList';
 import api from '../../../../lib/api';
 import useDebounce from '../../../../hooks/useDebounce';
+import { filterWarehousesByPermission } from '../../../../utils/permissions';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // API helpers
@@ -85,6 +86,7 @@ export function useCreateInbound({ onSuccess }) {
         staleTime: 1000 * 60 * 2,
         gcTime: 1000 * 60 * 5,
         placeholderData: (prev) => prev,
+        select: (warehouses) => filterWarehousesByPermission(warehouses),
     });
 
     const pickerSkus = pickerData?.data ?? [];

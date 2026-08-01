@@ -3,6 +3,57 @@ import { useNavigate } from "react-router-dom";
 import authApi from "@/lib/authApi";
 import api from "../../../lib/api";
 
+const PENDING_SECONDARY_REGISTER_KEY = "pendingSecondaryRegister";
+
+const getStoredSecondaryPayload = () => {
+    try {
+        const stored = sessionStorage.getItem(PENDING_SECONDARY_REGISTER_KEY);
+        return stored ? JSON.parse(stored) : null;
+    } catch {
+        sessionStorage.removeItem(PENDING_SECONDARY_REGISTER_KEY);
+        return null;
+    }
+};
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const registerSecondaryWithRetry = async (payload, maxAttempts = 3) => {
+    let lastError;
+    const normalizedPayload = normalizeSecondaryPayload(payload);
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+            return await api.post("/auth/register", normalizedPayload, {
+                headers: {
+                    Accept: "application/json",
+                    "Content-Type": "application/json",
+                },
+            });
+        } catch (err) {
+            lastError = err;
+
+            if (attempt < maxAttempts) {
+                await wait(attempt * 1000);
+            }
+        }
+    }
+
+    throw lastError;
+};
+
+const normalizeSecondaryPayload = (payload) => ({
+    userName: payload.userName || "",
+    userEmail: payload.userEmail || "",
+    userPassword: payload.userPassword || "",
+    companyName: payload.companyName || "",
+    phone: payload.phone || "",
+    timezone: payload.timezone || "",
+    currency: payload.currency || "",
+    avatar: payload.avatar || "",
+});
+
+const isAlreadyRegisteredMessage = (message = "") =>
+    message.toLowerCase().includes("already");
 
 export function useRegister() {
     const navigate = useNavigate();
@@ -92,6 +143,38 @@ export function useRegister() {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
+        const pendingSecondaryPayload = getStoredSecondaryPayload();
+        const currentEmail = formData.userEmail.trim().toLowerCase();
+        const pendingEmail = (pendingSecondaryPayload?.userEmail || "")
+            .trim()
+            .toLowerCase();
+
+        if (pendingSecondaryPayload && pendingEmail === currentEmail) {
+            setLoading(true);
+            setError("");
+            setEmailError("");
+
+            try {
+                await registerSecondaryWithRetry(pendingSecondaryPayload);
+                sessionStorage.removeItem(PENDING_SECONDARY_REGISTER_KEY);
+                navigate("/warehouse_management/verifyemail");
+            } catch (err) {
+                const serverMsg = err.response?.data?.message;
+                setError(
+                    serverMsg ||
+                    "Account created, but final setup failed after 3 attempts. Please try again."
+                );
+            } finally {
+                setLoading(false);
+            }
+
+            return;
+        }
+
+        if (pendingSecondaryPayload && pendingEmail !== currentEmail) {
+            sessionStorage.removeItem(PENDING_SECONDARY_REGISTER_KEY);
+        }
+
         if (formData.userPassword !== formData.confirmPassword) {
             setPasswordMatchError("Passwords do not match.");
             return;
@@ -102,30 +185,16 @@ export function useRegister() {
         setEmailError("");
         setPasswordMatchError("");
 
-        // Helper function for second API
-        const callSecondaryApi = () => {
-            api.post("/auth/register", {
-                userName: formData.userName,
-                userEmail: formData.userEmail,
-                userPassword: formData.userPassword,
-                companyName: formData.companyName || "",
-                phone: formData.phone || "",
-                timezone: formData.timezone || "",
-                currency: formData.currency || "",
-                avatar: formData.photo || "",
-            }).catch(err => {
-                console.warn("Secondary registration failed:", err);
-            });
+        const secondaryPayload = {
+            userName: formData.userName,
+            userEmail: formData.userEmail,
+            userPassword: formData.userPassword,
+            companyName: formData.companyName || "",
+            phone: formData.phone || "",
+            timezone: formData.timezone || "",
+            currency: formData.currency || "",
+            avatar: formData.photo || "",
         };
-console.log({
-                userId: 0,
-                userName: formData.userName,
-                userEmail: formData.userEmail,
-                userPassword: formData.userPassword,
-                role: "user",
-                photo: formData.photo || "string",
-                emailVerified: true,
-            });
 
         try {
             const mainApiResponse = await authApi.post("/v1/user/signup", {
@@ -142,7 +211,13 @@ console.log({
                 mainApiResponse?.code === 200;
 
             if (isSuccess) {
-                callSecondaryApi();
+                sessionStorage.setItem(
+                    PENDING_SECONDARY_REGISTER_KEY,
+                    JSON.stringify(normalizeSecondaryPayload(secondaryPayload))
+                );
+
+                await registerSecondaryWithRetry(secondaryPayload);
+                sessionStorage.removeItem(PENDING_SECONDARY_REGISTER_KEY);
 
                 setFormData({
                     userName: "",
@@ -159,8 +234,9 @@ console.log({
             } else {
                 const errorMsg = mainApiResponse?.data?.message || "Registration failed. Please try again.";
 
-                if (errorMsg?.toLowerCase().includes("already")) {
-                    callSecondaryApi(); // Call res2 even on "already" error
+                if (isAlreadyRegisteredMessage(errorMsg)) {
+                    await registerSecondaryWithRetry(secondaryPayload);
+                    sessionStorage.removeItem(PENDING_SECONDARY_REGISTER_KEY);
                     setEmailError("This email is already registered. Try signing in.");
                 } else {
                     setError(errorMsg);
@@ -170,10 +246,24 @@ console.log({
         } catch (err) {
             console.error("Register error:", err);
             const serverMsg = err.response?.data?.message;
+            const hasPendingSecondaryRegister = Boolean(getStoredSecondaryPayload());
 
-            if (serverMsg?.toLowerCase().includes("already")) {
-                callSecondaryApi(); // Call res2 even on "already" error
-                setEmailError("This email is already registered. Try signing in.");
+            if (hasPendingSecondaryRegister) {
+                setError(
+                    serverMsg ||
+                    "Account created, but final setup failed after 3 attempts. Please try again."
+                );
+            } else if (isAlreadyRegisteredMessage(serverMsg)) {
+                try {
+                    await registerSecondaryWithRetry(secondaryPayload);
+                    setEmailError("This email is already registered. Try signing in.");
+                } catch (secondaryErr) {
+                    const secondaryMsg = secondaryErr.response?.data?.message;
+                    setError(
+                        secondaryMsg ||
+                        "This email is already registered, but final setup failed after 3 attempts."
+                    );
+                }
             } else if (serverMsg) {
                 setError(serverMsg);
             } else {

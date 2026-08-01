@@ -4,8 +4,12 @@ import { useRegister } from "../hooks/useRegister";
 import AuthLayout from "../components/AuthLayout";
 import InputField from "../components/InputField";
 import PrimaryButton from "../components/PrimaryButton";
+import { useTranslation } from "react-i18next";
+import { translateStaticText } from "../../../i18nDomTranslator";
 
 export default function Register() {
+  const { i18n } = useTranslation();
+  const translate = (value) => translateStaticText(value, i18n.resolvedLanguage || i18n.language);
   const {
     formData,
     previewUrl,
@@ -31,7 +35,7 @@ export default function Register() {
         {/* Page heading */}
         <div className="mb-7">
           <h1 className="text-4xl text-center font-semibold mb-1.5 text-primary font-display">
-            Sign Up
+            {translate("Sign Up")}
           </h1>
         </div>
 
@@ -64,7 +68,7 @@ export default function Register() {
 
             <div>
               <p className="text-sm font-body text-primary font-semibold mb-1">
-                Profile Photo
+                {translate("Profile Photo")}
               </p>
               <p className="text-xs mt-1 mb-1" style={{ color: "#94A3B8" }}>
                 Optional — PNG, JPG up to 5MB
@@ -76,7 +80,7 @@ export default function Register() {
                   onChange={handleImageChange}
                   className="hidden"
                 />
-                {previewUrl ? "Change photo" : "Upload photo"}
+                {previewUrl ? translate("Change photo") : translate("Upload photo")}
               </label>
             </div>
           </div>
@@ -169,7 +173,11 @@ export default function Register() {
           />
 
           <div className="mt-[10px]">
-            <PrimaryButton type="submit" loading={loading}>
+            <PrimaryButton
+              type="submit"
+              loading={loading}
+              disabled={loading}
+            >
               Sign Up
             </PrimaryButton>
           </div>
@@ -177,12 +185,12 @@ export default function Register() {
 
         {/* Login link */}
         <p className="text-center mt-5 text-sm" style={{ color: "#64748B" }}>
-          Already have an account?{" "}
+          {translate("Already have an account?")}{" "}
           <Link
             to="/warehouse_management/login"
             className="font-bold transition-colors text-primary font-body"
           >
-            Log In
+            {translate("Log In")}
           </Link>
         </p>
       </div>

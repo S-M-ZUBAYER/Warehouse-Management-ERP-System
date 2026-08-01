@@ -701,6 +701,7 @@ export function useRoleManagement() {
         isLoading: rolesLoading,
         isError: isRolesError,
         error: rolesError,
+        refetch: refetchRoles,
     } = useQuery({
         queryKey: ROLES_QUERY_KEY,
         queryFn: fetchAllRoles,
@@ -902,6 +903,7 @@ export function useRoleManagement() {
         rolesLoading,
         isRolesError,
         rolesError,
+        refetchRoles,
 
         // action dropdown
         openActionId, setOpenActionId,

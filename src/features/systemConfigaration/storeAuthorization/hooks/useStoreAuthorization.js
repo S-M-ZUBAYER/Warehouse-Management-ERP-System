@@ -1,9 +1,50 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import api from "../../../../lib/api";
 import { toast } from "sonner";
 
 const PLATFORMS = ["All", "Shopee", "Lazada", "TikTok"];
 const STATUSES = ["All", "Authorized", "Disabled"];
+const ADD_STORE_COUNTRIES = {
+    Shopee: ["SG", "MY", "TH", "VN", "PH", "ID"],
+    TikTok: ["SG", "MY", "TH", "VN", "PH", "ID"],
+};
+
+const readJsonStorage = (key, fallback = {}) => {
+    if (typeof localStorage === "undefined") return fallback;
+    try {
+        return JSON.parse(localStorage.getItem(key) || "null") || fallback;
+    } catch {
+        return fallback;
+    }
+};
+
+const getCurrentCompanyContext = () => {
+    const storedUser = readJsonStorage("warehouseUser", {});
+    const authUser = readJsonStorage("auth-storage", {});
+    const authStateUser = authUser?.state?.user || {};
+    const authStateToken = authUser?.state?.token || {};
+
+    return {
+        companyId:
+            storedUser?.companyId ||
+            storedUser?.company_id ||
+            storedUser?.company?.id ||
+            authStateUser?.companyId ||
+            authStateUser?.company_id ||
+            authStateUser?.company?.id ||
+            storedUser?.id ||
+            storedUser?.userId ||
+            authStateUser?.id ||
+            "",
+        email:
+            storedUser?.email ||
+            storedUser?.userEmail ||
+            authStateUser?.email ||
+            authStateToken?.email ||
+            "",
+    };
+};
 
 const platformLabel = (value) => {
     const normalized = String(value || "").toLowerCase();
@@ -59,11 +100,14 @@ const normalizePermissionUser = (user) => ({
 });
 
 export function useStoreAuthorization() {
+    const queryClient = useQueryClient();
     const [platform, setPlatform] = useState("All");
     const [selectPlatform, setSelectPlatform] = useState("All");
     const [authFilter, setAuthFilter] = useState("All");
     const [search, setSearch] = useState("");
     const [selectedIds, setSelectedIds] = useState([]);
+    const [selectedStores, setSelectedStores] = useState([]);
+    const [selectionLoading, setSelectionLoading] = useState(false);
     const [storesRaw, setStoresRaw] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
@@ -77,6 +121,13 @@ export function useStoreAuthorization() {
     const [permSelected, setPermSelected] = useState([]);
     const [permEditIds, setPermEditIds] = useState([]);
     const [unlinkModal, setUnlinkModal] = useState({ open: false, store: null, loading: false });
+    const [addStoreModal, setAddStoreModal] = useState({
+        open: false,
+        platform: "",
+        country: "",
+        loading: false,
+        errors: {},
+    });
 
     const loadStores = useCallback(async () => {
         setLoading(true);
@@ -85,13 +136,14 @@ export function useStoreAuthorization() {
             const res = await api.get("/platform-stores", { params: { page: 1, limit: 1000 } });
             const list = Array.isArray(res?.data) ? res.data : [];
             setStoresRaw(list);
+            queryClient.invalidateQueries({ queryKey: ["global", "shop-platform-dropdowns"] });
         } catch (err) {
             setError(err?.response?.data?.message || err?.message || "Failed to load platform stores");
             setStoresRaw([]);
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [queryClient]);
 
     useEffect(() => {
         loadStores();
@@ -101,17 +153,18 @@ export function useStoreAuthorization() {
         setPlatform(value);
         setSelectPlatform(value);
         setSelectedIds([]);
+        setSelectedStores([]);
     }, []);
 
     const setSelectPlatformFilter = useCallback((value) => {
         setSelectPlatform(value);
         setPlatform(value);
         setSelectedIds([]);
+        setSelectedStores([]);
     }, []);
 
-    const stores = useMemo(() => {
-        let list = storesRaw.map(normalizeStore);
-
+    const filterStores = useCallback((rows) => {
+        let list = rows.map(normalizeStore);
         if (platform !== "All") list = list.filter((s) => s.marketplace === platform);
         if (authFilter !== "All") list = list.filter((s) => s.authStatus === authFilter);
         if (search.trim()) {
@@ -122,20 +175,90 @@ export function useStoreAuthorization() {
             );
         }
         return list;
-    }, [storesRaw, platform, authFilter, search]);
+    }, [platform, authFilter, search]);
+
+    const stores = useMemo(() => filterStores(storesRaw), [filterStores, storesRaw]);
 
     useEffect(() => {
         setSelectedIds((prev) => prev.filter((id) => stores.some((store) => store.id === id)));
+        setSelectedStores((prev) => prev.filter((store) => stores.some((item) => item.id === store.id)));
     }, [stores]);
 
-    const toggleSelect = (id) => setSelectedIds((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
-    const toggleAll = () => {
-        const ids = stores.map((s) => s.id);
-        setSelectedIds(ids.every((id) => selectedIds.includes(id)) ? [] : ids);
+    const fetchAllStores = async () => {
+        const res = await api.get("/platform-stores", { params: { page: 1, limit: 1000 } });
+        const list = Array.isArray(res?.data) ? res.data : [];
+        return filterStores(list);
+    };
+
+    const toggleSelect = (id) => setSelectedIds((p) => {
+        if (p.includes(id)) {
+            setSelectedStores((rows) => rows.filter((store) => store.id !== id));
+            return p.filter((x) => x !== id);
+        }
+
+        const selectedStore = stores.find((store) => store.id === id);
+        if (selectedStore) {
+            setSelectedStores((rows) => rows.some((store) => store.id === id) ? rows : [...rows, selectedStore]);
+        }
+        return [...p, id];
+    });
+
+    const toggleAll = async () => {
+        setSelectionLoading(true);
+        try {
+            const rows = await fetchAllStores();
+            const ids = rows.map((s) => s.id);
+            const shouldClear = ids.length > 0 && ids.every((id) => selectedIds.includes(id));
+            setSelectedIds(shouldClear ? [] : ids);
+            setSelectedStores(shouldClear ? [] : rows);
+        } finally {
+            setSelectionLoading(false);
+        }
     };
 
     const openAddStore = () => {
-        toast.info("Store connection/authorization should be started from the platform OAuth flow. Existing stores are loaded from backend.");
+        setAddStoreModal({ open: true, platform: "", country: "", loading: false, errors: {} });
+    };
+
+    const closeAddStore = () => {
+        setAddStoreModal((prev) => {
+            if (prev.loading) return prev;
+            return { open: false, platform: "", country: "", loading: false, errors: {} };
+        });
+    };
+
+    const setAddStorePlatform = (value) => {
+        setAddStoreModal((prev) => ({ ...prev, platform: value, country: "", errors: { ...prev.errors, platform: "", country: "" } }));
+    };
+
+    const setAddStoreCountry = (value) => {
+        setAddStoreModal((prev) => ({ ...prev, country: value, errors: { ...prev.errors, country: "" } }));
+    };
+
+    const submitAddStore = () => {
+        const errors = {};
+        if (!addStoreModal.platform) errors.platform = "Please select a platform";
+        if (!addStoreModal.country) errors.country = "Please select a country";
+
+        if (Object.keys(errors).length > 0) {
+            setAddStoreModal((prev) => ({ ...prev, errors }));
+            return;
+        }
+
+        const { companyId, email } = getCurrentCompanyContext();
+        if (!companyId || !email) {
+            toast.error("Company ID or company email is missing. Please sign in again.");
+            return;
+        }
+
+        const state = encodeURIComponent(`WMS${companyId}/${email}`);
+
+        const authUrl = addStoreModal.platform === "Shopee"
+            ? `https://grozziie.zjweiting.com:3091/new-shopee-open-shop/auth/url-generate/by-state?state=${state}`
+            : `https://services.tiktokshop.com/open/authorize?service_id=7525737223036126981&state=${state}`;
+
+        setAddStoreModal((prev) => ({ ...prev, loading: true, errors: {} }));
+        window.location.href = authUrl;
     };
 
     const openEditStore = (store) => setNicknameModal({ open: true, mode: "edit", store, nickname: store.nickname === "-" ? "" : store.nickname, saving: false });
@@ -283,10 +406,16 @@ export function useStoreAuthorization() {
         loading,
         error,
         reloadStores: loadStores,
-        selectedIds, toggleSelect, toggleAll,
+        selectedIds, selectedStores, selectionLoading, toggleSelect, toggleAll,
         allSelected: stores.length > 0 && stores.every((s) => selectedIds.includes(s.id)),
         openActionId, setOpenActionId,
         nicknameModal, openAddStore, openEditStore,
+        addStoreModal,
+        addStoreCountries: ADD_STORE_COUNTRIES,
+        closeAddStore,
+        setAddStorePlatform,
+        setAddStoreCountry,
+        submitAddStore,
         closeNickname, setNickname, handleNicknameSubmit,
         unlinkStore: requestUnlinkStore,
         unlinkModal, closeUnlinkModal, confirmUnlinkStore,

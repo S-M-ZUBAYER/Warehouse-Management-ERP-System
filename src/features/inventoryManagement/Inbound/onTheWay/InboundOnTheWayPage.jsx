@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
   Printer,
@@ -21,6 +21,7 @@ import {
   buildInboundOutputRows,
   inboundOutputColumns,
 } from "../../shared/inboundOutput";
+import { toast } from "sonner";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // InboundOnTheWayPage — On The Way list + Receive modal
@@ -60,15 +61,19 @@ export default function InboundOnTheWayPage() {
     isFetching,
     isError,
     error,
+    refetch,
     selectedIds,
+    selectionLoading,
     toggleSelect,
     toggleAll,
+    clearSelected,
     openCancelModal,
     showCancelModal,
     setShowCancelModal,
     actionTarget: cancelTarget,
     confirmCancel,
     cancelling,
+    selectedItems: selectedInboundItems,
   } = useInboundList({ status: "on_the_way" });
 
   const { warehouseOptions, warehouseLoading } = useInboundDropdowns();
@@ -80,14 +85,49 @@ export default function InboundOnTheWayPage() {
     receiveTarget,
     lines,
     detailLoading,
+    bulkDetails,
+    bulkDetailLoading,
     receivedQtys,
     receiveNotes,
     setReceiveNotes,
     handleReceivedQtyChange,
     fillAllExpected,
     confirmReceive,
+    canConfirmReceive,
     receiving,
-  } = useReceiveInbound();
+  } = useReceiveInbound({ onSuccess: clearSelected });
+
+  const selectedItems = useMemo(
+    () => selectedInboundItems.length === selectedIds.length
+      ? selectedInboundItems
+      : items.filter((item) => selectedIds.includes(item.id)),
+    [items, selectedIds, selectedInboundItems],
+  );
+  const outputItems = selectedItems.length > 0 ? selectedItems : items;
+
+  const openSelectedReceiveModal = () => {
+    if (selectedItems.length === 0) {
+      toast.error("Please select at least one inbound order");
+      return;
+    }
+
+    openReceiveModal(selectedItems);
+  };
+
+  const openSelectedCancelModal = () => {
+    if (selectedItems.length === 0) {
+      toast.error("Please select at least one inbound order");
+      return;
+    }
+
+    openCancelModal(selectedItems);
+  };
+
+  const cancelTargetCount = Array.isArray(cancelTarget) ? cancelTarget.length : cancelTarget ? 1 : 0;
+  const cancelTargetLabel =
+    cancelTargetCount > 1
+      ? `${cancelTargetCount} selected inbound orders`
+      : cancelTarget?.inbound_id ?? "selected inbound";
 
   // 3-dot action items for on_the_way rows
   const actionItems = [
@@ -126,7 +166,7 @@ export default function InboundOnTheWayPage() {
             <div className="relative" ref={bulkRef}>
               <button
                 onClick={() => setShowBulkDrop((p) => !p)}
-                disabled={selectedIds.length === 0}
+                disabled={selectedIds.length === 0 || receiving || cancelling}
                 className="flex items-center gap-2 px-4 py-1.5 text-sm font-semibold border border-surface-border rounded-lg text-slate-700 bg-white hover:bg-surface-card transition-colors disabled:opacity-50"
               >
                 Bulk Action
@@ -140,7 +180,11 @@ export default function InboundOnTheWayPage() {
                   {["Receive", "Cancel"].map((a) => (
                     <button
                       key={a}
-                      onClick={() => setShowBulkDrop(false)}
+                      onClick={() => {
+                        setShowBulkDrop(false);
+                        if (a === "Receive") openSelectedReceiveModal();
+                        if (a === "Cancel") openSelectedCancelModal();
+                      }}
                       className={`w-full text-left px-4 py-2 text-sm transition-colors ${a === "Cancel" ? "text-red-500 hover:bg-red-50" : "text-slate-700 hover:bg-surface-card"}`}
                     >
                       {a}
@@ -160,6 +204,7 @@ export default function InboundOnTheWayPage() {
         <InboundTable
           items={items}
           selectedIds={selectedIds}
+          selectionLoading={selectionLoading}
           onToggleSelect={toggleSelect}
           onToggleAll={toggleAll}
           actionItems={actionItems}
@@ -170,7 +215,10 @@ export default function InboundOnTheWayPage() {
             error?.response?.data?.message ??
             "Failed to load on-the-way inbounds"
           }
-          onRetry={() => setPage(1)}
+          onRetry={() => {
+            setPage(1);
+            refetch?.();
+          }}
         />
 
         {!isLoading && !isError && pagination.totalPages > 1 && (
@@ -203,11 +251,11 @@ export default function InboundOnTheWayPage() {
 
         <div className="flex justify-end gap-3 px-5 py-4 border-t border-surface-border">
           <ExportMenu
-            onExportCsv={() => exportRowsToCsv(buildInboundOutputRows(items), inboundOutputColumns, "on-the-way-inbounds.csv", "inbound")}
-            onExportXlsx={() => exportRowsToXlsx(buildInboundOutputRows(items), inboundOutputColumns, "on-the-way-inbounds.xlsx", "inbound")}
+            onExportCsv={() => exportRowsToCsv(buildInboundOutputRows(outputItems), inboundOutputColumns, "on-the-way-inbounds.csv", "inbound")}
+            onExportXlsx={() => exportRowsToXlsx(buildInboundOutputRows(outputItems), inboundOutputColumns, "on-the-way-inbounds.xlsx", "inbound")}
           />
           <button
-            onClick={() => printRows(buildInboundOutputRows(items), inboundOutputColumns, "On The Way Inbounds", "inbound")}
+            onClick={() => printRows(buildInboundOutputRows(outputItems), inboundOutputColumns, "On The Way Inbounds", "inbound")}
             className="px-16 py-2.5 text-base font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors"
           >
             Print
@@ -221,6 +269,8 @@ export default function InboundOnTheWayPage() {
           target={receiveTarget}
           lines={lines}
           loading={detailLoading}
+          bulkDetails={bulkDetails}
+          bulkLoading={bulkDetailLoading}
           receivedQtys={receivedQtys}
           notes={receiveNotes}
           onNotesChange={setReceiveNotes}
@@ -228,6 +278,7 @@ export default function InboundOnTheWayPage() {
           onFillAll={fillAllExpected}
           onConfirm={confirmReceive}
           onCancel={() => setShowReceiveModal(false)}
+          canConfirmReceive={canConfirmReceive}
           receiving={receiving}
         />
       )}
@@ -239,7 +290,7 @@ export default function InboundOnTheWayPage() {
           message={
             <>
               Cancel{" "}
-              <span className="font-semibold">{cancelTarget.inbound_id}</span>?
+              <span className="font-semibold">{cancelTargetLabel}</span>?
               This will reverse qty_inbound counters.
             </>
           }
@@ -261,6 +312,8 @@ function ReceiveModal({
   target,
   lines,
   loading,
+  bulkDetails = [],
+  bulkLoading = false,
   receivedQtys,
   notes,
   onNotesChange,
@@ -268,8 +321,15 @@ function ReceiveModal({
   onFillAll,
   onConfirm,
   onCancel,
+  canConfirmReceive,
   receiving,
 }) {
+  const targetCount = Array.isArray(target) ? target.length : target ? 1 : 0;
+  const isBulkTarget = targetCount > 1;
+  const targetLabel = isBulkTarget
+    ? `${targetCount} selected inbound orders`
+    : target?.inbound_id ?? "selected inbound";
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -289,7 +349,7 @@ function ReceiveModal({
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
               Enter actual quantities received for{" "}
-              <span className="font-semibold">{target?.inbound_id}</span>
+              <span className="font-semibold">{targetLabel}</span>
             </p>
           </div>
           <button
@@ -301,7 +361,82 @@ function ReceiveModal({
         </div>
 
         <div className="px-7 py-4 max-h-80 overflow-y-auto">
-          {loading ? (
+          {isBulkTarget ? (
+            bulkLoading ? (
+              <div className="flex items-center justify-center h-24 gap-2 text-xs text-slate-400">
+                <Loader2 size={14} className="animate-spin text-primary" />{" "}
+                Loading lines...
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {bulkDetails.map((detail) => (
+                  <div key={detail.id} className="rounded-xl border border-surface-border overflow-hidden">
+                    <div className="bg-surface-card px-4 py-2.5">
+                      <p className="text-xs font-semibold text-slate-700">
+                        Inbound ID: {detail.inbound_id ?? detail.id}
+                      </p>
+                    </div>
+                    {detail.lines?.length > 0 ? (
+                      <table className="w-full text-sm">
+                        <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
+                          <tr className="border-b border-surface-border">
+                            {["Product", "SKU", "Expected", "Received"].map((h) => (
+                              <th
+                                key={h}
+                                className="py-2 pr-3 text-left text-xs font-semibold text-slate-500 first:pl-4"
+                              >
+                                {h}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-surface-border">
+                          {detail.lines.map((line) => {
+                            const received = receivedQtys[line.id] ?? "";
+                            const hasDiscrepancy =
+                              received !== "" && Number(received) !== line.qty_expected;
+
+                            return (
+                              <tr key={line.id}>
+                                <td className="py-2.5 pl-4 pr-3 text-slate-700 text-xs truncate max-w-[180px]">
+                                  {line.merchantSku?.sku_title ?? "-"}
+                                </td>
+                                <td className="py-2.5 pr-3 font-mono text-xs text-slate-500">
+                                  {line.merchantSku?.sku_name ?? "-"}
+                                </td>
+                                <td className="py-2.5 pr-3 text-xs font-semibold text-slate-700">
+                                  {line.qty_expected}
+                                </td>
+                                <td className="py-2.5 pr-3">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={received}
+                                    onChange={(e) => onQtyChange(line.id, e.target.value)}
+                                    placeholder={String(line.qty_expected)}
+                                    className={`w-20 px-2 py-1 text-xs border rounded-lg text-center outline-none focus:border-primary transition-all ${
+                                      hasDiscrepancy ? "border-amber-400 bg-amber-50 text-amber-700" : "border-surface-border"
+                                    }`}
+                                  />
+                                  {hasDiscrepancy && (
+                                    <p className="text-xs text-amber-600 mt-0.5">
+                                      Discrepancy
+                                    </p>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <p className="py-6 text-center text-sm text-slate-400">No lines found</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )
+          ) : loading ? (
             <div className="flex items-center justify-center h-24 gap-2 text-xs text-slate-400">
               <Loader2 size={14} className="animate-spin text-primary" />{" "}
               Loading lines...
@@ -387,7 +522,7 @@ function ReceiveModal({
           </button>
           <button
             onClick={onConfirm}
-            disabled={receiving || loading}
+            disabled={receiving || loading || bulkLoading || !canConfirmReceive}
             className="px-6 py-2.5 text-sm font-semibold bg-primary hover:bg-primary-dark text-white rounded-xl disabled:opacity-60 flex items-center gap-2"
           >
             {receiving && <Loader2 size={13} className="animate-spin" />}

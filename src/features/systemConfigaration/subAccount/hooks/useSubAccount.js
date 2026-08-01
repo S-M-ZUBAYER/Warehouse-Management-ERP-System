@@ -385,6 +385,7 @@ import authApi from "../../../../lib/authApi";
 import useDebounce from "../../../../hooks/useDebounce";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { filterWarehousesByPermission } from "../../../../utils/permissions";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -396,6 +397,7 @@ import { toast } from "sonner";
 const EMPTY_FORM = Object.freeze({
     photo: null,
     photoPreview: null,
+    photoBase64: null,
     roleId: "",
     warehouseId: "",
     accountId: "",
@@ -419,9 +421,26 @@ const warehouseQueryKey = (search) => ["warehouses-all", search];
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Strip duplicate base64 prefixes that some image pickers produce.
+const getAuthAssetOrigin = () => {
+    const configured = String(import.meta.env.VITE_AUTH_BASE_URL || window.location.origin || "").trim();
+    try {
+        const url = new URL(configured, window.location.origin);
+        return url.origin;
+    } catch {
+        return configured.replace(/\/api\/v\d+\/?$/i, "").replace(/\/+$/, "");
+    }
+};
+
 export const cleanAvatar = (url) => {
     if (!url) return null;
-    return url.replace(/^(data:image\/\w+;base64,)+/, "data:image/jpeg;base64,");
+    const src = String(url).trim().replace(/^(data:image\/\w+;base64,)+/, "data:image/jpeg;base64,");
+
+    if (/^(https?:|data:image)/i.test(src)) return src;
+    if (src.startsWith("/uploads/") || src.startsWith("uploads/")) {
+        return `${getAuthAssetOrigin()}${src.startsWith("/") ? src : `/${src}`}`;
+    }
+
+    return `data:image/jpeg;base64,${src}`;
 };
 
 // Paginated fetcher — fetches page 1 first, then fires remaining pages in
@@ -457,6 +476,7 @@ const fetchAllWarehouses = (search = "") => {
 
 const fetchAllRoles = () => fetchPaginated("/roles");
 const fetchAllUsers = () => fetchPaginated("/users");
+const fetchUserDetail = (id) => api.get(`/users/${id}`).then((res) => res?.data ?? res);
 const fetchPlatformStores = () =>
     api.get("/platform-stores", { params: { page: 1, limit: 1000 } }).then((res) => {
         if (Array.isArray(res?.data)) return res.data;
@@ -479,6 +499,55 @@ const normalizeStorePermission = (store) => ({
     raw: store,
 });
 
+const firstPresent = (...values) =>
+    values.find((value) => value !== null && value !== undefined && String(value).trim() !== "");
+
+const getStorePermissionId = (permission) => firstPresent(
+    permission?.connectionId,
+    permission?.connection_id,
+    permission?.connection?.id,
+    permission?.storeConnectionId,
+    permission?.store_connection_id,
+    permission?.platformStoreId,
+    permission?.platform_store_id,
+    permission?.platformStore?.id,
+    permission?.store?.connectionId,
+    permission?.store?.connection_id,
+    permission?.store?.id,
+    permission?.storeId,
+    permission?.store_id,
+    permission?.id
+);
+
+const getWarehousePermissionId = (permission) => firstPresent(
+    permission?.warehouseId,
+    permission?.warehouse_id,
+    permission?.warehouse?.id,
+    permission?.id
+);
+
+const toNumericId = (value) => {
+    const id = Number(value);
+    return Number.isFinite(id) && id > 0 ? id : null;
+};
+
+const toPermissionRows = (ids, idKey) =>
+    ids
+        .map(toNumericId)
+        .filter(Boolean)
+        .map((id) => ({
+            [idKey]: id,
+            canView: true,
+            canEdit: true,
+        }));
+
+const toSystemRole = (roleName = "") => {
+    const normalized = String(roleName).toLowerCase();
+    if (normalized.includes("admin")) return "admin";
+    if (normalized.includes("manager")) return "manager";
+    return "staff";
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Validation — pure, outside the hook
 // ─────────────────────────────────────────────────────────────────────────────
@@ -489,6 +558,7 @@ const validateSubAccountForm = (form, isEdit) => {
     if (!form.email.trim()) e.email = "Email is required";
     if (!isEdit && !form.password.trim()) e.password = "Password is required";
     if (!form.roleId) e.roleId = "Role is required";
+    if (!form.warehouseId) e.warehouseId = "Warehouse is required";
     return e;
 };
 
@@ -599,6 +669,7 @@ export function useSubAccount() {
         staleTime: 1000 * 60 * 2,
         gcTime: 1000 * 60 * 5,
         placeholderData: (prev) => prev,
+        select: (warehouseRows) => filterWarehousesByPermission(warehouseRows),
     });
 
     // ── Roles query ───────────────────────────────────────────────────────────
@@ -625,6 +696,7 @@ export function useSubAccount() {
         data: rawAccounts = [],
         isLoading: accountLoading,
         isError: accountError,
+        refetch: refetchAccounts,
     } = useQuery({
         queryKey: SUB_ACCOUNT_QUERY_KEY,
         queryFn: fetchAllUsers,
@@ -745,7 +817,7 @@ export function useSubAccount() {
         if (!file) return;
         const reader = new FileReader();
         reader.onloadend = () =>
-            setForm((prev) => ({ ...prev, photoPreview: reader.result }));
+            setForm((prev) => ({ ...prev, photo: file, photoPreview: reader.result, photoBase64: reader.result }));
         reader.readAsDataURL(file);
     }, []);
 
@@ -771,37 +843,54 @@ export function useSubAccount() {
     }, []);
 
     // ── Open edit — pre-fills form from API data ──────────────────────────────
-    const handleEditClick = useCallback((acc) => {
-        setEditAccount(acc);
+    const handleEditClick = useCallback(async (acc) => {
+        let account = acc;
+        try {
+            account = await fetchUserDetail(acc.id);
+        } catch (err) {
+            toast.error(err?.response?.data?.message || "Failed to load account permissions");
+        }
+
+        setEditAccount(account);
 
         setForm({
             photo: null,
+            photoBase64: null,
             // Cast to String — HTML <select> values are always strings;
             // a numeric id from the API would never match otherwise.
-            roleId: String(acc.roleInfo?.id ?? ""),
-            warehouseId: String(acc.warehouseId ?? ""),
-            accountId: acc.account_id ?? "",
+            roleId: String(account.roleInfo?.id ?? account.role_id ?? account.roleId ?? ""),
+            warehouseId: String(account.warehouseId ?? account.warehouse_id ?? ""),
+            accountId: account.account_id ?? account.accountId ?? "",
             password: "",                              // never pre-fill
-            name: acc.name ?? "",
-            department: acc.department ?? "",
-            designation: acc.designation ?? "",
+            name: account.name ?? "",
+            department: account.department ?? "",
+            designation: account.designation ?? "",
             // API may return `phone` or `phoneNumber` — handle both
-            phoneNumber: acc.phone ?? acc.phoneNumber ?? "",
-            email: acc.email ?? "",
-            address: acc.address ?? "",
-            photoPreview: cleanAvatar(acc.avatar_url) ?? null,
+            phoneNumber: account.phone ?? account.phoneNumber ?? "",
+            email: account.email ?? "",
+            address: account.address ?? "",
+            photoPreview: cleanAvatar(account.avatar_url ?? account.avatarUrl) ?? null,
         });
 
         // Extract ids from the nested permission objects the API returns
-        const preStores = (acc.storePermissions ?? []).map(
-            (p) => p.connectionId ?? p.id
-        );
-        setSelectedStores(preStores.length ? preStores : (acc.storeIds ?? []));
+        const storePermissionRows =
+            account.storePermissions ??
+            account.store_permissions ??
+            account.platformStorePermissions ??
+            account.platform_store_permissions ??
+            account.connections ??
+            account.stores ??
+            [];
+        const preStores = storePermissionRows.map(getStorePermissionId).filter(Boolean).map(String);
+        setSelectedStores(preStores.length ? preStores : (account.storeIds ?? account.store_ids ?? []).map(String));
 
-        const preWarehouses = (acc.warehousePermissions ?? []).map(
-            (p) => p.warehouseId ?? p.id
-        );
-        setSelectedWarehouses(preWarehouses.length ? preWarehouses : (acc.warehouseIds ?? []));
+        const warehousePermissionRows =
+            account.warehousePermissions ??
+            account.warehouse_permissions ??
+            account.warehouses ??
+            [];
+        const preWarehouses = warehousePermissionRows.map(getWarehousePermissionId).filter(Boolean).map(String);
+        setSelectedWarehouses(preWarehouses.length ? preWarehouses : (account.warehouseIds ?? account.warehouse_ids ?? []).map(String));
 
         setErrors({});
         setStoreSearch("");
@@ -815,29 +904,31 @@ export function useSubAccount() {
     // ── Submit ────────────────────────────────────────────────────────────────
     const handleSave = useCallback(() => {
         const e = validateSubAccountForm(form, !!editAccount);
-        if (Object.keys(e).length) { setErrors(e); return; }
+        if (Object.keys(e).length) {
+            setErrors(e);
+            toast.error("Please fill all required fields");
+            return;
+        }
+
+        const selectedRole = roleOptions.find((role) => String(role.id) === String(form.roleId));
 
         const payload = {
             name: form.name,
             email: form.email,
             accountId: form.accountId,
+            role: toSystemRole(selectedRole?.name),
             department: form.department,
             designation: form.designation,
             phone: form.phoneNumber,
-            avatar: form.photoPreview ?? null,
+            ...(!editAccount && { avatar: form.photoBase64 ?? null }),
+            ...(editAccount && form.photoBase64 && { avatar: form.photoBase64 }),
             address: form.address ?? null,
             roleId: Number(form.roleId) || null,
             warehouseId: Number(form.warehouseId) || null,
-            storePermissions: selectedStores.map((id) => ({
-                connectionId: id,
-                canView: true,
-                canEdit: true,
-            })),
-            warehousePermissions: selectedWarehouses.map((id) => ({
-                warehouseId: id,
-                canView: true,
-                canEdit: true,
-            })),
+            ...(!editAccount && {
+                storePermissions: toPermissionRows(selectedStores, "connectionId"),
+            }),
+            warehousePermissions: toPermissionRows(selectedWarehouses, "warehouseId"),
             // Only include password when the user actually typed one
             ...(form.password.trim() && { password: form.password }),
         };
@@ -849,10 +940,10 @@ export function useSubAccount() {
                 name: form.name,
                 email: form.email,
                 password: form.password,
-                photo: form.photoPreview,
+                photo: form.photoBase64,
             },
         });
-    }, [form, editAccount, selectedStores, selectedWarehouses, saveMutation]);
+    }, [form, editAccount, roleOptions, selectedStores, selectedWarehouses, saveMutation]);
 
     // ── Delete ────────────────────────────────────────────────────────────────
     const handleAccountDelete = useCallback(() => {
@@ -862,8 +953,14 @@ export function useSubAccount() {
 
     // ── Selection toggles ─────────────────────────────────────────────────────
     const toggleSelect = useCallback((id) => setSelectedIds((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]), []);
-    const toggleStore = useCallback((id) => setSelectedStores((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]), []);
-    const toggleWarehouse = useCallback((id) => setSelectedWarehouses((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]), []);
+    const toggleStore = useCallback((id) => {
+        const normalizedId = String(id);
+        setSelectedStores((p) => p.includes(normalizedId) ? p.filter((x) => x !== normalizedId) : [...p, normalizedId]);
+    }, []);
+    const toggleWarehouse = useCallback((id) => {
+        const normalizedId = String(id);
+        setSelectedWarehouses((p) => p.includes(normalizedId) ? p.filter((x) => x !== normalizedId) : [...p, normalizedId]);
+    }, []);
 
     // ─────────────────────────────────────────────────────────────────────────
     return {
@@ -872,6 +969,7 @@ export function useSubAccount() {
         accounts: filteredAccounts,
         accountLoading,
         accountError,
+        refetchAccounts,
 
         // row selection
         selectedIds, toggleSelect,

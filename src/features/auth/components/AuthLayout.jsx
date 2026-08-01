@@ -1,10 +1,20 @@
 import { Warehouse } from "lucide-react";
 import logInLogo from "../../../assets/Login/logInLogo.svg";
 import grozziieLogo from "../../../assets/Login/GrozziieLogo.svg";
+import LanguageSelector from "../../../components/shared/LanguageSelector";
+import { useTranslation } from "react-i18next";
+import { translateStaticText } from "../../../i18nDomTranslator";
 
 export default function AuthLayout({ children, subtitle }) {
+  const { i18n } = useTranslation();
+  const translate = (value) => translateStaticText(value, i18n.resolvedLanguage || i18n.language);
+
   return (
     <div className="min-h-screen flex items-center justify-center p-6 relative overflow-hidden bg-white font-body">
+      <div className="absolute right-4 top-4 z-20">
+        <LanguageSelector />
+      </div>
+
       {/* Ambient glow top-right */}
       <div
         className="absolute pointer-events-none"
@@ -62,7 +72,7 @@ export default function AuthLayout({ children, subtitle }) {
           {/* Logo */}
           <div className="w-full text-center gap-3 mb-10 self-start">
             <img className="block mx-auto mb-6" src={grozziieLogo} alt="" />
-            <p className="text-sm leading-relaxed text-primary">{subtitle}</p>
+            <p className="text-sm leading-relaxed text-primary">{translate(subtitle)}</p>
           </div>
 
           <img src={logInLogo} alt="" />

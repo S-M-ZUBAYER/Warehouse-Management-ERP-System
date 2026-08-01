@@ -575,7 +575,10 @@ export default function ProductListPage() {
     listFetching,
     isListError,
     listError,
+    refetchList,
     selectedIds,
+    selectedProducts,
+    selectionLoading,
     toggleSelect,
     toggleAll,
     allSelected,
@@ -676,7 +679,10 @@ export default function ProductListPage() {
         listFetching={listFetching}
         isListError={isListError}
         listError={listError}
+        onRetry={refetchList}
         selectedIds={selectedIds}
+        selectedProducts={selectedProducts}
+        selectionLoading={selectionLoading}
         toggleSelect={toggleSelect}
         toggleAll={toggleAll}
         allSelected={allSelected}
@@ -708,6 +714,7 @@ export default function ProductListPage() {
           handleSave={handleSave}
           handleCloseModal={handleCloseModal}
           saving={saving}
+          readOnlyWarehouse={Boolean(editingProduct)}
           warehouseSearch={warehouseSearch}
           setWarehouseSearch={setWarehouseSearch}
           modalWarehouses={modalWarehouses}

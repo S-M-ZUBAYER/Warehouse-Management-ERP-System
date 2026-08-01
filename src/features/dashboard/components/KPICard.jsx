@@ -16,9 +16,10 @@ const ICONS = {
   "out-of-stock": outOfStockIcon,
 };
 
-export default function KPICard({ label, value, icon, color, bg, loading }) {
+export default function KPICard({ label, value, icon, color, bg, loading, onClick }) {
   const Icon = ICONS[icon] || Package;
   const isSvgIcon = typeof Icon === "string";
+  const isClickable = typeof onClick === "function";
 
   if (loading) {
     return (
@@ -35,10 +36,20 @@ export default function KPICard({ label, value, icon, color, bg, loading }) {
 
   return (
     <div
-      className="rounded-2xl p-4 bg-white transition-all duration-200 cursor-default group"
+      role={isClickable ? "button" : undefined}
+      tabIndex={isClickable ? 0 : undefined}
+      className={`rounded-2xl p-4 bg-white transition-all duration-200 group ${
+        isClickable ? "cursor-pointer" : "cursor-default"
+      }`}
       style={{
         border: "1px solid #F1F5F9",
         boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+      }}
+      onClick={onClick}
+      onKeyDown={(event) => {
+        if (!isClickable || (event.key !== "Enter" && event.key !== " ")) return;
+        event.preventDefault();
+        onClick();
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)";

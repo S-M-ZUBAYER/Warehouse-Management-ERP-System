@@ -18,6 +18,15 @@ export default function AddMerchantSKUModal({
 }) {
   const [showWarehousePicker, setShowWarehousePicker] = useState(false);
   const modalBodyRef = useRef(null);
+  const isWarehouseSelected = Boolean(form.warehouseId);
+  const isImageSelected = Boolean(form.photoFile || form.photoPreview);
+  const hasValue = (value) => String(value ?? "").trim().length > 0;
+  const areRequiredFieldsComplete =
+    isImageSelected &&
+    isWarehouseSelected &&
+    ["productPrice", "weight", "length", "width", "height"].every((name) =>
+      hasValue(form[name])
+    );
 
   const fields = [
     {
@@ -32,8 +41,8 @@ export default function AddMerchantSKUModal({
       placeholder: "Product details here",
     },
     { label: "GTIN", name: "gtin", placeholder: "GTIN here" },
-    { label: "Product Price", name: "productPrice", placeholder: "180.00" },
-    { label: "Weight", name: "weight", placeholder: "Product weight" },
+    { label: "*Product Price", name: "productPrice", placeholder: "180.00" },
+    { label: "*Weight", name: "weight", placeholder: "Product weight" },
   ];
 
   return (
@@ -43,7 +52,6 @@ export default function AddMerchantSKUModal({
         background: "rgba(200,210,220,0.55)",
         backdropFilter: "blur(3px)",
       }}
-      onClick={(e) => e.target === e.currentTarget && handleCloseModal()}
     >
       <div
         className="bg-white rounded-2xl shadow-xl w-full font-body overflow-hidden"
@@ -92,7 +100,7 @@ export default function AddMerchantSKUModal({
               <>
                 <UploadCloud size={28} className="text-slate-400 mb-2" />
                 <p className="text-sm font-semibold text-slate-700">
-                  Choose a file or drag & drop it here
+                  *Choose a file or drag & drop it here
                 </p>
                 <p className="text-xs text-slate-400 mt-0.5">
                   JPEG or PNG, less than 5MB
@@ -122,6 +130,7 @@ export default function AddMerchantSKUModal({
                 <input
                   type="text"
                   name={name}
+                  required={["productPrice", "weight"].includes(name)}
                   value={form[name]}
                   onChange={handleFormChange}
                   placeholder={placeholder}
@@ -140,7 +149,9 @@ export default function AddMerchantSKUModal({
 
             {/* Size */}
             <div>
-              <label className="block text-xs text-slate-600 mb-1">Size</label>
+              <label className="block text-xs text-slate-600 mb-1">
+                *Size
+              </label>
               <div className="grid grid-cols-3 gap-1.5">
                 {[
                   ["length", "Length"],
@@ -151,6 +162,7 @@ export default function AddMerchantSKUModal({
                     key={name}
                     type="text"
                     name={name}
+                    required
                     value={form[name]}
                     onChange={handleFormChange}
                     placeholder={ph}
@@ -163,7 +175,7 @@ export default function AddMerchantSKUModal({
             {/* Warehouse picker */}
             <div className="relative">
               <label className="block text-xs text-slate-600 mb-1">
-                Select Warehouse
+                *Select Warehouse
               </label>
               <button
                 type="button"
@@ -265,7 +277,7 @@ export default function AddMerchantSKUModal({
             </button>
             <button
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || !areRequiredFieldsComplete}
               className="px-6 py-2.5 text-sm font-semibold bg-primary hover:bg-primary-dark text-white rounded-xl transition-colors disabled:opacity-60 flex items-center gap-2"
             >
               {saving && (

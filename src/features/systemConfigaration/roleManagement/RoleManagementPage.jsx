@@ -1,4 +1,4 @@
-import { Search, Plus, Eye, Pencil, Trash2 } from "lucide-react";
+import { AlertCircle, RefreshCw, Search, Plus, Eye, Pencil, Trash2 } from "lucide-react";
 import { useRef, useEffect, useState } from "react";
 import Topbar from "../../../components/layout/Topbar";
 import { useRoleManagement } from "./hooks/useRoleManagement";
@@ -16,6 +16,7 @@ export default function RoleManagementPage() {
     isRolesError,
     rolesLoading,
     rolesError,
+    refetchRoles,
     openActionId,
     setOpenActionId,
     showModal,
@@ -105,16 +106,22 @@ export default function RoleManagementPage() {
         </div>
         <div className="overflow-x-auto">
           {/* ── Loading ── */}
-          {rolesLoading && (
-            <div className="flex items-center justify-center py-16 text-slate-400 text-sm">
-              Loading roles...
-            </div>
-          )}
+          {rolesLoading && <RoleTableSkeleton />}
 
           {/* ── Error ── */}
           {isRolesError && (
-            <div className="flex items-center justify-center py-16 text-red-500 text-sm">
-              {rolesError?.message ?? "Failed to load roles"}
+            <div className="flex flex-col items-center justify-center py-20 gap-3">
+              <AlertCircle size={36} className="text-red-400 opacity-70" />
+              <p className="text-sm font-medium text-slate-700">
+                {rolesError?.response?.data?.message ?? rolesError?.message ?? "Failed to load roles"}
+              </p>
+              <button
+                type="button"
+                onClick={refetchRoles}
+                className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-primary border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors"
+              >
+                <RefreshCw size={12} /> Retry
+              </button>
             </div>
           )}
 
@@ -295,5 +302,51 @@ export default function RoleManagementPage() {
         deleting={deleting}
       />
     </div>
+  );
+}
+
+function RoleTableSkeleton() {
+  return (
+    <table className="w-full text-sm font-body">
+      <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
+        <tr className="border-b border-surface-border">
+          {[
+            { label: "Role Name", cls: "pl-5 w-[22%]" },
+            { label: "Sub Account Linking Status", cls: "w-[22%]" },
+            { label: "Create Time", cls: "w-[22%]" },
+            { label: "Updated Time", cls: "w-[22%]" },
+            { label: "Actions", cls: "pr-5 w-[12%]" },
+          ].map(({ label, cls }) => (
+            <th
+              key={label}
+              className={`py-3 text-left text-xs font-semibold text-slate-600 pr-4 ${cls}`}
+            >
+              {label}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-surface-border">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <tr key={index} className="animate-pulse">
+            <td className="pl-5 py-3.5 pr-4">
+              <div className="h-4 w-32 rounded bg-slate-200" />
+            </td>
+            <td className="py-3.5 pr-4">
+              <div className="h-4 w-24 rounded bg-slate-200" />
+            </td>
+            <td className="py-3.5 pr-4">
+              <div className="h-4 w-32 rounded bg-slate-200" />
+            </td>
+            <td className="py-3.5 pr-4">
+              <div className="h-4 w-32 rounded bg-slate-200" />
+            </td>
+            <td className="py-3.5 pr-5">
+              <div className="h-8 w-8 rounded-lg bg-slate-200" />
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }

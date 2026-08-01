@@ -4,13 +4,6 @@ import { Calendar, ChevronDown } from "lucide-react";
 
 const formatDate = (date) => date.toISOString().split("T")[0];
 
-const defaultDateRange = () => {
-  const end = new Date();
-  const start = new Date();
-  start.setDate(start.getDate() - 30);
-  return { startDate: formatDate(start), endDate: formatDate(end) };
-};
-
 function DateRangePicker({ value, onChange }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -139,10 +132,10 @@ const CustomTooltip = ({ active, payload }) => {
   );
 };
 
-export default function OrderStatusChart({ data, loading }) {
-  const [dateRange, setDateRange] = useState(defaultDateRange);
+export default function OrderStatusChart({ data, loading, dateRange, onDateRangeChange, onStatusClick }) {
   const total = data?.reduce((sum, d) => sum + d.value, 0) || 0;
   const enriched = (data || []).map((d) => ({ ...d, total }));
+  const handleStatusClick = (item) => onStatusClick?.(item?.payload || item);
 
   if (loading) {
     return (
@@ -170,7 +163,7 @@ export default function OrderStatusChart({ data, loading }) {
     >
       <div className="flex items-center justify-between gap-3 mb-6">
         <h3 className="text-lg font-semibold font-display text-primary-text">Order Status</h3>
-        <DateRangePicker value={dateRange} onChange={setDateRange} />
+        <DateRangePicker value={dateRange} onChange={onDateRangeChange} />
       </div>
 
       <div className="flex items-center gap-4">
@@ -187,9 +180,11 @@ export default function OrderStatusChart({ data, loading }) {
                 dataKey="value"
                 startAngle={90}
                 endAngle={-270}
+                cursor={onStatusClick ? "pointer" : "default"}
+                onClick={handleStatusClick}
               >
                 {enriched.map((entry, index) => (
-                  <Cell key={index} fill={entry.color} />
+                  <Cell key={index} fill={entry.color} className={onStatusClick ? "outline-none" : ""} />
                 ))}
               </Pie>
               <Tooltip content={<CustomTooltip />} wrapperStyle={{ zIndex: 20 }} />
@@ -204,14 +199,19 @@ export default function OrderStatusChart({ data, loading }) {
         </div>
 
         <div className="flex flex-col gap-2.5 flex-1">
-          {data.map(({ name, value, color }) => (
-            <div key={name} className="flex items-center justify-between">
+          {data.map((item) => (
+            <button
+              key={item.name}
+              type="button"
+              onClick={() => handleStatusClick(item)}
+              className="flex items-center justify-between rounded-md px-1 py-0.5 text-left transition-colors hover:bg-surface-card focus:outline-none focus:ring-2 focus:ring-primary/10"
+            >
               <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color }} />
-                <span className="text-xs font-body" style={{ color: "#333333" }}>{name}</span>
+                <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: item.color }} />
+                <span className="text-xs font-body" style={{ color: "#333333" }}>{item.name}</span>
               </div>
-              <span className="text-xs font-semibold ml-2 font-body" style={{ color: "#333333" }}>{value}</span>
-            </div>
+              <span className="text-xs font-semibold ml-2 font-body" style={{ color: "#333333" }}>{item.value}</span>
+            </button>
           ))}
         </div>
       </div>

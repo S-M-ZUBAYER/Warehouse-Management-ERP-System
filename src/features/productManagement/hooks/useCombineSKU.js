@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { COMBINE_SKU_KEYS } from "./useCombineSKUList";
 import api from "../../../lib/api";
 import useDebounce from "../../../hooks/useDebounce";
+import { filterWarehousesByPermission } from "../../../utils/permissions";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // API helpers
@@ -93,6 +94,7 @@ export function useAddCombineSKU() {
         staleTime: 1000 * 60 * 2,
         gcTime: 1000 * 60 * 5,
         placeholderData: (prev) => prev,
+        select: (warehouses) => filterWarehousesByPermission(warehouses),
     });
 
     const filteredSkus = pickerData?.data ?? [];

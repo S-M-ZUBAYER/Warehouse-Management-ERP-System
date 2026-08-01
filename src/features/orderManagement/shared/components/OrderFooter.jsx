@@ -1,12 +1,15 @@
 import { ChevronDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { exportRowsToCsv, printRows } from "../../../../utils/tableOutput";
+import { exportRowsToCsv, printRows, requireSelectedRows } from "../../../../utils/tableOutput";
+import { translateStaticText } from "../../../../i18nDomTranslator";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // OrderFooter — Export dropdown + Print button matching all Figma order pages
 // ─────────────────────────────────────────────────────────────────────────────
 
 const defaultColumns = [
+  { label: "Platform", key: "platformLabel" },
+  { label: "Store", key: "storeName" },
   { label: "Package No.", key: "pkgNo" },
   { label: "SKU", key: "sku" },
   { label: "Order Number", key: "orderNo" },
@@ -46,7 +49,7 @@ const buildWorksheetXml = (rows, columns) => {
   const headerCells = columns
     .map((column, index) => {
       const ref = `${columnName(index)}1`;
-      return `<c r="${ref}" t="inlineStr"><is><t>${xmlEscape(column.label)}</t></is></c>`;
+      return `<c r="${ref}" t="inlineStr"><is><t>${xmlEscape(translateStaticText(column.label))}</t></is></c>`;
     })
     .join("");
 
@@ -288,7 +291,9 @@ export default function OrderFooter({
 
   const handleXlsxExport = () => {
     setExportOpen(false);
-    exportRowsToXlsx(selectedRows, outputColumns, "orders.xlsx");
+    const selected = requireSelectedRows(selectedRows, "order");
+    if (!selected) return;
+    exportRowsToXlsx(selected, outputColumns, "orders.xlsx");
   };
 
   const handlePrint = () => {

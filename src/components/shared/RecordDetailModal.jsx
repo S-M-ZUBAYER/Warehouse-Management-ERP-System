@@ -1,10 +1,16 @@
 import { X } from "lucide-react";
 
+const normalizeLabelAcronyms = (label) =>
+  String(label)
+    .replace(/\bSku\b/g, "SKU")
+    .replace(/\bId\b/g, "ID")
+    .replace(/\bGtin\b/g, "GTIN");
+
 const formatLabel = (key) =>
-  String(key)
+  normalizeLabelAcronyms(String(key)
     .replace(/[_-]/g, " ")
     .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+    .replace(/\b\w/g, (c) => c.toUpperCase()));
 
 const isEmpty = (value) =>
   value === null || value === undefined || value === "" ||
@@ -38,14 +44,22 @@ const renderValue = (value) => {
   return String(value);
 };
 
-export default function RecordDetailModal({ open, title = "Details", subtitle, record, fields, onClose }) {
+export default function RecordDetailModal({
+  open,
+  title = "Details",
+  subtitle,
+  record,
+  fields,
+  onClose,
+  showRecordId = true,
+}) {
   if (!open || !record) return null;
 
   const rows = (fields && fields.length ? fields : Object.keys(record).slice(0, 24).map((key) => ({ key })))
     .map((field) => {
       const key = field.key || field;
       const value = field.render ? field.render(record) : record[key];
-      return { label: field.label || formatLabel(key), value, fullWidth: field.fullWidth };
+      return { label: normalizeLabelAcronyms(field.label || formatLabel(key)), value, fullWidth: field.fullWidth };
     });
 
   return (
@@ -70,7 +84,7 @@ export default function RecordDetailModal({ open, title = "Details", subtitle, r
                 className="w-16 h-16 rounded-xl object-cover border border-surface-border"
                 onError={(e) => { e.currentTarget.style.display = "none"; }}
               />
-              <div>
+              <div className={showRecordId ? "" : "[&>p:nth-child(2)]:hidden"}>
                 <p className="text-sm font-semibold text-slate-800">{record.name || record.sku_title || record.sku_name || record.product_name || "Record"}</p>
                 <p className="text-xs text-slate-500">ID: {record.id ?? "—"}</p>
               </div>

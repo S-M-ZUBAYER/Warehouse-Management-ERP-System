@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, createContext, useContext } from "react";
+import { useTranslation } from "react-i18next";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -18,6 +19,7 @@ import {
   FileText,
   AlertCircle,
   Crown,
+  MessageCircle,
 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import { getStoredWarehouseUser, filterNavByPermission } from "@/utils/permissions";
@@ -27,23 +29,27 @@ import grozziielogo from "../../assets/GrozziieLogo.svg";
 const navItems = [
   {
     label: "Dashboard",
+    i18nKey: "nav.dashboard",
     permissionKey: "dashboard",
     to: "/warehouse_management",
     icon: LayoutDashboard,
   },
   {
     label: "Product Management",
+    i18nKey: "nav.productManagement",
     permissionKey: "product_management",
     icon: ProductManagementIcon,
     children: [
       {
         label: "Product List",
+        i18nKey: "nav.productList",
         permissionKey: "product_list",
         to: "/warehouse_management/products/list",
         icon: List,
       },
       {
         label: "Combine SKU",
+        i18nKey: "nav.combineSku",
         permissionKey: "combine_sku",
         to: "/warehouse_management/products/combine_sku",
         icon: GitMerge,
@@ -52,28 +58,33 @@ const navItems = [
   },
   {
     label: "Inventory Management",
+    i18nKey: "nav.inventoryManagement",
     permissionKey: "inventory_management",
     icon: InventoryManagementIcon,
     children: [
       {
         label: "Merchant SKU",
+        i18nKey: "nav.merchantSku",
         permissionKey: "merchant_sku",
         to: "/warehouse_management/inventory/merchant_SKU",
         icon: Layers,
       },
       {
         label: "SKU Mapping",
+        i18nKey: "nav.skuMapping",
         permissionKey: "sku_mapping",
         icon: RotateCcw,
         children: [
           {
             label: "By Product",
+            i18nKey: "nav.byProduct",
             permissionKey: "sku_mapping_by_product",
             to: "/warehouse_management/inventory/SKU_mapping/byProduct",
             icon: FileText,
           },
           {
             label: "By Merchant",
+            i18nKey: "nav.byMerchant",
             permissionKey: "sku_mapping_by_merchant",
             to: "/warehouse_management/inventory/SKU_mapping/byMerchant",
             icon: AlertCircle,
@@ -82,37 +93,72 @@ const navItems = [
       },
       {
         label: "Inventory List",
+        i18nKey: "nav.inventoryList",
         permissionKey: "inventory_list",
         to: "/warehouse_management/inventory/list",
         icon: SlidersHorizontal,
       },
       {
         label: "Manual inbound",
+        i18nKey: "nav.manualInbound",
         permissionKey: "manual_inbound",
         to: "/warehouse_management/inventory/manual_inbound",
         icon: SlidersHorizontal,
       },
       {
         label: "Inbound",
+        i18nKey: "nav.inbound",
         permissionKey: "inbound",
         icon: RotateCcw,
         children: [
           {
             label: "Draft",
+            i18nKey: "nav.draft",
             permissionKey: "inbound_draft",
             to: "/warehouse_management/inventory/inbound/draft",
             icon: FileText,
           },
           {
             label: "On The Way",
+            i18nKey: "nav.onTheWay",
             permissionKey: "inbound_on_the_way",
             to: "/warehouse_management/inventory/inbound/onTheWay",
             icon: AlertCircle,
           },
           {
             label: "Complete",
+            i18nKey: "nav.complete",
             permissionKey: "inbound_complete",
             to: "/warehouse_management/inventory/inbound/completed",
+            icon: AlertCircle,
+          },
+        ],
+      },
+      {
+        label: "Outbound",
+        i18nKey: "nav.outbound",
+        permissionKey: "inbound",
+        icon: RotateCcw,
+        children: [
+          {
+            label: "Draft",
+            i18nKey: "nav.draft",
+            permissionKey: "inbound_draft",
+            to: "/warehouse_management/inventory/outbound/draft",
+            icon: FileText,
+          },
+          {
+            label: "On The Way",
+            i18nKey: "nav.onTheWay",
+            permissionKey: "inbound_on_the_way",
+            to: "/warehouse_management/inventory/outbound/onTheWay",
+            icon: AlertCircle,
+          },
+          {
+            label: "Complete",
+            i18nKey: "nav.complete",
+            permissionKey: "inbound_complete",
+            to: "/warehouse_management/inventory/outbound/completed",
             icon: AlertCircle,
           },
         ],
@@ -125,6 +171,7 @@ const navItems = [
       // },
       {
         label: "Inventory Log",
+        i18nKey: "nav.inventoryLog",
         permissionKey: "inventory_log",
         to: "/warehouse_management/inventory/log",
         icon: SlidersHorizontal,
@@ -133,52 +180,61 @@ const navItems = [
   },
   {
     label: "Order Management",
+    i18nKey: "nav.orderManagement",
     permissionKey: "order_management",
     icon: ShoppingBasket,
     children: [
       {
         label: "Order Processing",
+        i18nKey: "nav.orderProcessing",
         permissionKey: "order_processing",
         icon: RotateCcw,
         children: [
           {
             label: "New Order",
+            i18nKey: "nav.newOrder",
             permissionKey: "new_order",
             to: "/warehouse_management/orders/processing/new_order",
             icon: FileText,
           },
           {
             label: "Processed Order",
+            i18nKey: "nav.processedOrder",
             permissionKey: "processed_order",
             to: "/warehouse_management/orders/processing/processed",
             icon: AlertCircle,
           },
           {
             label: "To Pickup Order",
+            i18nKey: "nav.toPickupOrder",
             permissionKey: "to_pickup_order",
             to: "/warehouse_management/orders/processing/pick_up",
             icon: AlertCircle,
           },
           {
             label: "Shipped Order",
+            i18nKey: "nav.shippedOrder",
             permissionKey: "shipped_order",
             to: "/warehouse_management/orders/processing/shipped",
             icon: AlertCircle,
           },
           {
             label: "Completed",
+            i18nKey: "nav.completed",
             permissionKey: "completed_order",
             to: "/warehouse_management/orders/processing/completed",
             icon: AlertCircle,
           },
           {
             label: "All Order",
+            i18nKey: "nav.allOrder",
             permissionKey: "all_order",
             to: "/warehouse_management/orders/processing/all_order",
             icon: AlertCircle,
           },
           {
             label: "Canceled Order",
+            i18nKey: "nav.canceledOrder",
             permissionKey: "canceled_order",
             to: "/warehouse_management/orders/processing/canceled",
             icon: AlertCircle,
@@ -187,42 +243,62 @@ const navItems = [
       },
       {
         label: "Manual Order",
+        i18nKey: "nav.manualOrder",
         permissionKey: "manual_order",
         to: "/warehouse_management/orders/manual_order",
         icon: RotateCcw,
       },
+      {
+        label: "Platform Manual Order",
+        i18nKey: "nav.platformManualOrder",
+        permissionKey: "manual_order",
+        to: "/warehouse_management/orders/platform_manual_order",
+        icon: FileText,
+      },
+      // {
+      //   label: "Manual order by aftership",
+      //   permissionKey: "manual_order",
+      //   to: "/warehouse_management/orders/aftership_manual_order",
+      //   icon: RotateCcw,
+      // },
     ],
   },
   {
     label: "Warehouse Management",
+    i18nKey: "nav.warehouseManagement",
     permissionKey: "warehouse_management",
     to: "/warehouse_management/warehouse",
     icon: Warehouse,
   },
   {
     label: "System Configuration",
+    i18nKey: "nav.systemConfiguration",
     permissionKey: "system_configuration",
     icon: SystemConfigurationIcon,
     children: [
       {
         label: "Store Authorization",
+        i18nKey: "nav.storeAuthorization",
         permissionKey: "store_authorization",
         to: "/warehouse_management/config/store_authorization",
         icon: MapPin,
       },
       {
         label: "Account Management",
+        i18nKey: "nav.accountManagement",
         permissionKey: "account_management",
         icon: RotateCcw,
         children: [
           {
             label: "Sub Account",
+            i18nKey: "nav.subAccount",
             permissionKey: "sub_account",
             to: "/warehouse_management/config/account_management/sub_account",
             icon: FileText,
           },
           {
             label: "Role Management",
+            i18nKey: "nav.roleManagement",
             permissionKey: "role_management",
             to: "/warehouse_management/config/account_management/role_management",
             icon: AlertCircle,
@@ -231,6 +307,13 @@ const navItems = [
       },
     ],
   },
+  //  {
+  //   label: "Chat",
+  //   i18nKey: "nav.chat",
+  //   permissionKey: "dashboard",
+  //   to: "/warehouse_management/chat",
+  //   icon: MessageCircle,
+  // }
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -275,6 +358,8 @@ function SubSubChildArrow() {
 }
 
 function CollapsedFlyoutItem({ item, depth = 0, onClose }) {
+  const { t } = useTranslation();
+  const label = t(item.i18nKey, { defaultValue: item.label });
   if (item.to) {
     return (
       <NavLink
@@ -292,7 +377,7 @@ function CollapsedFlyoutItem({ item, depth = 0, onClose }) {
         }
       >
         {depth > 0 && <SubSubChildArrow />}
-        <span className="truncate">{item.label}</span>
+        <span className="truncate">{label}</span>
       </NavLink>
     );
   }
@@ -301,7 +386,7 @@ function CollapsedFlyoutItem({ item, depth = 0, onClose }) {
     <div className={depth > 0 ? "ml-4" : ""}>
       <div className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-[#6B8299]">
         {depth > 0 && <SubSubChildArrow />}
-        <span className="truncate">{item.label}</span>
+        <span className="truncate">{label}</span>
       </div>
       <div className="space-y-0.5">
         {item.children?.map((child) => (
@@ -318,10 +403,11 @@ function CollapsedFlyoutItem({ item, depth = 0, onClose }) {
 }
 
 function CollapsedFlyout({ item, onClose }) {
+  const { t } = useTranslation();
   return (
     <div className="w-64 rounded-xl border border-[#E2E8F0] bg-white p-2 shadow-xl">
       <div className="px-3 py-2 text-sm font-semibold text-[#0F172A]">
-        {item.label}
+        {t(item.i18nKey, { defaultValue: item.label })}
       </div>
       <div className="space-y-0.5">
         {item.children?.map((child) => (
@@ -457,6 +543,7 @@ function NavItem({
   setCollapsedFlyout,
   closeCollapsedFlyout,
 }) {
+  const { t } = useTranslation();
   const location = useLocation();
   const accordion = useContext(AccordionContext);
   const effectivePathname = getEffectiveNavPath(location);
@@ -467,6 +554,7 @@ function NavItem({
 
   // This item's group key (used when THIS item is a parent rendering its children)
   const selfPath = `${parentPath}>${item.label}`;
+  const label = t(item.i18nKey, { defaultValue: item.label });
 
   // Open rules:
   // 1) User click always wins inside the same sibling group.
@@ -492,7 +580,7 @@ function NavItem({
           if (depth === 0) accordion?.closeAll();
           closeCollapsedFlyout?.();
         }}
-        title={collapsed ? item.label : undefined}
+        title={collapsed ? label : undefined}
         style={!collapsed ? { paddingLeft: `${indentPx}px` } : {}}
         className={({ isActive }) =>
           {
@@ -518,10 +606,10 @@ function NavItem({
                 <SubSubChildArrow />
               ) : null
             ) : (
-              <NavIcon icon={item.icon} label={item.label} />
+            <NavIcon icon={item.icon} label={label} />
             )}
             {!collapsed && (
-              <span className="text-sm truncate">{item.label}</span>
+              <span className="text-sm truncate">{label}</span>
             )}
           </>
         )}
@@ -555,7 +643,7 @@ function NavItem({
     <div>
       <button
         onClick={handleToggle}
-        title={collapsed ? item.label : undefined}
+        title={collapsed ? label : undefined}
         style={!collapsed ? { paddingLeft: `${indentPx}px` } : {}}
         className={`w-full flex items-center gap-3 pr-3 py-2.5 rounded-lg transition-all duration-150
           ${collapsed ? "px-3 justify-center" : ""}
@@ -570,13 +658,13 @@ function NavItem({
             <SubSubChildArrow />
           ) : null
         ) : (
-          <NavIcon icon={item.icon} label={item.label} />
+          <NavIcon icon={item.icon} label={label} />
         )}
 
         {!collapsed && (
           <>
             <span className="text-sm flex-1 text-left truncate">
-              {item.label}
+              {label}
             </span>
             {open ? (
               <ChevronDown size={15} className="flex-shrink-0 opacity-70" />
@@ -620,7 +708,7 @@ function UpgradePlan({ collapsed }) {
       <div className="rounded-xl bg-[#FFFFFF] border border-surface-card p-3">
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-xs font-semibold text-primary-text">
-            Free Trial
+            Free Trial(v-1.1)
           </span>
           <span className="text-xs text-[#6B8299]">30 Days left</span>
         </div>
@@ -641,6 +729,7 @@ function UpgradePlan({ collapsed }) {
 
 // ── Sidebar ────────────────────────────────────────────────────────────────
 export default function Sidebar() {
+  const { t } = useTranslation();
   const { sidebarCollapsed, toggleSidebar } = useUIStore();
   const flyoutRef = useRef(null);
   const [collapsedFlyout, setCollapsedFlyout] = useState(null);
@@ -680,7 +769,7 @@ export default function Sidebar() {
           className={`flex items-center justify-center w-8 h-8 rounded-lg
             text-[#004368] hover:bg-[#EAF1F8] transition-all flex-shrink-0
             ${sidebarCollapsed ? "mx-auto" : ""}`}
-          title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={sidebarCollapsed ? t("common.expandSidebar") : t("common.collapseSidebar")}
         >
           <PanelRight size={18} />
         </button>
@@ -717,7 +806,7 @@ export default function Sidebar() {
         </div>
       )}
 
-      <UpgradePlan collapsed={sidebarCollapsed} />
+      {/* <UpgradePlan collapsed={sidebarCollapsed} /> */}
     </aside>
   );
 }

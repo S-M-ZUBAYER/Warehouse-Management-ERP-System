@@ -6,15 +6,15 @@ Frontend work is wired for Shopee and TikTok only.
 
 ```env
 VITE_AUTH_BASE_LOGIN_URL=https://grozziieget.zjweiting.com:3091/CustomerService-Chat/api
-VITE_AUTH_BASE_URL=http://localhost:5000/api/v1/
+VITE_AUTH_BASE_URL=https://grozziieget.zjweiting.com:8035/api/v1/
 ```
 
 The frontend strips `/CustomerService-Chat/api` from `VITE_AUTH_BASE_LOGIN_URL` for platform order APIs, then calls:
 
-- Shopee: `/shopee-open-shop/api/dev/order/get-order-list`
-- Shopee detail: `/shopee-open-shop/api/dev/order/get-order-details`
-- Shopee tracking: `/shopee-open-shop/api/dev/logistics/get-tracking-number`
-- TikTok: `/tiktokshop-partner/api/dev/order/list/filter`
+- Shopee: `/new-shopee-open-shop/api/dev/order/get-order-list`
+- Shopee detail: `/new-shopee-open-shop/api/dev/order/get-order-details`
+- Shopee tracking: `/new-shopee-open-shop/api/dev/logistics/get-tracking-number`
+- TikTok: `/tiktokshop-partner-country/api/dev/order/list/filter`
 
 ## Backend APIs expected from local ERP backend
 
