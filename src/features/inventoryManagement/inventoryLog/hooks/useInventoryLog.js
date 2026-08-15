@@ -88,6 +88,8 @@ export function useInventoryLog() {
     const [skuName, setSkuName] = useState("");       // input field
     const [searchSku, setSearchSku] = useState("");   // actual API param
     const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(PAGE_SIZE);
+    const [pageSizeInput, setPageSizeInput] = useState(String(PAGE_SIZE));
     const [selectedIds, setSelectedIds] = useState([]);
     const [selectedItems, setSelectedItems] = useState([]);
     const [selectionLoading, setSelectionLoading] = useState(false);
@@ -98,7 +100,7 @@ export function useInventoryLog() {
 
     const listParams = {
         page,
-        limit: PAGE_SIZE,
+        limit: pageSize,
         warehouseId: warehouseId || undefined,
         startDate: movementType === 'recent' ? today : appliedStartDate,
         endDate: movementType === 'recent' ? today : appliedEndDate,
@@ -251,6 +253,13 @@ export function useInventoryLog() {
         setSelectedItems([]);
     }, [skuName]);
 
+    const applyPageSize = useCallback(() => {
+        const nextPageSize = Math.max(1, Number.parseInt(pageSizeInput, 10) || PAGE_SIZE);
+        setPageSize(nextPageSize);
+        setPageSizeInput(String(nextPageSize));
+        setPage(1);
+    }, [pageSizeInput]);
+
     return {
         // filters
         warehouseId,
@@ -266,6 +275,9 @@ export function useInventoryLog() {
         handleSearch,
         page,
         setPage,
+        pageSizeInput,
+        setPageSizeInput,
+        applyPageSize,
 
         // data
         items,

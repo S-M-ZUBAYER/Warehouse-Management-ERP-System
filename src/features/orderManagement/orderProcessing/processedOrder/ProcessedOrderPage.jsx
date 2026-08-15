@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useNavigationType } from "react-router-dom";
 import { toast } from "sonner";
 import Topbar from "../../../../components/layout/Topbar";
@@ -16,8 +16,10 @@ import { getDashboardOrderStatusFilter } from "../utils/dashboardOrderStatusFilt
 
 const SUB_TABS = ["Pushing", "Pushed Successful", "Withdraw"];
 const PROCESSED_ORDER_TAB_COUNT_GC_TIME = 1000 * 60 * 5;
+const TAB_COUNT_STALE_TIME = 1000 * 150;
 
 export default function ProcessedOrderPage() {
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
   const navigationType = useNavigationType();
@@ -63,21 +65,25 @@ export default function ProcessedOrderPage() {
         { label: "Withdraw", onClick: (order) => setWithdrawOrder(order) },
       ]
     : undefined;
-  const {
-    data: tabCounts = {},
-    isLoading: tabCountsLoading,
-    isFetching: tabCountsFetching,
-  } = useQuery({
-    queryKey: [
+  const tabCountQueryKey = useMemo(
+    () => [
       "order-management",
       "processed-order-tab-counts",
-      tabRefreshKey,
       list.storeContext,
       list.appliedSearch,
       list.appliedSearchType,
       list.appliedSkuType,
       list.dateRange,
     ],
+    [list.appliedSearch, list.appliedSearchType, list.appliedSkuType, list.dateRange, list.storeContext]
+  );
+  const {
+    data: tabCounts = {},
+    isLoading: tabCountsLoading,
+    isFetching: tabCountsFetching,
+    dataUpdatedAt: tabCountsUpdatedAt,
+  } = useQuery({
+    queryKey: tabCountQueryKey,
     queryFn: () =>
       fetchProcessedOrderTabCounts({
         context: list.storeContext,
@@ -88,9 +94,9 @@ export default function ProcessedOrderPage() {
         tabs: SUB_TABS,
     }),
     enabled: list.hasStore,
-    staleTime: 0,
+    staleTime: TAB_COUNT_STALE_TIME,
     gcTime: PROCESSED_ORDER_TAB_COUNT_GC_TIME,
-    refetchOnMount: "always",
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
   });
   const activeTabCount = list.isLoading
@@ -98,6 +104,9 @@ export default function ProcessedOrderPage() {
     : list.pagination?.total ?? list.allOrders?.length ?? list.orders.length;
   const handleTabChange = (tab) => {
     if (tab === activeTab) return;
+    if (!tabCountsFetching && tabCountsUpdatedAt && Date.now() - tabCountsUpdatedAt >= TAB_COUNT_STALE_TIME) {
+      queryClient.invalidateQueries({ queryKey: tabCountQueryKey });
+    }
     setTabRefreshKey((current) => current + 1);
     setActiveTab(tab);
   };
@@ -238,6 +247,7 @@ export default function ProcessedOrderPage() {
           statusSortDirection={list.statusSortDirection}
           onStatusSortChange={list.setStatusSortDirection}
           showActionsCol={showRowActions}
+          showSkuAdjustmentColumn={list.showSkuAdjustmentColumn}
           actionLabel={rowActionLabel}
           rowActions={rowActions}
           actionMenuPlacement="up"

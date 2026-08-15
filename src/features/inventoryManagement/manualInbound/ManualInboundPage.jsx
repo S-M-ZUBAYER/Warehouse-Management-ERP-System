@@ -937,6 +937,7 @@ import { useManualInboundList } from "./hooks/useManualInboundList";
 import { useInboundDropdowns } from "../Inbound/hooks/useInboundDropdowns";
 import InboundFilterBar from "../Inbound/draft/component/InboundFilterBar";
 import ManualInboundTable from "./component/ManualInboundTable";
+import ListPageSizePagination from "../../../components/shared/ListPageSizePagination";
 import SelectMerchantSKUModal from "./component/SelectMerchantSKUModal";
 import Topbar from "../../../components/layout/Topbar";
 import { exportRowsToCsv, exportRowsToXlsx, printRows } from "../../../utils/tableOutput";
@@ -997,8 +998,13 @@ function ManualInboundListView({ onCreateClick }) {
     setDateTo,
     inboundType, setInboundType,
     search,      setSearch,
+    page,
     setPage,
+    pageSizeInput,
+    setPageSizeInput,
+    applyPageSize,
     items,
+    pagination,
     isLoading,
     isFetching,
     isError,
@@ -1061,6 +1067,18 @@ function ManualInboundListView({ onCreateClick }) {
           isError={isError}
           errorMessage="Failed to load manual inbound orders"
           onRetry={refetch}
+        />
+
+        <ListPageSizePagination
+          page={page}
+          limit={pagination.limit || 10}
+          total={pagination.total || 0}
+          itemLabel="Inventory items"
+          pageSizeInput={pageSizeInput}
+          onPageChange={setPage}
+          onPageSizeInputChange={setPageSizeInput}
+          onApplyPageSize={applyPageSize}
+          loading={isFetching}
         />
 
         {/* Footer */}

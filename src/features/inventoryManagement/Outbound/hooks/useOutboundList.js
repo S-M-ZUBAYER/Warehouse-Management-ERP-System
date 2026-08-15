@@ -72,6 +72,8 @@ export function useOutboundList({ status }) {
     const [dateFrom, setDateFrom] = useState('');
     const [dateTo, setDateTo] = useState('');
     const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+    const [pageSizeInput, setPageSizeInput] = useState('10');
     const [selectedIds, setSelectedIds] = useState([]);
     const [selectedItems, setSelectedItems] = useState([]);
     const [selectionLoading, setSelectionLoading] = useState(false);
@@ -82,7 +84,7 @@ export function useOutboundList({ status }) {
 
     const debouncedSearch = useDebounce(search, 350);
     const serverSearch = outboundType === 'Outbound No.' ? debouncedSearch : '';
-    const limit = debouncedSearch && outboundType !== 'Outbound No.' ? 1000 : 10;
+    const limit = debouncedSearch && outboundType !== 'Outbound No.' ? 1000 : pageSize;
 
     const resetList = useCallback(() => {
         setPage(1);
@@ -119,6 +121,13 @@ export function useOutboundList({ status }) {
         setSearch(value);
         setPage(1);
     }, []);
+
+    const applyPageSize = useCallback(() => {
+        const nextPageSize = Math.max(1, Number.parseInt(pageSizeInput, 10) || 10);
+        setPageSize(nextPageSize);
+        setPageSizeInput(String(nextPageSize));
+        setPage(1);
+    }, [pageSizeInput]);
 
     const listParams = {
         status,
@@ -259,6 +268,9 @@ export function useOutboundList({ status }) {
         dateFrom, setDateFrom: updateDateFrom,
         dateTo, setDateTo: updateDateTo,
         page, setPage,
+        pageSizeInput,
+        setPageSizeInput,
+        applyPageSize,
 
         // data
         items,

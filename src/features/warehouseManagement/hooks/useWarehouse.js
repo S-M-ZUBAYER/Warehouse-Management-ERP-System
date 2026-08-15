@@ -193,6 +193,8 @@ const EMPTY_FORM = Object.freeze({
     phoneNumber: "",
     location: "",
     city: "",
+    state: "",
+    zipCode: "",
     country: "",
 });
 
@@ -220,6 +222,9 @@ const selectWarehouses = (data) =>
         isDefault: w.is_default,
         manager: w.manager_name,
         phoneNumber: w.phone,
+        city: w.city,
+        state: w.state,
+        zipCode: w.zip_code,
         country: w.country,
         status: w.status,
         code: w.code,
@@ -364,6 +369,8 @@ export function useWarehouse() {
             phoneNumber: warehouse.phoneNumber || "",
             location: warehouse.location === "—" ? "" : (warehouse.location || ""),
             city: warehouse.city || "",
+            state: warehouse.state || "",
+            zipCode: warehouse.zipCode || "",
             country: warehouse.country || "",
         });
         setErrors({});
@@ -398,6 +405,8 @@ export function useWarehouse() {
             phone: form.phoneNumber || undefined,
             location: form.location || undefined,
             city: form.city || undefined,   // ✅ was `|| null` — change to undefined
+            state: form.state || undefined,
+            zipCode: form.zipCode || undefined,
             country: form.country || undefined,
             status: "active",
         };

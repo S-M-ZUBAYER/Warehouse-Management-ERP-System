@@ -33,6 +33,7 @@ const common = {
     shippedOrder: "Shipped Order",
     completed: "Completed",
     allOrder: "All Order",
+    returnOrder: "Return Order",
     canceledOrder: "Canceled Order",
     manualOrder: "Manual Order",
     platformManualOrder: "Platform Manual Order",
@@ -64,6 +65,7 @@ const common = {
     inbound: "Inbound",
     outbound: "Outbound",
     backToOrderList: "Back to Order List",
+    returnOrder: "Return Order",
     subAccount: "Sub Account",
     roleManagement: "Role Management",
   },
@@ -585,6 +587,23 @@ const resources = {
   },
 };
 
+const returnOrderI18nAdditions = {
+  en: "Return Order",
+  zh: "退货订单",
+  fil: "Return Order",
+  id: "Pesanan Retur",
+  th: "คำสั่งคืนสินค้า",
+  vi: "Đơn trả hàng",
+  ms: "Pesanan Pulangan",
+};
+
+Object.entries(returnOrderI18nAdditions).forEach(([language, label]) => {
+  const translation = resources[language]?.translation;
+  if (!translation) return;
+  translation.nav = { ...(translation.nav || {}), returnOrder: label };
+  translation.page = { ...(translation.page || {}), returnOrder: label };
+});
+
 i18n
   .use(LanguageDetector)
   .use(initReactI18next)
@@ -630,7 +649,9 @@ const pageTitleKeys = {
   "Inventory List": "page.inventoryList",
   "SKU Mapping": "page.skuMapping",
   Inbound: "page.inbound",
+  "Return Order": "page.returnOrder",
   "Back to Order List": "page.backToOrderList",
+  "Back to Return Order": "page.returnOrder",
   "Sub Account": "page.subAccount",
   "Role Management": "page.roleManagement",
 };

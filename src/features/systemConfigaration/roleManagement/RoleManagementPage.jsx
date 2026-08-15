@@ -1,5 +1,5 @@
 import { AlertCircle, RefreshCw, Search, Plus, Eye, Pencil, Trash2 } from "lucide-react";
-import { useRef, useEffect, useState } from "react";
+import { useMemo, useRef, useEffect, useState } from "react";
 import Topbar from "../../../components/layout/Topbar";
 import { useRoleManagement } from "./hooks/useRoleManagement";
 import AddRoleModal from "./component/AddRoleModal";
@@ -7,6 +7,7 @@ import EditRoleModal from "./component/EditRoleModal";
 import DeleteRoleModal from "./component/DeleteRoleModal";
 import PortalActionMenu from "../../../components/shared/PortalActionMenu";
 import RecordDetailModal from "../../../components/shared/RecordDetailModal";
+import ListPageSizePagination from "../../../components/shared/ListPageSizePagination";
 
 export default function RoleManagementPage() {
   const {
@@ -53,6 +54,21 @@ export default function RoleManagementPage() {
 
   const actionRefs = useRef({});
   const [detailRole, setDetailRole] = useState(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [pageSizeInput, setPageSizeInput] = useState("10");
+  const totalRolePages = Math.max(1, Math.ceil(roles.length / pageSize));
+  const currentPage = Math.min(page, totalRolePages);
+  const paginatedRoles = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return roles.slice(start, start + pageSize);
+  }, [roles, currentPage, pageSize]);
+  const applyPageSize = () => {
+    const nextPageSize = Math.max(1, Number.parseInt(pageSizeInput, 10) || 10);
+    setPageSize(nextPageSize);
+    setPageSizeInput(String(nextPageSize));
+    setPage(1);
+  };
 
   useEffect(() => {
     const handler = (e) => {
@@ -156,7 +172,7 @@ export default function RoleManagementPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-border">
-                {roles.map((role) => (
+                {paginatedRoles.map((role) => (
                   <tr
                     key={role.id}
                     className="hover:bg-surface/50 transition-colors"
@@ -249,6 +265,17 @@ export default function RoleManagementPage() {
             </table>
           )}
         </div>{" "}
+        <ListPageSizePagination
+          page={currentPage}
+          limit={pageSize}
+          total={roles.length}
+          itemLabel="Roles"
+          pageSizeInput={pageSizeInput}
+          onPageChange={setPage}
+          onPageSizeInputChange={setPageSizeInput}
+          onApplyPageSize={applyPageSize}
+          loading={rolesLoading}
+        />
         {/* ✅ closes overflow-x-auto */}
       </div>{" "}
       {/* ✅ closes Roles List card */}

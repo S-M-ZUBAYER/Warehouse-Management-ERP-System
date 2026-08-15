@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Search,
   AlertCircle,
@@ -9,6 +9,7 @@ import {
   Link,
   ShieldCheck,
   Plus,
+  CalendarDays,
 } from "lucide-react";
 import Topbar from "../../../components/layout/Topbar";
 import { useStoreAuthorization } from "./hooks/useStoreAuthorization";
@@ -21,6 +22,7 @@ import RecordDetailModal from "../../../components/shared/RecordDetailModal";
 import ConfirmActionModal from "../../../components/shared/ConfirmActionModal";
 import { exportRowsToCsv, exportRowsToXlsx, printRows } from "../../../utils/tableOutput";
 import ExportMenu from "../../../components/shared/ExportMenu";
+import ListPageSizePagination from "../../../components/shared/ListPageSizePagination";
 import shopeeLogo from "../../../assets/ShopPlatform/shopee.svg";
 import tiktokLogo from "../../../assets/ShopPlatform/tiktok.svg";
 import allCategoryLogo from "../../../assets/ShopPlatform/allCategories.svg";
@@ -84,10 +86,32 @@ export default function StoreAuthorizationPage() {
     unlinkModal,
     closeUnlinkModal,
     confirmUnlinkStore,
+    autoOrderAcceptModal,
+    requestAutoOrderAcceptToggle,
+    closeAutoOrderAcceptModal,
+    confirmAutoOrderAcceptToggle,
+    autoOrderAcceptDayOptions,
+    requestAutoOrderAcceptDays,
+    toggleAutoOrderAcceptDay,
   } = useStoreAuthorization();
 
   const [actionAnchor, setActionAnchor] = useState(null);
   const [detailStore, setDetailStore] = useState(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [pageSizeInput, setPageSizeInput] = useState("10");
+  const totalStorePages = Math.max(1, Math.ceil(stores.length / pageSize));
+  const currentPage = Math.min(page, totalStorePages);
+  const paginatedStores = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return stores.slice(start, start + pageSize);
+  }, [stores, currentPage, pageSize]);
+  const applyPageSize = () => {
+    const nextPageSize = Math.max(1, Number.parseInt(pageSizeInput, 10) || 10);
+    setPageSize(nextPageSize);
+    setPageSizeInput(String(nextPageSize));
+    setPage(1);
+  };
   const selectedRows =
     selectedStores.length === selectedIds.length &&
     selectedIds.every((id) => selectedStores.some((store) => store.id === id))
@@ -101,11 +125,10 @@ export default function StoreAuthorizationPage() {
     { label: "Open ID", key: "openId" },
     { label: "Country", key: "country" },
     { label: "Status", key: "authStatus" },
+    { label: "Auto Order Accept", key: "autoOrderAcceptLabel" },
+    { label: "Auto Process Days", key: "autoOrderAcceptDaysLabel" },
     { label: "Create Time", key: "createdAt" },
   ];
-
-console.log(stores,"Stores");
-
 
   return (
     <div className="space-y-4 font-body">
@@ -260,13 +283,15 @@ console.log(stores,"Stores");
                   "Store ID",
                   "Country",
                   "Authorization Status",
+                  "Auto Order Accept",
+                  "Auto Process Days",
                   "Create Time",
                   "Actions",
                 ].map((h, i) => (
                   <th
                     key={h}
                     className={`py-3 text-left text-lg font-semibold text-primary-text
-                    ${i === 0 ? "pl-5 w-14 pr-4" : "pr-4"} ${i === 7 ? "pr-5" : ""}`}
+                    ${i === 0 ? "pl-5 w-14 pr-4" : "pr-4"} ${i === 9 ? "pr-5" : ""}`}
                   >
                     {h === "Select All" ? (
                       <div className="flex justify-start items-center w-32">
@@ -298,7 +323,7 @@ console.log(stores,"Stores");
               {loading && <StoreAuthorizationTableSkeleton />}
               {!loading && error && (
                 <tr>
-                  <td colSpan={8} className="py-20 text-center">
+                  <td colSpan={10} className="py-20 text-center">
                     <div className="flex flex-col items-center justify-center gap-3">
                       <AlertCircle size={36} className="text-red-400 opacity-70" />
                       <p className="text-sm font-medium text-slate-700">{error}</p>
@@ -315,12 +340,12 @@ console.log(stores,"Stores");
               )}
               {!loading && !error && stores.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="py-10 text-center text-sm text-slate-500">
+                  <td colSpan={10} className="py-10 text-center text-sm text-slate-500">
                     No authorized stores found
                   </td>
                 </tr>
               )}
-              {!loading && !error && stores.map((store) => (
+              {!loading && !error && paginatedStores.map((store) => (
                 <tr
                   key={store.id}
                   className="hover:bg-surface/50 transition-colors"
@@ -343,6 +368,36 @@ console.log(stores,"Stores");
                   <td className="py-3 pr-4 text-slate-700">{store.country}</td>
                   <td className="py-3 pr-4">
                     <AuthStatusBadge status={store.authStatus} />
+                  </td>
+                  <td className="py-3 pr-4">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={store.autoOrderAccept}
+                      title={store.autoOrderAccept ? "On" : "Off"}
+                      onClick={() => requestAutoOrderAcceptToggle(store)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20 ${
+                        store.autoOrderAccept ? "bg-primary" : "bg-slate-300"
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                          store.autoOrderAccept ? "translate-x-5" : "translate-x-1"
+                        }`}
+                      />
+                      <span className="sr-only">Auto Order Accept</span>
+                    </button>
+                  </td>
+                  <td className="py-3 pr-4">
+                    <button
+                      type="button"
+                      onClick={() => requestAutoOrderAcceptDays(store)}
+                      title="Auto Process Days"
+                      className="inline-flex items-center gap-2 rounded-lg border border-surface-border px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:border-primary/40 hover:text-primary transition-colors"
+                    >
+                      <CalendarDays size={13} />
+                      <span>{store.autoOrderAcceptDaysLabel}</span>
+                    </button>
                   </td>
                   <td className="py-3 pr-4 text-primary-text text-xs">
                     {store.createdAt}
@@ -453,6 +508,17 @@ console.log(stores,"Stores");
             </tbody>
           </table>
         </div>
+        <ListPageSizePagination
+          page={currentPage}
+          limit={pageSize}
+          total={stores.length}
+          itemLabel="Stores"
+          pageSizeInput={pageSizeInput}
+          onPageChange={setPage}
+          onPageSizeInputChange={setPageSizeInput}
+          onApplyPageSize={applyPageSize}
+          loading={loading}
+        />
         <div className="flex justify-end gap-3 px-5 py-4 border-t border-surface-border">
           <ExportMenu
             onExportCsv={() => exportRowsToCsv(selectedRows, outputColumns, "authorized-stores.csv", "store")}
@@ -478,6 +544,8 @@ console.log(stores,"Stores");
           { label: "Open ID", key: "openId" },
           { label: "Country", key: "country" },
           { label: "Authorization Status", key: "authStatus" },
+          { label: "Auto Order Accept", key: "autoOrderAcceptLabel" },
+          { label: "Auto Process Days", key: "autoOrderAcceptDaysLabel" },
           { label: "Default Warehouse", key: "defaultWarehouse" },
           { label: "Create Time", key: "createdAt" },
         ]}
@@ -492,6 +560,79 @@ console.log(stores,"Stores");
         confirmLabel="Unlink"
         onCancel={closeUnlinkModal}
         onConfirm={confirmUnlinkStore}
+      />
+
+      <ConfirmActionModal
+        open={autoOrderAcceptModal?.open}
+        title={
+          autoOrderAcceptModal?.mode === "days"
+            ? "Auto Process Days"
+            : autoOrderAcceptModal?.nextValue
+              ? "Enable Auto Order Accept"
+              : "Disable Auto Order Accept"
+        }
+        loading={autoOrderAcceptModal?.loading}
+        loadingLabel="Saving..."
+        message={
+          <>
+            {autoOrderAcceptModal?.mode === "days" ? (
+              <>
+                Configure the weekdays when Auto Order Accept can run for{" "}
+                <span className="font-semibold text-slate-800">{autoOrderAcceptModal?.store?.nickname}</span>.
+              </>
+            ) : (
+              <>
+                Are you sure you want to {autoOrderAcceptModal?.nextValue ? "turn on" : "turn off"} Auto Order Accept for{" "}
+                <span className="font-semibold text-slate-800">{autoOrderAcceptModal?.store?.nickname}</span>?
+              </>
+            )}
+            {(autoOrderAcceptModal?.mode === "days" || autoOrderAcceptModal?.nextValue) && (
+              <div className="mt-4">
+                <p className="mb-2 text-xs font-semibold text-slate-700">Select auto process days</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {autoOrderAcceptDayOptions.map((day) => {
+                    const checked = (autoOrderAcceptModal?.selectedDays || []).includes(day.value);
+                    return (
+                      <label
+                        key={day.value}
+                        className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold cursor-pointer ${
+                          checked ? "border-primary bg-primary/5 text-primary" : "border-surface-border text-slate-600"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleAutoOrderAcceptDay(day.value)}
+                          className="w-3.5 h-3.5 accent-primary"
+                        />
+                        {day.label}
+                      </label>
+                    );
+                  })}
+                </div>
+                {(autoOrderAcceptModal?.selectedDays || []).length === 0 && (
+                  <p className="mt-2 text-xs font-semibold text-red-500">Select at least one auto process day</p>
+                )}
+              </div>
+            )}
+            {autoOrderAcceptModal?.mode !== "days" && autoOrderAcceptModal?.nextValue && (
+              <span className="block mt-3">Auto Order Accept will run on selected days from To Pack and every hour.</span>
+            )}
+          </>
+        }
+        confirmLabel={
+          autoOrderAcceptModal?.mode === "days"
+            ? "Save Days"
+            : autoOrderAcceptModal?.nextValue
+              ? "Turn On"
+              : "Turn Off"
+        }
+        confirmDisabled={
+          (autoOrderAcceptModal?.mode === "days" || autoOrderAcceptModal?.nextValue) &&
+          (autoOrderAcceptModal?.selectedDays || []).length === 0
+        }
+        onCancel={closeAutoOrderAcceptModal}
+        onConfirm={confirmAutoOrderAcceptToggle}
       />
 
       {/* ── Modals ── */}
@@ -552,6 +693,12 @@ function StoreAuthorizationTableSkeleton() {
       </td>
       <td className="py-3 pr-4">
         <div className="h-5 w-24 rounded-full bg-slate-200" />
+      </td>
+      <td className="py-3 pr-4">
+        <div className="h-6 w-11 rounded-full bg-slate-200" />
+      </td>
+      <td className="py-3 pr-4">
+        <div className="h-7 w-28 rounded-lg bg-slate-200" />
       </td>
       <td className="py-3 pr-4">
         <div className="h-4 w-28 rounded bg-slate-200" />

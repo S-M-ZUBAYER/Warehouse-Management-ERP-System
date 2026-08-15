@@ -571,6 +571,9 @@ export default function ProductListPage() {
     pagination,
     page,
     setPage,
+    pageSizeInput,
+    setPageSizeInput,
+    applyPageSize,
     listLoading,
     listFetching,
     isListError,
@@ -675,6 +678,9 @@ export default function ProductListPage() {
         pagination={pagination}
         page={page}
         setPage={setPage}
+        pageSizeInput={pageSizeInput}
+        setPageSizeInput={setPageSizeInput}
+        applyPageSize={applyPageSize}
         listLoading={listLoading}
         listFetching={listFetching}
         isListError={isListError}

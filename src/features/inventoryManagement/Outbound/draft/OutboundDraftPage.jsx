@@ -22,6 +22,7 @@ import { useShipOutbound } from "../hooks/useShipOutbound";
 import { toast } from "sonner";
 import { exportRowsToCsv, exportRowsToXlsx, printRows } from "../../../../utils/tableOutput";
 import ExportMenu from "../../../../components/shared/ExportMenu";
+import ListPageSizePagination from "../../../../components/shared/ListPageSizePagination";
 import {
   buildOutboundOutputRows,
   outboundOutputColumns,
@@ -77,6 +78,9 @@ function DraftListPage({ onCreateClick, onEditClick }) {
     setSearch,
     page,
     setPage,
+    pageSizeInput,
+    setPageSizeInput,
+    applyPageSize,
     items,
     pagination,
     isLoading,
@@ -245,7 +249,7 @@ function DraftListPage({ onCreateClick, onEditClick }) {
         />
 
         {/* Pagination */}
-        {!isLoading && !isError && pagination.totalPages > 1 && (
+        {false && !isLoading && !isError && pagination.totalPages > 1 && (
           <div className="flex items-center justify-between px-5 py-3 border-t border-surface-border">
             <p className="text-xs text-slate-500">
               {(page - 1) * pagination.limit + 1}–
@@ -272,6 +276,17 @@ function DraftListPage({ onCreateClick, onEditClick }) {
             </div>
           </div>
         )}
+        <ListPageSizePagination
+          page={page}
+          limit={pagination.limit || 10}
+          total={pagination.total || 0}
+          itemLabel="Inventory items"
+          pageSizeInput={pageSizeInput}
+          onPageChange={setPage}
+          onPageSizeInputChange={setPageSizeInput}
+          onApplyPageSize={applyPageSize}
+          loading={isFetching}
+        />
 
         <div className="flex justify-end gap-3 px-5 py-4 border-t border-surface-border">
           <ExportMenu

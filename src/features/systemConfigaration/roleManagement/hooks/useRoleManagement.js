@@ -448,6 +448,7 @@ const SIDEBAR_PERMISSION_TREE = [
         { key: "shipped_order", display: "Shipped Order", level: 3, sub: [] },
         { key: "completed_order", display: "Completed", level: 3, sub: [] },
         { key: "all_order", display: "All Order", level: 3, sub: [] },
+        { key: "return_order", display: "Return Order", level: 3, sub: [] },
         { key: "canceled_order", display: "Canceled Order", level: 3, sub: [] },
       ]},
       { key: "manual_order", display: "Manual Order", level: 2, sub: [] },

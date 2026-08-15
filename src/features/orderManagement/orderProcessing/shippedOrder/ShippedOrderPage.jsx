@@ -80,6 +80,7 @@ export default function ShippedOrder() {
           statusSortDirection={list.statusSortDirection}
           onStatusSortChange={list.setStatusSortDirection}
           showActionsCol={false}
+          showSkuAdjustmentColumn={list.showSkuAdjustmentColumn}
           compact
           onDetails={handleDetails}
         />

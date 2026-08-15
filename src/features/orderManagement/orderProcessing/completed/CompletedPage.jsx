@@ -76,6 +76,7 @@ export default function Completed() {
           statusSortDirection={list.statusSortDirection}
           onStatusSortChange={list.setStatusSortDirection}
           showActionsCol={false}
+          showSkuAdjustmentColumn={list.showSkuAdjustmentColumn}
           compact
           onDetails={handleDetails}
         />
