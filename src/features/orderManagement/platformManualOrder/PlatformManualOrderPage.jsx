@@ -18,12 +18,15 @@ import { toast } from "sonner";
 import Topbar from "../../../components/layout/Topbar";
 import ConfirmActionModal from "../../../components/shared/ConfirmActionModal";
 import OrderFooter from "../shared/components/OrderFooter";
+import PageSizePagination from "../shared/components/PageSizePagination";
 import api from "../../../lib/api";
 import { filterWarehousesByPermission } from "../../../utils/permissions";
+import { formatPlatformDateTime, resolvePlatformRegion } from "../shared/utils/platformDateTime";
 
 const STATUS_OPTIONS = ["All", "Processed", "On The Way", "Shipped", "Delivered", "Completed", "Cancelled"];
 const SEARCH_TYPES = ["Single Search", "Batch Search"];
 const SEARCH_FIELDS = ["SKU", "Order Number"];
+const DEFAULT_PLATFORM_MANUAL_ORDER_PAGE_SIZE = 10;
 
 const PLATFORM_MANUAL_ORDER_COLUMNS = [
   { label: "Order Number", key: "orderNumber" },
@@ -83,12 +86,10 @@ const getWarehouseSenderInfo = (warehouse = {}) => {
   };
 };
 
-const formatPlatformManualOrderDate = (value, fallbackDate, fallbackTime) => {
+const formatPlatformManualOrderDate = (value, fallbackDate, fallbackTime, region) => {
   const rawValue = value || (fallbackDate ? `${fallbackDate}${fallbackTime ? `T${fallbackTime}` : ""}` : "");
   if (!rawValue) return "-";
-  const date = new Date(rawValue);
-  if (Number.isNaN(date.getTime())) return String(rawValue);
-  return date.toLocaleString();
+  return formatPlatformDateTime(rawValue, region);
 };
 
 const parseJsonField = (value, fallback) => {
@@ -921,12 +922,13 @@ function PlatformManualOrderDetailModal({ order, onClose }) {
   const sender = order.sender || {};
   const logistic = order.logistic || {};
   const packageInfo = order.package || {};
+  const orderRegion = resolvePlatformRegion(buyer.country, order.buyerCountry, sender.country, order.country);
   const infoRows = [
     ["Order Number", order.orderNumber],
     ["Shipment Status", order.shipmentStatus],
     ["Order Date", order.orderDate],
     ["Order Time", order.orderTime],
-    ["Created", formatPlatformManualOrderDate(order.createdAt, order.orderDate, order.orderTime)],
+    ["Created", formatPlatformManualOrderDate(order.createdAt, order.orderDate, order.orderTime, orderRegion)],
     ["Warehouse ID", order.warehouseId],
     ["Tracking Number", logistic.trackingNumber],
     ["Delivery Company", logistic.deliveryCompany],
@@ -1185,6 +1187,9 @@ function PlatformManualOrderList({ orders, loading, error, warehouses, companyId
   const [selectedIds, setSelectedIds] = useState([]);
   const [selectedOrderRows, setSelectedOrderRows] = useState([]);
   const [selectionLoading, setSelectionLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PLATFORM_MANUAL_ORDER_PAGE_SIZE);
+  const [pageSizeInput, setPageSizeInput] = useState(String(DEFAULT_PLATFORM_MANUAL_ORDER_PAGE_SIZE));
   const [statusFilters, setStatusFilters] = useState(["All"]);
   const [searchType, setSearchType] = useState("Single Search");
   const [searchField, setSearchField] = useState("SKU");
@@ -1223,9 +1228,20 @@ function PlatformManualOrderList({ orders, loading, error, warehouses, companyId
     return filteredOrders.filter((order) => selectedIds.includes(order.id));
   }, [filteredOrders, selectedIds, selectedOrderRows]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
+  const effectivePage = Math.min(page, totalPages);
+  const paginatedOrders = useMemo(() => {
+    const start = (effectivePage - 1) * pageSize;
+    return filteredOrders.slice(start, start + pageSize);
+  }, [effectivePage, filteredOrders, pageSize]);
+
   useEffect(() => {
     setSelectedOrderRows((current) => current.filter((order) => selectedIds.includes(order.id)));
   }, [selectedIds]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
 
   useEffect(() => {
     if (!actionOpenId) return undefined;
@@ -1242,6 +1258,7 @@ function PlatformManualOrderList({ orders, loading, error, warehouses, companyId
       ? searchInput.split(/\n|,|\s+/).map((item) => item.trim()).filter(Boolean)
       : [searchInput.trim()].filter(Boolean);
     setAppliedSearch({ type: searchType, field: searchField, values });
+    setPage(1);
     setSelectedIds([]);
     setSelectedOrderRows([]);
     onQueryChange({
@@ -1287,6 +1304,13 @@ function PlatformManualOrderList({ orders, loading, error, warehouses, companyId
     });
   };
 
+  const handlePageSizeSearch = () => {
+    const nextPageSize = Math.max(1, Number.parseInt(pageSizeInput, 10) || DEFAULT_PLATFORM_MANUAL_ORDER_PAGE_SIZE);
+    setPageSize(nextPageSize);
+    setPageSizeInput(String(nextPageSize));
+    setPage(1);
+  };
+
   return (
     <div className="space-y-6 font-body">
       <Topbar PageTitle="Platform Manual Order" />
@@ -1297,9 +1321,10 @@ function PlatformManualOrderList({ orders, loading, error, warehouses, companyId
             value={statusFilters}
             onChange={(value) => {
               setStatusFilters(value);
-              setSelectedIds([]);
-              setSelectedOrderRows([]);
-              onQueryChange({
+                setSelectedIds([]);
+                setSelectedOrderRows([]);
+                setPage(1);
+                onQueryChange({
                 statuses: value.includes("All") ? [] : value,
                 searchType: appliedSearch.type,
                 searchField: appliedSearch.field,
@@ -1395,12 +1420,13 @@ function PlatformManualOrderList({ orders, loading, error, warehouses, companyId
                     </div>
                   </td>
                 </tr>
-              ) : filteredOrders.map((order) => {
+              ) : paginatedOrders.map((order) => {
                 const country = valueOrDash(order.buyer?.country, order.buyerCountry, order.country);
+                const orderRegion = resolvePlatformRegion(order.buyer?.country, order.buyerCountry, order.sender?.country, order.country);
                 const receiver = valueOrDash(order.buyer?.name, order.buyerName, order.receiverName, order.receiver);
                 const courier = valueOrDash(order.logistic?.deliveryCompany, order.deliveryCompany, order.logisticCompany, order.courier);
                 const trackingNumber = valueOrDash(order.logistic?.trackingNumber, order.trackingNumber, order.awbNumber, order.awb, order.waybillNumber);
-                const createdAt = formatPlatformManualOrderDate(order.createdAt, order.orderDate, order.orderTime);
+                const createdAt = formatPlatformManualOrderDate(order.createdAt, order.orderDate, order.orderTime, orderRegion);
                 return (
                   <tr key={order.id} className="hover:bg-surface/50">
                     <td className="py-3 pl-5 pr-4">
@@ -1477,6 +1503,17 @@ function PlatformManualOrderList({ orders, loading, error, warehouses, companyId
             </tbody>
           </table>
         </div>
+
+        <PageSizePagination
+          page={effectivePage}
+          limit={pageSize}
+          total={filteredOrders.length}
+          onPageChange={setPage}
+          pageSizeInput={pageSizeInput}
+          onPageSizeInputChange={setPageSizeInput}
+          onApplyPageSize={handlePageSizeSearch}
+          loading={loading}
+        />
 
         <OrderFooter selectedRows={selectedOrders} columns={PLATFORM_MANUAL_ORDER_COLUMNS} title="Platform Manual Orders" />
       </div>

@@ -20,6 +20,7 @@ import ShippedOrderPage from "../features/orderManagement/orderProcessing/shippe
 import CompletedPage from "../features/orderManagement/orderProcessing/completed/CompletedPage";
 import AllOrderPage from "../features/orderManagement/orderProcessing/allOrder/AllOrderpage";
 import CanceledOrderPage from "../features/orderManagement/orderProcessing/canceledOrder/CanceledOrderPage";
+import ReturnOrderPage from "../features/orderManagement/orderProcessing/returnOrder/ReturnOrderPage";
 import ManualOrderPage from "../features/orderManagement/manualOrder/ManualOrderPage";
 import PlatformManualOrderPage from "../features/orderManagement/platformManualOrder/PlatformManualOrderPage";
 import ManualOrderAftershipPage from "../features/orderManagement/manualOrderAftership/ManualOrderAftershipPage";
@@ -145,6 +146,10 @@ export const routes = [
       {
         path: "/warehouse_management/orders/processing/all_order",
         element: <AllOrderPage />,
+      },
+      {
+        path: "/warehouse_management/orders/processing/return_order",
+        element: <ReturnOrderPage />,
       },
       {
         path: "/warehouse_management/orders/processing/canceled",

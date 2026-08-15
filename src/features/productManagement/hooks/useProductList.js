@@ -454,6 +454,8 @@ export function useProductList() {
     const [country, setCountry] = useState("all");
     const [sku, setSku] = useState("");
     const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+    const [pageSizeInput, setPageSizeInput] = useState("10");
     const [sortBy] = useState("created_at");
     const [sortOrder] = useState("DESC");
     const [bulkAction, setBulkAction] = useState("");
@@ -588,7 +590,7 @@ export function useProductList() {
     // ─────────────────────────────────────────────────────────────────────────
     const listFilters = useMemo(() => ({
         page,
-        limit: 10,
+        limit: pageSize,
         search: debouncedSearch,
         searchField,
         sku: debouncedSku,
@@ -597,7 +599,7 @@ export function useProductList() {
         country: country,
         sortBy,
         sortOrder,
-    }), [page, debouncedSearch, searchField, debouncedSku, warehouseFilter, productStatus, country, sortBy, sortOrder]);
+    }), [page, pageSize, debouncedSearch, searchField, debouncedSku, warehouseFilter, productStatus, country, sortBy, sortOrder]);
 
     const {
         data: listData,
@@ -615,7 +617,13 @@ export function useProductList() {
     });
 
     const products = useMemo(() => listData?.data ?? [], [listData?.data]);
-    const pagination = listData?.pagination ?? { total: 0, totalPages: 1, page: 1, limit: 10 };
+    const pagination = listData?.pagination ?? { total: 0, totalPages: 1, page: 1, limit: pageSize };
+    const handlePageSizeSearch = () => {
+        const nextPageSize = Math.max(1, Number.parseInt(pageSizeInput, 10) || 10);
+        setPageSize(nextPageSize);
+        setPageSizeInput(String(nextPageSize));
+        setPage(1);
+    };
 
     useEffect(() => {
         setSelectedProducts((prev) => {
@@ -1033,6 +1041,9 @@ export function useProductList() {
         products,
         pagination,
         page, setPage,
+        pageSizeInput,
+        setPageSizeInput,
+        applyPageSize: handlePageSizeSearch,
         listLoading,
         listFetching,
         isListError,

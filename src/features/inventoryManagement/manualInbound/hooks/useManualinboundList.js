@@ -82,13 +82,15 @@ export function useManualInboundList() {
     const [dateFrom,    setDateFrom]    = useState('');
     const [dateTo,      setDateTo]      = useState('');
     const [page,        setPage]        = useState(1);
+    const [pageSize,    setPageSize]    = useState(10);
+    const [pageSizeInput, setPageSizeInput] = useState('10');
     const [selectedIds, setSelectedIds] = useState([]);
     const [selectedItems, setSelectedItems] = useState([]);
     const [selectionLoading, setSelectionLoading] = useState(false);
 
     const debouncedSearch = useDebounce(search, 350);
     const serverSearch = inboundType === 'Inbound No.' ? debouncedSearch : '';
-    const limit = debouncedSearch && inboundType !== 'Inbound No.' ? 1000 : 20;
+    const limit = debouncedSearch && inboundType !== 'Inbound No.' ? 1000 : pageSize;
 
     const resetList = useCallback(() => {
         setPage(1);
@@ -125,6 +127,13 @@ export function useManualInboundList() {
         setSearch(value);
         setPage(1);
     }, []);
+
+    const applyPageSize = useCallback(() => {
+        const nextPageSize = Math.max(1, Number.parseInt(pageSizeInput, 10) || 10);
+        setPageSize(nextPageSize);
+        setPageSizeInput(String(nextPageSize));
+        setPage(1);
+    }, [pageSizeInput]);
 
     const listParams = {
         page,
@@ -236,6 +245,9 @@ export function useManualInboundList() {
         dateFrom,    setDateFrom: updateDateFrom,
         dateTo,      setDateTo: updateDateTo,
         page,        setPage,
+        pageSizeInput,
+        setPageSizeInput,
+        applyPageSize,
 
         // data
         items,

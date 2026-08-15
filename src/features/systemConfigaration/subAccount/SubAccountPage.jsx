@@ -362,12 +362,13 @@
 // }
 
 import { AlertCircle, RefreshCw, Search, Plus, Pencil, Trash2, Eye } from "lucide-react";
-import { useRef, useEffect, useState } from "react";
+import { useMemo, useRef, useEffect, useState } from "react";
 import Topbar from "../../../components/layout/Topbar";
 import { useSubAccount } from "./hooks/useSubAccount";
 import AddAccountPage from "./component/AddAccountPage";
 import PortalActionMenu from "../../../components/shared/PortalActionMenu";
 import RecordDetailModal from "../../../components/shared/RecordDetailModal";
+import ListPageSizePagination from "../../../components/shared/ListPageSizePagination";
 import api from "../../../lib/api";
 import { toast } from "sonner";
 
@@ -470,6 +471,21 @@ export default function SubAccountPage() {
 
   const actionRefs = useRef({});
   const [detailAccount, setDetailAccount] = useState(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [pageSizeInput, setPageSizeInput] = useState("10");
+  const totalAccountPages = Math.max(1, Math.ceil(accounts.length / pageSize));
+  const currentPage = Math.min(page, totalAccountPages);
+  const paginatedAccounts = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return accounts.slice(start, start + pageSize);
+  }, [accounts, currentPage, pageSize]);
+  const applyPageSize = () => {
+    const nextPageSize = Math.max(1, Number.parseInt(pageSizeInput, 10) || 10);
+    setPageSize(nextPageSize);
+    setPageSizeInput(String(nextPageSize));
+    setPage(1);
+  };
 
   useEffect(() => {
     const handler = (e) => {
@@ -571,7 +587,7 @@ export default function SubAccountPage() {
 
               {!accountLoading &&
                 !accountError &&
-                accounts.map((acc) => (
+                paginatedAccounts.map((acc) => (
                   <tr
                     key={acc.id}
                     className="hover:bg-surface/50 transition-colors"
@@ -697,6 +713,17 @@ export default function SubAccountPage() {
             </tbody>
           </table>
         </div>
+        <ListPageSizePagination
+          page={currentPage}
+          limit={pageSize}
+          total={accounts.length}
+          itemLabel="Sub Accounts"
+          pageSizeInput={pageSizeInput}
+          onPageChange={setPage}
+          onPageSizeInputChange={setPageSizeInput}
+          onApplyPageSize={applyPageSize}
+          loading={accountLoading}
+        />
       </div>
 
       <RecordDetailModal

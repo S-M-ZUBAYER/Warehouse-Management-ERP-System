@@ -113,6 +113,8 @@ export function useByMerchantMapping() {
     const [skuType,       setSkuType]       = useState('sku_name');  // sku_name | product_name
     const [mappingStatus, setMappingStatus] = useState('all');
     const [page,          setPage]          = useState(1);
+    const [pageSize,      setPageSize]      = useState(PAGE_SIZE);
+    const [pageSizeInput, setPageSizeInput] = useState(String(PAGE_SIZE));
 
     // ── Selection ─────────────────────────────────────────────────────────────
     const [selectedIds, setSelectedIds] = useState([]);
@@ -143,7 +145,7 @@ export function useByMerchantMapping() {
     // ── Query: merchant SKU list ──────────────────────────────────────────────
     const listParams = {
         page,
-        limit:         LOCAL_MAPPING_SEARCH_TYPES.has(skuType) && searchApplied ? LOCAL_SEARCH_FETCH_LIMIT : PAGE_SIZE,
+        limit:         LOCAL_MAPPING_SEARCH_TYPES.has(skuType) && searchApplied ? LOCAL_SEARCH_FETCH_LIMIT : pageSize,
         search:        LOCAL_MAPPING_SEARCH_TYPES.has(skuType) ? undefined : searchApplied || undefined,
         skuType:       LOCAL_MAPPING_SEARCH_TYPES.has(skuType) ? undefined : skuType || undefined,
         mappingStatus: mappingStatus !== 'all' ? mappingStatus : undefined,
@@ -188,9 +190,9 @@ export function useByMerchantMapping() {
     const merchantSkus = useMemo(() => {
         if (!isLocalSearch) return filteredMerchantSkus;
 
-        const start = (page - 1) * PAGE_SIZE;
-        return filteredMerchantSkus.slice(start, start + PAGE_SIZE);
-    }, [filteredMerchantSkus, isLocalSearch, page]);
+        const start = (page - 1) * pageSize;
+        return filteredMerchantSkus.slice(start, start + pageSize);
+    }, [filteredMerchantSkus, isLocalSearch, page, pageSize]);
 
     const totalForCurrentTab =
         mappingStatus === 'mapped' ? counts.mapped
@@ -200,24 +202,31 @@ export function useByMerchantMapping() {
     const fallbackTotal = Number(totalForCurrentTab) || filteredMerchantSkus.length;
     const rawPagination = listData?.pagination ?? {
         total: fallbackTotal,
-        totalPages: Math.max(1, Math.ceil(fallbackTotal / PAGE_SIZE)),
+        totalPages: Math.max(1, Math.ceil(fallbackTotal / pageSize)),
         page,
-        limit: PAGE_SIZE,
+        limit: pageSize,
     };
     const pagination = isLocalSearch
         ? {
             ...rawPagination,
             total: filteredMerchantSkus.length,
-            totalPages: Math.max(1, Math.ceil(filteredMerchantSkus.length / PAGE_SIZE)),
+            totalPages: Math.max(1, Math.ceil(filteredMerchantSkus.length / pageSize)),
             page,
-            limit: PAGE_SIZE,
+            limit: pageSize,
         }
         : {
             ...rawPagination,
             total: rawPagination.total ?? fallbackTotal,
-            totalPages: rawPagination.totalPages ?? Math.max(1, Math.ceil(fallbackTotal / PAGE_SIZE)),
-            limit: Number(rawPagination.limit) || PAGE_SIZE,
+            totalPages: rawPagination.totalPages ?? Math.max(1, Math.ceil(fallbackTotal / pageSize)),
+            limit: Number(rawPagination.limit) || pageSize,
         };
+
+    const applyPageSize = useCallback(() => {
+        const nextPageSize = Math.max(1, Number.parseInt(pageSizeInput, 10) || PAGE_SIZE);
+        setPageSize(nextPageSize);
+        setPageSizeInput(String(nextPageSize));
+        setPage(1);
+    }, [pageSizeInput]);
 
     useEffect(() => {
         setSelectedMerchantSkus((prev) => {
@@ -411,6 +420,7 @@ export function useByMerchantMapping() {
         skuType, setSkuType,
         mappingStatus, handleTabChange,
         page, setPage,
+        pageSizeInput, setPageSizeInput, applyPageSize,
 
         // data
         merchantSkus, pagination,

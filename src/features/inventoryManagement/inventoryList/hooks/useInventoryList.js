@@ -147,6 +147,12 @@ const syncInventory = (skuIds) =>
         skuIds: skuIds.map(Number),
     }).then((r) => r.data);
 
+const updateInventoryStockRequest = ({ id, quantity, lock }) =>
+    api.put(`/inventory/${Number(id)}/stock`, {
+        quantity: Number(quantity),
+        lock: Number(lock),
+    }).then((r) => r.data);
+
 
 
 /**
@@ -190,6 +196,8 @@ export function useInventoryList({ initialStockAlertStatus = '' } = {}) {
     const [mappingStatus, setMappingStatus] = useState('all');
     const [stockAlertStatus] = useState(initialStockAlertStatus);
     const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+    const [pageSizeInput, setPageSizeInput] = useState('10');
 
     // ── Selection ─────────────────────────────────────────────────────────────
     const [selectedIds, setSelectedIds] = useState([]);   // sku_warehouse_stock IDs
@@ -242,7 +250,7 @@ export function useInventoryList({ initialStockAlertStatus = '' } = {}) {
     // ─────────────────────────────────────────────────────────────────────────
     const listParams = {
         page,
-        limit: 10,
+        limit: pageSize,
         warehouseId: warehouseId || undefined,
         search: searchApplied || undefined,
         skuType: skuType || undefined,
@@ -345,6 +353,17 @@ const syncMutation = useMutation({
         toast.error(err?.message ?? 'Sync failed');
     },
 });
+
+    const updateStockMutation = useMutation({
+        mutationFn: updateInventoryStockRequest,
+        onSuccess: (data) => {
+            toast.success(data?.message ?? 'Inventory updated');
+            queryClient.invalidateQueries({ queryKey: INVENTORY_KEYS.all() });
+        },
+        onError: (err) => {
+            toast.error(err?.response?.data?.message ?? err?.message ?? 'Failed to update inventory');
+        },
+    });
     // ─────────────────────────────────────────────────────────────────────────
     // Mutation: batch delete
     // Uses existing /merchant-skus/bulk — needs merchant_sku_id not stock row id
@@ -472,6 +491,13 @@ const syncMutation = useMutation({
         stockAlertMutation.mutate({ skuIds: selectedIds, minStock });
     }, [selectedIds, minStock, stockAlertMutation]);
 
+    const applyPageSize = useCallback(() => {
+        const nextPageSize = Math.max(1, Number.parseInt(pageSizeInput, 10) || 10);
+        setPageSize(nextPageSize);
+        setPageSizeInput(String(nextPageSize));
+        setPage(1);
+    }, [pageSizeInput]);
+
    const handleSyncOpen = useCallback(() => {
     if (selectedIds.length === 0) {
         toast.error('Select at least one mapped SKU to sync');
@@ -513,6 +539,7 @@ const syncMutation = useMutation({
         counts,
 
         page, setPage,
+        pageSizeInput, setPageSizeInput, applyPageSize,
 
         // data
         items, pagination,
@@ -541,5 +568,8 @@ const syncMutation = useMutation({
         handleSyncOpen,
         confirmSync,
         syncing: syncMutation.isPending,
+
+        updateInventoryStock: updateStockMutation.mutateAsync,
+        inventoryStockUpdating: updateStockMutation.isPending,
     };
 }

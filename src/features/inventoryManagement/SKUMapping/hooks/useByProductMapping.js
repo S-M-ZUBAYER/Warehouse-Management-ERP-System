@@ -1144,6 +1144,8 @@ export function useByProductMapping() {
     const [skuType,          setSkuType]           = useState('product_name');
     const [mappingStatus,    setMappingStatus]     = useState('all');
     const [page,             setPage]              = useState(1);
+    const [pageSize,         setPageSize]          = useState(PAGE_SIZE);
+    const [pageSizeInput,    setPageSizeInput]     = useState(String(PAGE_SIZE));
 
     const [selectedIds, setSelectedIds] = useState([]);
     const [selectedProducts, setSelectedProducts] = useState([]);
@@ -1173,7 +1175,7 @@ export function useByProductMapping() {
 
     const listParams = {
         page,
-        limit:          PAGE_SIZE,
+        limit:          pageSize,
         platformStoreId:selectedStoreId  || undefined,
         platform:       selectedPlatform || undefined,
         search:         searchApplied    || undefined,
@@ -1237,24 +1239,31 @@ export function useByProductMapping() {
             return getResponseRows(listData);
         }
 
-        const start = (page - 1) * PAGE_SIZE;
-        return filteredStatusRows.slice(start, start + PAGE_SIZE);
-    }, [listData, mappingStatus, filteredStatusRows, page]);
+        const start = (page - 1) * pageSize;
+        return filteredStatusRows.slice(start, start + pageSize);
+    }, [listData, mappingStatus, filteredStatusRows, page, pageSize]);
 
     const activeTotal = Number(totalForCurrentTab) || filteredStatusRows.length || products.length;
     const pagination = mappingStatus === 'all'
         ? (listData?.pagination ?? {
             total: activeTotal,
-            totalPages: Math.max(1, Math.ceil(activeTotal / PAGE_SIZE)),
+            totalPages: Math.max(1, Math.ceil(activeTotal / pageSize)),
             page,
-            limit: PAGE_SIZE,
+            limit: pageSize,
         })
         : {
             total: activeTotal,
-            totalPages: Math.max(1, Math.ceil(activeTotal / PAGE_SIZE)),
+            totalPages: Math.max(1, Math.ceil(activeTotal / pageSize)),
             page,
-            limit: PAGE_SIZE,
+            limit: pageSize,
         };
+
+    const applyPageSize = useCallback(() => {
+        const nextPageSize = Math.max(1, Number.parseInt(pageSizeInput, 10) || PAGE_SIZE);
+        setPageSize(nextPageSize);
+        setPageSizeInput(String(nextPageSize));
+        setPage(1);
+    }, [pageSizeInput]);
 
     // ── Mutations ─────────────────────────────────────────────────────────────
 
@@ -1452,6 +1461,7 @@ export function useByProductMapping() {
         skuType, setSkuType,
         mappingStatus, handleTabChange,
         page, setPage,
+        pageSizeInput, setPageSizeInput, applyPageSize,
 
         // data
         products, pagination,

@@ -21,7 +21,7 @@ import { useSkuMappingDropdowns } from '../hooks/useSkuMappingDropdowns';
 import MappingStatusBadge from '../components/MappingStatusBadge';
 import ConfirmModal from '../components/ConfirmModal';
 import { TableSkeleton, EmptyState } from '../components/TableHelpers';
-import Pagination from '../../../../components/shared/Pagination';
+import ListPageSizePagination from '../../../../components/shared/ListPageSizePagination';
 import ExportMenu from '../../../../components/shared/ExportMenu';
 import api from '../../../../lib/api';
 import { exportRowsToCsv, exportRowsToXlsx, printRows } from '../../../../utils/tableOutput';
@@ -38,6 +38,23 @@ const SEARCH_TYPE_OPTIONS = [
     { label: 'Product ID', value: 'platform_product_id' },
     { label: 'Store ID', value: 'platform_shop_id' },
 ];
+
+const formatStockWarehouseSummary = (warehouses = []) => {
+    if (!Array.isArray(warehouses)) return '';
+    return warehouses
+        .filter((warehouse) => warehouse && (warehouse.warehouse_name || warehouse.warehouse_id))
+        .slice()
+        .sort((a, b) => {
+            const availableDiff = Number(b.available || 0) - Number(a.available || 0);
+            if (availableDiff) return availableDiff;
+            return String(a.warehouse_name || a.warehouse_id).localeCompare(String(b.warehouse_name || b.warehouse_id));
+        })
+        .map((warehouse) => {
+            const name = warehouse.warehouse_name || `Warehouse #${warehouse.warehouse_id}`;
+            return `${name} (${Number(warehouse.available || 0)})`;
+        })
+        .join(', ');
+};
 
 const fetchSyncGroups = () => api.get('/sku-sync-groups').then((r) => r.data ?? []);
 const fetchEligibleMembers = (primarySkuId) =>
@@ -66,6 +83,7 @@ export default function ByMerchantSKUMappingsPage() {
         skuType, setSkuType,
         mappingStatus, handleTabChange,
         page, setPage,
+        pageSizeInput, setPageSizeInput, applyPageSize,
         merchantSkus, pagination,
         counts,
         isLoading, isFetching, isError, error, refetch,
@@ -465,6 +483,7 @@ export default function ByMerchantSKUMappingsPage() {
                                         const childGroups = getChildGroupsForSku(sku.id);
                                         const groupPanelGroups = [skuGroup, ...childGroups].filter(Boolean).filter((g, idx, arr) => arr.findIndex((x) => x.id === g.id) === idx);
                                         const isMappedInfoExpanded = mappedInfoExpandedIds.includes(sku.id);
+                                        const stockWarehouseSummary = formatStockWarehouseSummary(sku.stock_warehouses);
 
                                         return (
                                             <Fragment key={sku.id}>
@@ -489,6 +508,12 @@ export default function ByMerchantSKUMappingsPage() {
                                                         <p className="text-sm font-semibold text-slate-800 font-mono">{sku.sku_name}</p>
                                                         <p className="text-xs text-slate-400 mt-0.5 truncate max-w-[190px]" title={sku.sku_title}>{sku.sku_title}</p>
                                                         <p className="text-[11px] text-slate-400 mt-0.5">{sku.warehouse_name ?? `Warehouse #${sku.warehouse_id ?? '—'}`}</p>
+                                                        {stockWarehouseSummary && (
+                                                            <p className="text-[11px] text-slate-500 mt-0.5 truncate max-w-[260px]" title={stockWarehouseSummary}>
+                                                                <span>Stock</span>
+                                                                <span>: {stockWarehouseSummary}</span>
+                                                            </p>
+                                                        )}
                                                     </td>
                                                     <td className="py-3 pr-4 text-xs text-slate-600">
                                                         {sku.is_mapped ? (
@@ -607,14 +632,16 @@ export default function ByMerchantSKUMappingsPage() {
                     )}
                 </div>
 
-                <Pagination
+                <ListPageSizePagination
                     page={page}
-                    totalPages={pagination.totalPages}
-                    total={pagination.total}
-                    limit={pagination.limit}
-                    itemLabel="merchant SKUs"
-                    showWhenSinglePage
+                    limit={pagination.limit || 10}
+                    total={pagination.total || 0}
+                    itemLabel="SKUs"
+                    pageSizeInput={pageSizeInput}
                     onPageChange={setPage}
+                    onPageSizeInputChange={setPageSizeInput}
+                    onApplyPageSize={applyPageSize}
+                    loading={isFetching}
                 />
                 <div className="flex justify-end gap-3 px-5 py-4 border-t border-surface-border">
                     <ExportMenu

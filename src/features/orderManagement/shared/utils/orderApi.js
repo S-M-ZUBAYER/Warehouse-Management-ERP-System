@@ -1,5 +1,6 @@
 import api from "../../../../lib/api";
 import platformApi from "../../../../lib/platformApi";
+import { formatPlatformDateTime, resolvePlatformRegion } from "./platformDateTime";
 
 export const ORDER_STORE_CONTEXT_KEY = "order-store-context";
 export const ORDER_SEARCH_CONTEXT_KEY = "order-search-context";
@@ -55,6 +56,7 @@ const MANUAL_STATUS_LABELS = {
   CREATED: "Created",
   BOOKING_PENDING: "Booking Pending",
   BOOKING_FAILED: "Booking Failed",
+  MANUAL_DELIVERY: "Self-arranged Delivery",
   SCHEDULE_IN_ARRANGEMENT: "Schedule In Arrangement",
   TO_BE_COLLECTED: "To Be Collected",
   DROP_OFF: "Drop Off",
@@ -234,6 +236,13 @@ export const setCachedOrderDetail = (order) => {
   if (!order?.id) return;
   const cache = safeLocalStorageGet(ORDER_DETAIL_CACHE_KEY, {});
   cache[String(order.id)] = order;
+  safeLocalStorageSet(ORDER_DETAIL_CACHE_KEY, cache);
+};
+
+export const setCachedOrderDetailForId = (id, order) => {
+  if (!id || !order) return;
+  const cache = safeLocalStorageGet(ORDER_DETAIL_CACHE_KEY, {});
+  cache[String(id)] = order;
   safeLocalStorageSet(ORDER_DETAIL_CACHE_KEY, cache);
 };
 
@@ -595,17 +604,11 @@ const formatMoney = (amount, currency = "") => {
   return `${currency ? `${currency} ` : "$"}${formatted}`.trim();
 };
 
-const formatDateTime = (seconds) => {
+const formatDateTime = (seconds, region) => {
   if (!seconds) return "-";
   const value = Number(seconds);
   if (!Number.isFinite(value)) return String(seconds);
-  return new Date(value * 1000).toLocaleString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatPlatformDateTime(new Date(value * 1000), region);
 };
 
 const formatEstimatedDeliveryTime = (value) => {
@@ -737,6 +740,7 @@ export const normalizeShopeeOrder = (order, context = {}) => {
   const recipient = order?.recipient_address || {};
   const totalAmount = order?.total_amount ?? items.reduce((sum, item) => sum + item.subtotal, 0);
   const id = `shopee:${order?.order_sn}`;
+  const orderRegion = resolvePlatformRegion(context.region, recipient?.region);
 
   return {
     id,
@@ -750,8 +754,9 @@ export const normalizeShopeeOrder = (order, context = {}) => {
     orderNo: order?.order_sn || "-",
     trackingNo: order?.tracking_number || order?.trackingNo || "--",
     price: formatMoney(totalAmount, order?.currency),
-    createdAt: formatDateTime(order?.create_time),
-    orderTime: formatDateTime(order?.create_time),
+    createdAt: formatDateTime(order?.create_time, orderRegion),
+    orderTime: formatDateTime(order?.create_time, orderRegion),
+    platformRegion: orderRegion,
     status: normalizeShopeeStatus(order?.order_status),
     rawStatus: order?.order_status || "",
     image: firstItem.image || DEFAULT_IMAGE,
@@ -764,7 +769,7 @@ export const normalizeShopeeOrder = (order, context = {}) => {
     },
     payment: {
       type: order?.cod ? "COD" : "Prepaid",
-      paidAt: formatDateTime(order?.pay_time || order?.create_time),
+      paidAt: formatDateTime(order?.pay_time || order?.create_time, orderRegion),
       subtotal: formatMoney(items.reduce((sum, item) => sum + item.subtotal, 0), order?.currency),
       shippingFee: formatMoney(order?.estimated_shipping_fee || order?.buyer_paid_shipping_fee || 0, order?.currency),
       discount: formatMoney(order?.voucher_from_seller || order?.voucher_from_shopee || 0, order?.currency),
@@ -792,6 +797,14 @@ export const normalizeTikTokOrder = (order, context = {}) => {
   const payment = order?.payment || {};
   const totalAmount = Number(payment?.totalAmount || payment?.total_amount || 0);
   const id = `tiktok:${order?.id}`;
+  const orderRegion = resolvePlatformRegion(
+    context.region,
+    address?.regionCode,
+    address?.region_code,
+    address?.country,
+    address?.countryCode,
+    address?.country_code,
+  );
 
   return {
     id,
@@ -805,8 +818,9 @@ export const normalizeTikTokOrder = (order, context = {}) => {
     orderNo: order?.id || "-",
     trackingNo: order?.trackingNumber || order?.tracking_number || "--",
     price: formatMoney(totalAmount || items.reduce((sum, item) => sum + item.subtotal, 0), payment?.currency),
-    createdAt: formatDateTime(order?.createTime || order?.create_time),
-    orderTime: formatDateTime(order?.createTime || order?.create_time),
+    createdAt: formatDateTime(order?.createTime || order?.create_time, orderRegion),
+    orderTime: formatDateTime(order?.createTime || order?.create_time, orderRegion),
+    platformRegion: orderRegion,
     status: normalizeTikTokStatus(order?.status),
     rawStatus: order?.status || "",
     shippingProviderId: order?.shippingProviderId || order?.shipping_provider_id || order?.shippingProvider?.id || order?.shipping_provider?.id || "",
@@ -823,7 +837,7 @@ export const normalizeTikTokOrder = (order, context = {}) => {
     },
     payment: {
       type: order?.paymentMethodName || order?.payment_method_name || "Prepaid",
-      paidAt: formatDateTime(order?.paidTime || order?.paid_time || order?.createTime),
+      paidAt: formatDateTime(order?.paidTime || order?.paid_time || order?.createTime, orderRegion),
       subtotal: formatMoney(payment?.subTotal || payment?.sub_total || items.reduce((sum, item) => sum + item.subtotal, 0), payment?.currency),
       shippingFee: formatMoney(payment?.shippingFee || payment?.shipping_fee || 0, payment?.currency),
       discount: formatMoney(payment?.sellerDiscount || payment?.seller_discount || payment?.platformDiscount || payment?.platform_discount || 0, payment?.currency),
@@ -1540,6 +1554,15 @@ const filterOrders = (orders, { search, searchType, skuType }) => {
   });
 };
 
+const isReadyToShipOrder = (order = {}) => {
+  const platform = normalizePlatform(order?.platform || order?.storeContext?.platform);
+  const status = String(order?.rawStatus || order?.raw?.order_status || order?.status || "").toUpperCase();
+
+  if (platform === "shopee") return status === "READY_TO_SHIP";
+  if (platform === "tiktok") return status === "AWAITING_SHIPMENT";
+  return false;
+};
+
 const cleanSku = (value) =>
   String(value || "")
     .trim()
@@ -1617,6 +1640,11 @@ const isOrderOutOfStock = async (order, merchantSkuCache, stockCache) => {
 };
 
 const filterOutOfStockOrders = async (orders) => {
+  const { outOfStockRows } = await partitionOrdersByStockStatus(orders);
+  return outOfStockRows;
+};
+
+const partitionOrdersByStockStatus = async (orders) => {
   const merchantSkuCache = new Map();
   const stockCache = new Map();
   const checks = await Promise.all(
@@ -1625,21 +1653,15 @@ const filterOutOfStockOrders = async (orders) => {
       outOfStock: await isOrderOutOfStock(order, merchantSkuCache, stockCache),
     }))
   );
-
-  return checks.filter((result) => result.outOfStock).map((result) => result.order);
+  return {
+    inStockRows: checks.filter((result) => !result.outOfStock).map((result) => result.order),
+    outOfStockRows: checks.filter((result) => result.outOfStock).map((result) => result.order),
+  };
 };
 
 const filterInStockOrders = async (orders) => {
-  const merchantSkuCache = new Map();
-  const stockCache = new Map();
-  const checks = await Promise.all(
-    (orders || []).map(async (order) => ({
-      order,
-      outOfStock: await isOrderOutOfStock(order, merchantSkuCache, stockCache),
-    }))
-  );
-
-  return checks.filter((result) => !result.outOfStock).map((result) => result.order);
+  const { inStockRows } = await partitionOrdersByStockStatus(orders);
+  return inStockRows;
 };
 
 const getOrderIdentity = (order) =>
@@ -1714,6 +1736,14 @@ export const normalizeManualOrder = (order = {}, index = 0) => {
   const awb = order.awbNumber || afterShip?.trackingNumber || easyParcel?.awb || easyParcel?.parcelNumber || order.trackingNo || order.trackingNumber || "";
   const waybillPdfUrl = resolveBackendAssetUrl(order.waybillPdfUrl || order.pdfUrl || order.awbLink || afterShip?.labelUrl || afterShip?.waybillPdfUrl || easyParcel?.pdfUrl || easyParcel?.waybillPdfUrl || easyParcel?.awbLink || "");
   const paymentCertificateUrl = resolveBackendAssetUrl(order.paymentCertificateUrl || order.payment_certificate_url || order.payment?.paymentCertificate?.url || order.logisticRaw?.payment?.paymentCertificate?.url || order.logistic_raw?.payment?.paymentCertificate?.url || "");
+  const orderRegion = resolvePlatformRegion(
+    order.sender?.country,
+    order.easyparcelCountry,
+    order.easyparcel_country,
+    order.raw?.easyparcel_country,
+    order.buyer?.country,
+    order.customer?.country,
+  );
   
   return {
     id: `manual:${order.id || orderNo}`,
@@ -1727,9 +1757,10 @@ export const normalizeManualOrder = (order = {}, index = 0) => {
     orderNo,
     trackingNo: awb || "-",
     price: formatMoney(subtotal, order.currency || ""),
-    createdAt: formatManualDate(order.createdAt || order.created_at || order.orderTime),
-    updatedAt: formatManualDate(order.updatedAt || order.updated_at),
-    orderTime: formatManualDate(order.orderTime || order.createdAt || order.created_at),
+    createdAt: formatManualDate(order.createdAt || order.created_at || order.orderTime, orderRegion),
+    updatedAt: formatManualDate(order.updatedAt || order.updated_at, orderRegion),
+    orderTime: formatManualDate(order.orderTime || order.createdAt || order.created_at, orderRegion),
+    platformRegion: orderRegion,
     status: statusLabel,
     statusCode,
     rawStatus: order.rawStatus || statusCode,
@@ -1737,6 +1768,8 @@ export const normalizeManualOrder = (order = {}, index = 0) => {
     codStatus: order.codStatus || "COD_NOT_APPLICABLE",
     bookingStatus: order.bookingStatus || "SAVED_ONLY",
     bookingError: order.bookingError || easyParcel?.error || "",
+    manualDelivery: Boolean(order.manualDelivery || order.manualDeliveryInfo || easyParcel?.manualDelivery || String(order.bookingStatus || "").toUpperCase() === "MANUAL_DELIVERY"),
+    manualDeliveryInfo: order.manualDeliveryInfo || order.logisticRaw?.manualDelivery || order.logistic_raw?.manualDelivery || null,
     rawProviderStatus: order.rawProviderStatus || "",
     image: firstItem.image || firstItem.imageUrl || DEFAULT_IMAGE,
     items,
@@ -1949,15 +1982,32 @@ export const fetchOrders = async ({ context, pageType = "all", tab, search, sear
   }
   const isPackFailedTab = pageType === "new" && tab === "Pack Failed";
   const isToPackTab = pageType === "new" && tab === "To Pack";
+  const isExchangeAddTab = pageType === "new" && tab === "Exchange/Add";
   const isPackedSuccessfullyTab = pageType === "new" && tab === "Packed Successfully";
   const isOutOfStockTab = pageType === "new" && tab === "Out Of Stock";
   const isPushingTab = pageType === "processed" && tab === "Pushing";
   const isPushedSuccessfulTab = pageType === "processed" && tab === "Pushed Successful";
   const isWithdrawTab = pageType === "processed" && tab === "Withdraw";
+  const shouldAttachListSkuAdjustments = pageType === "new";
   let rows = [];
 
   if (!platform && isPushingTab) {
     return [];
+  }
+
+  if (isExchangeAddTab) {
+    const sourceRows = await Promise.all([
+      fetchOrders({ context, pageType, tab: "To Pack", search: "", searchType, skuType, dateRange, showAllShopeeShipped }),
+      fetchOrders({ context, pageType, tab: "Pack Failed", search: "", searchType, skuType, dateRange, showAllShopeeShipped }),
+      fetchOrders({ context, pageType, tab: "Out Of Stock", search: "", searchType, skuType, dateRange, showAllShopeeShipped }),
+    ]);
+    rows = mergeUniqueOrders(sourceRows[0], [
+      ...normalizeRowsResult(sourceRows[1]),
+      ...normalizeRowsResult(sourceRows[2]),
+    ]);
+    rows = filterOrdersWithSkuAdjustments(rows, { includeWithdraw: false });
+    rows = rows.filter(isReadyToShipOrder);
+    return filterOrders(rows, { search, searchType, skuType });
   }
 
   if (platform === "shopee") {
@@ -1984,11 +2034,18 @@ export const fetchOrders = async ({ context, pageType = "all", tab, search, sear
   }
 
   if (isToPackTab) {
-    rows = await filterInStockOrders(Array.isArray(rows) ? rows : rows?.orders || []);
+    const currentRows = Array.isArray(rows) ? rows : rows?.orders || [];
+    const { inStockRows, outOfStockRows } = await partitionOrdersByStockStatus(currentRows);
+    const adjustedOutOfStockRows = filterOrdersWithSkuAdjustments(
+      await attachSkuAdjustments(outOfStockRows, { platform }),
+      { includeWithdraw: false }
+    );
+    rows = mergeUniqueOrders(inStockRows, adjustedOutOfStockRows);
   }
 
   if (isOutOfStockTab) {
     rows = await filterOutOfStockOrders(Array.isArray(rows) ? rows : rows?.orders || []);
+    rows = (await attachSkuAdjustments(rows, { platform })).filter((order) => !(order.skuAdjustments || []).length);
   }
 
   if (isPushingTab || isPushedSuccessfulTab) {
@@ -2007,12 +2064,18 @@ export const fetchOrders = async ({ context, pageType = "all", tab, search, sear
   }
 
   if (rows && !Array.isArray(rows) && Array.isArray(rows.orders)) {
+    if (shouldAttachListSkuAdjustments) {
+      rows = await attachSkuAdjustments(rows, { platform });
+    }
     return {
       ...rows,
       orders: filterOrders(rows.orders, { search, searchType, skuType }),
     };
   }
 
+  if (shouldAttachListSkuAdjustments) {
+    rows = await attachSkuAdjustments(rows, { platform });
+  }
   return filterOrders(rows, { search, searchType, skuType });
 };
 
@@ -2025,7 +2088,7 @@ export const fetchNewOrderTabCounts = async ({ context, search, searchType, skuT
   const platform = normalizePlatform(context?.platform);
   const countTabs = tabs.length
     ? tabs
-    : ["To Pack", "Packed Successfully", "Pack Failed", "Out Of Stock", "Platform Processing"];
+    : ["To Pack", "Packed Successfully", "Pack Failed", "Out Of Stock", "Exchange/Add", "Platform Processing"];
 
   if (!platform) {
     return countTabs.reduce((counts, tab) => ({ ...counts, [tab]: 0 }), {});
@@ -2159,17 +2222,9 @@ const getListPayload = (res) => {
   };
 };
 
-const formatManualDate = (value) => {
+const formatManualDate = (value, region) => {
   if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatPlatformDateTime(value, region);
 };
 
 const mapWarehouseSku = (sku, index = 0) => {
@@ -2223,6 +2278,106 @@ const getSelectedSkuIds = (sku) => {
     combineSkuId: skuType === "combine" ? combineSkuId : null,
     warehouseId: sku?.warehouseId ?? sku?.warehouse_id,
   };
+};
+
+const getAdjustmentOrderId = (order) => order?.rawId || order?.orderId || order?.orderNo || order?.id;
+
+const normalizeSkuAdjustment = (adjustment = {}) => ({
+  ...adjustment,
+  adjustmentType: adjustment.adjustmentType || adjustment.adjustment_type || "exchange",
+  platformOrderId: adjustment.platformOrderId || adjustment.platform_order_id,
+  platformOrderItemId: adjustment.platformOrderItemId || adjustment.platform_order_item_id,
+  replacementSku: adjustment.replacementSku || adjustment.replacement_sku || {},
+  originalSku: adjustment.originalSku || adjustment.original_sku || {},
+});
+
+export const fetchOrderSkuAdjustments = async ({ platform, orderIds = [] } = {}) => {
+  const ids = [...new Set(orderIds.filter(Boolean).map(String))];
+  const normalizedPlatform = normalizePlatform(platform);
+  if (!ids.length) return [];
+
+  const res = await api.get("/platform-order-deductions/sku-adjustments", {
+    params: {
+      platform: normalizedPlatform || undefined,
+      orderIds: ids.join(","),
+    },
+  });
+  return unwrapApiData(res).map(normalizeSkuAdjustment);
+};
+
+export const fetchOrderSkuAdjustmentSummary = async ({ context, platform } = {}) => {
+  if (isAllOrderStoreContext(context)) {
+    const storeContexts = await getScopedStoreContexts(context);
+    const results = await Promise.allSettled(
+      storeContexts.map((storeContext) => fetchOrderSkuAdjustmentSummary({ context: storeContext }))
+    );
+    const seen = new Set();
+    return results.flatMap((result) => {
+      if (result.status !== "fulfilled") return [];
+      return result.value.filter((item) => {
+        const key = `${item.platform || ""}:${item.platformOrderId || ""}`;
+        if (!item.platformOrderId || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    });
+  }
+
+  const normalizedPlatform = normalizePlatform(platform || context?.platform);
+  if (!["shopee", "tiktok"].includes(normalizedPlatform)) return [];
+
+  const res = await api.get("/platform-order-deductions/sku-adjustments", {
+    params: {
+      platform: normalizedPlatform,
+      platformStoreId: context?.platform_store_id || undefined,
+      summary: true,
+      excludeWithdraw: true,
+    },
+  });
+  return unwrapApiData(res).map(normalizeSkuAdjustment);
+};
+
+const attachSkuAdjustments = async (rows = [], { platform } = {}) => {
+  const rowList = Array.isArray(rows) ? rows : rows?.orders || [];
+  const orderIds = rowList.map(getAdjustmentOrderId).filter(Boolean);
+  if (!orderIds.length) return rows;
+
+  const adjustments = await fetchOrderSkuAdjustments({ platform, orderIds });
+  const byOrder = new Map();
+  adjustments.forEach((adjustment) => {
+    const orderId = String(adjustment.platformOrderId || "");
+    if (!orderId) return;
+    const next = byOrder.get(orderId) || [];
+    next.push(adjustment);
+    byOrder.set(orderId, next);
+  });
+
+  const attach = (order) => {
+    const orderAdjustments = byOrder.get(String(getAdjustmentOrderId(order))) || [];
+    const hasExchange = orderAdjustments.some((item) => item.adjustmentType === "exchange");
+    const hasAdd = orderAdjustments.some((item) => item.adjustmentType === "add");
+    return {
+      ...order,
+      skuAdjustments: orderAdjustments,
+      skuAdjustmentStatus: hasExchange && hasAdd ? "Exchange + Add" : hasExchange ? "Exchange" : hasAdd ? "Add" : "",
+    };
+  };
+
+  if (rows && !Array.isArray(rows) && Array.isArray(rows.orders)) {
+    return { ...rows, orders: rowList.map(attach) };
+  }
+  return rowList.map(attach);
+};
+
+const filterOrdersWithSkuAdjustments = (rows = [], { includeWithdraw = false } = {}) => {
+  const rowList = Array.isArray(rows) ? rows : rows?.orders || [];
+  const filtered = rowList.filter((order) => {
+    const adjustments = order.skuAdjustments || [];
+    if (!adjustments.length) return false;
+    return includeWithdraw || !adjustments.some((item) => item.sourceTab === "Withdraw");
+  });
+  if (rows && !Array.isArray(rows) && Array.isArray(rows.orders)) return { ...rows, orders: filtered };
+  return filtered;
 };
 
 export const fetchOrderWarehouses = async () => {
@@ -2347,58 +2502,70 @@ export const lockReplacementSkuForPlatformOrder = async ({ order, item, merchant
   });
 };
 
-const buildSkuOverridePayload = ({ order, item, merchantSku, context }) => {
+const buildSkuOverridePayload = ({ order, item, merchantSku, context, adjustmentType = "exchange", sourceTab = "", sourceItem = null }) => {
   const platform = normalizePlatform(order?.platform);
   const storeContext = context || order?.storeContext || getStoredOrderContext();
   const orderId = order?.rawId || order?.orderId || order?.orderNo || order?.id;
   const platformItem = buildPlatformItemPayload(order, item);
+  const platformSourceItem = sourceItem ? buildPlatformItemPayload(order, sourceItem) : null;
   const selectedSku = getSelectedSkuIds(merchantSku);
   const replacementWarehouseId = selectedSku.warehouseId;
   const quantity = platformItem.quantity || item?.quantity || 1;
+  const common = {
+    adjustmentType,
+    sourceTab,
+    displaySection: sourceTab === "Withdraw" ? "Withdraw" : "Exchange/Add",
+  };
 
   if (platform === "shopee") {
     return {
+      ...common,
       platform,
       platformOrderId: orderId,
-      platformOrderItemId: platformItem.orderItemId,
+      platformOrderItemId: adjustmentType === "add" ? item?.addLineId : platformItem.orderItemId,
       shopId: getShopeeShopId(storeContext),
       itemId: platformItem.itemId || platformItem.platformItemId,
       modelId: platformItem.modelId,
+      sourceItem: platformSourceItem || undefined,
       replacementMerchantSkuId: selectedSku.merchantSkuId || undefined,
       replacementCombineSkuId: selectedSku.combineSkuId || undefined,
       replacementWarehouseId,
       quantity,
-      reason: "out_of_stock",
-      note: "Original SKU out of stock, using replacement SKU",
+      reason: adjustmentType === "add" ? "add_sku" : "out_of_stock",
+      note: adjustmentType === "add" ? "Added SKU for this order" : "Original SKU out of stock, using replacement SKU",
     };
   }
 
   return {
+    ...common,
     platform,
     platformOrderId: orderId,
-    platformOrderItemId: platformItem.orderItemId,
+    platformOrderItemId: adjustmentType === "add" ? item?.addLineId : platformItem.orderItemId,
     shopId: getContextValue(storeContext, ["shop_id", "store_shop_id", "external_store_id", "platform_store_id"]),
     openId: getTikTokOpenId(storeContext),
     cipherId: getTikTokCipher(storeContext),
     productId: platformItem.productId || platformItem.platformItemId,
     skuId: platformItem.skuId,
+    sourceItem: platformSourceItem || undefined,
     replacementMerchantSkuId: selectedSku.merchantSkuId || undefined,
     replacementCombineSkuId: selectedSku.combineSkuId || undefined,
     replacementWarehouseId,
     quantity,
-    reason: "out_of_stock",
-    note: "Original SKU out of stock, using replacement SKU",
+    reason: adjustmentType === "add" ? "add_sku" : "out_of_stock",
+    note: adjustmentType === "add" ? "Added SKU for this order" : "Original SKU out of stock, using replacement SKU",
   };
 };
 
-export const overrideOutOfStockSkuAndPackStock = async ({ order, item, merchantSku, context }) => {
+export const saveOrderSkuAdjustment = async ({ order, item, merchantSku, context, adjustmentType = "exchange", sourceTab = "", sourceItem = null }) => {
   const storeContext = context || order?.storeContext || getStoredOrderContext();
 
   return fetchBackendJsonNoAuth("/api/v1/platform-order-deductions/sku-override", {
     method: "POST",
-    body: buildSkuOverridePayload({ order, item, merchantSku, context: storeContext }),
+    body: buildSkuOverridePayload({ order, item, merchantSku, context: storeContext, adjustmentType, sourceTab, sourceItem }),
   });
 };
+
+export const overrideOutOfStockSkuAndPackStock = saveOrderSkuAdjustment;
 
 export const deleteOrderSkuOverride = async ({ order, context }) => {
   const storeContext = context || order?.storeContext || getStoredOrderContext();
@@ -2425,6 +2592,31 @@ export const deleteOrderSkuOverride = async ({ order, context }) => {
       console.warn("Order SKU override could not be deleted.", error);
     }
     return null;
+  });
+};
+
+export const deleteOrderSkuAdjustment = async ({ order, adjustment, context }) => {
+  const storeContext = context || order?.storeContext || getStoredOrderContext();
+  const platform = normalizePlatform(order?.platform || adjustment?.platform || storeContext?.platform);
+  const platformOrderId = adjustment?.platformOrderId || order?.rawId || order?.orderNo || order?.id;
+
+  if (!platform || !platformOrderId || !adjustment?.id) return null;
+
+  return fetchBackendJsonNoAuth("/api/v1/platform-order-deductions/sku-override", {
+    method: "DELETE",
+    body: {
+      platform,
+      platformOrderId,
+      adjustmentId: adjustment.id,
+      platformOrderItemId: adjustment.platformOrderItemId,
+      adjustmentType: adjustment.adjustmentType,
+      shopId:
+        platform === "shopee"
+          ? getShopeeShopId(storeContext)
+          : getContextValue(storeContext, ["shop_id", "store_shop_id", "external_store_id", "platform_store_id"]),
+      openId: platform === "tiktok" ? getTikTokOpenId(storeContext) : undefined,
+      cipherId: platform === "tiktok" ? getTikTokCipher(storeContext) : undefined,
+    },
   });
 };
 
@@ -2713,6 +2905,33 @@ export const packTikTokOrders = async ({ context, orders = [] }) => {
     successfulIds,
     failedOrders,
   };
+};
+
+export const runAutoOrderAcceptNow = async ({ context } = {}) => {
+  const platform = normalizePlatform(context?.platform);
+  const storeId = getPlatformStoreValue(context);
+  const payload = {};
+
+  if (platform && platform !== ALL_PLATFORM_VALUE) payload.platform = platform;
+  if (storeId && String(storeId).toLowerCase() !== ALL_STORE_VALUE) payload.storeId = storeId;
+
+  const res = await api.post("/auto-order-accept/run-now", payload);
+  const data = res?.data ?? res;
+
+  (data?.results || []).forEach((result) => {
+    if (!Array.isArray(result?.successfulIds) || result.successfulIds.length === 0) return;
+    savePackedSuccessfulOrders({
+      context: {
+        ...context,
+        platform: result.platform,
+        platform_store_id: result.storeId,
+      },
+      platform: result.platform,
+      orderIds: result.successfulIds,
+    });
+  });
+
+  return data;
 };
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -3113,6 +3332,13 @@ export const updateManualOrderCodSettlement = (order, payload = {}) => {
   const manualOrderId = order?.rawId || String(order?.id || "").replace(/^manual:/, "") || order?.orderNo;
   return api
     .patch(`/order-management/manual-orders/${encodeURIComponent(manualOrderId)}/cod-settlement`, payload)
+    .then((res) => res?.data?.data ?? res?.data ?? res);
+};
+
+export const updateManualOrderDeliveryInfo = (order, payload = {}) => {
+  const manualOrderId = order?.rawId || String(order?.id || "").replace(/^manual:/, "") || order?.orderNo;
+  return api
+    .patch(`/order-management/manual-orders/${encodeURIComponent(manualOrderId)}/manual-delivery`, payload)
     .then((res) => res?.data?.data ?? res?.data ?? res);
 };
 

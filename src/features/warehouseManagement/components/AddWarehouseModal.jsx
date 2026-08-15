@@ -58,7 +58,7 @@ export default function AddWarehouseModal({
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
-        className="bg-white max-w-[657px] rounded-2xl shadow-2xl w-full font-body"
+        className="bg-white max-w-[657px] max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl w-full font-body"
         style={{
           animation: "popIn 0.18s ease both",
           boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
@@ -161,6 +161,30 @@ export default function AddWarehouseModal({
             required
             error={errors.name}
           />
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <ModalInput
+              label="State"
+              name="state"
+              value={form.state}
+              onChange={onFormChange}
+              placeholder="State name here"
+            />
+            <ModalInput
+              label="Zip Code"
+              name="zipCode"
+              value={form.zipCode}
+              onChange={onFormChange}
+              placeholder="Zip Code"
+            />
+            <ModalInput
+              label="City"
+              name="city"
+              value={form.city}
+              onChange={onFormChange}
+              placeholder="City name here"
+            />
+          </div>
 
           {/* ── Footer Buttons ── */}
           <div className="flex items-center justify-end gap-3 pt-2">

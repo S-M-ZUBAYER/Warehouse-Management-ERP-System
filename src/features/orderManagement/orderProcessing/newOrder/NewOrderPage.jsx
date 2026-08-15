@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useNavigationType } from "react-router-dom";
 import Topbar from "../../../../components/layout/Topbar";
 import OrderProcessingFilterBar from "../../shared/components/OrderProcessingFilterBar";
@@ -12,11 +12,13 @@ import { useOrderList } from "../../shared/hooks/useOrderList";
 import { fetchNewOrderTabCounts, getStoredOrderListReturnState, setOrderDetailReturnContext } from "../../shared/utils/orderApi";
 import { getDashboardOrderStatusFilter } from "../utils/dashboardOrderStatusFilter";
 
-const SUB_TABS = ["To Pack", "Packed Successfully", "Pack Failed", "Out Of Stock", "Platform Processing"];
-const SHOPEE_READY_TO_SHIP_TABS = ["To Pack", "Pack Failed"];
+const SUB_TABS = ["To Pack", "Packed Successfully", "Pack Failed", "Out Of Stock", "Exchange/Add", "Platform Processing"];
+const SHOPEE_READY_TO_SHIP_TABS = ["To Pack", "Pack Failed", "Exchange/Add"];
 const NEW_ORDER_TAB_COUNT_GC_TIME = 1000 * 60 * 5;
+const TAB_COUNT_STALE_TIME = 1000 * 150;
 
 export default function NewOrder() {
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
   const navigationType = useNavigationType();
@@ -57,21 +59,26 @@ export default function NewOrder() {
         { label: "Withdraw", onClick: (order) => setWithdrawOrder(order) },
       ]
     : undefined;
-  const {
-    data: tabCounts = {},
-    isLoading: tabCountsLoading,
-    isFetching: tabCountsFetching,
-  } = useQuery({
-    queryKey: [
+  const tabCountQueryKey = useMemo(
+    () => [
       "order-management",
       "new-order-tab-counts",
-      tabRefreshKey,
       list.storeContext,
       list.appliedSearch,
       list.appliedSearchType,
       list.appliedSkuType,
       list.dateRange,
+      list.dataRefreshKey,
     ],
+    [list.appliedSearch, list.appliedSearchType, list.appliedSkuType, list.dateRange, list.dataRefreshKey, list.storeContext]
+  );
+  const {
+    data: tabCounts = {},
+    isLoading: tabCountsLoading,
+    isFetching: tabCountsFetching,
+    dataUpdatedAt: tabCountsUpdatedAt,
+  } = useQuery({
+    queryKey: tabCountQueryKey,
     queryFn: () =>
       fetchNewOrderTabCounts({
         context: list.storeContext,
@@ -82,9 +89,9 @@ export default function NewOrder() {
         tabs: SUB_TABS,
     }),
     enabled: list.hasStore,
-    staleTime: 0,
+    staleTime: TAB_COUNT_STALE_TIME,
     gcTime: NEW_ORDER_TAB_COUNT_GC_TIME,
-    refetchOnMount: "always",
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
   });
   const activeTabCount = list.isLoading
@@ -92,6 +99,9 @@ export default function NewOrder() {
     : list.pagination?.total ?? list.allOrders?.length ?? list.orders.length;
   const handleTabChange = (tab) => {
     if (tab === activeTab) return;
+    if (!tabCountsFetching && tabCountsUpdatedAt && Date.now() - tabCountsUpdatedAt >= TAB_COUNT_STALE_TIME) {
+      queryClient.invalidateQueries({ queryKey: tabCountQueryKey });
+    }
     setTabRefreshKey((current) => current + 1);
     setActiveTab(tab);
   };
@@ -202,6 +212,7 @@ export default function NewOrder() {
           statusSortDirection={list.statusSortDirection}
           onStatusSortChange={list.setStatusSortDirection}
           showActionsCol={showActionButton}
+          showSkuAdjustmentColumn={list.showSkuAdjustmentColumn}
           actionLabel={actionLabel}
           rowActions={rowActions}
           actionMenuPlacement="up"
@@ -245,5 +256,5 @@ function formatCount(value, isLoading = false) {
 }
 
 function isWarningTab(tab) {
-  return tab === "Pack Failed" || tab === "Out Of Stock";
+  return tab === "Pack Failed" || tab === "Out Of Stock" || tab === "Exchange/Add";
 }

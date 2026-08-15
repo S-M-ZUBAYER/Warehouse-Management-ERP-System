@@ -43,6 +43,7 @@ export default function OrderFilterBar({
   skuTypes,
   search,
   setSearch,
+  onSearch,
   showSearchTypeDropdown,
   setShowSearchTypeDropdown,
 }) {
@@ -134,21 +135,36 @@ export default function OrderFilterBar({
         <div className="flex-1 min-w-40 relative">
           <Search
             size={14}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            className={`absolute left-3 text-slate-400 ${searchType === "Batch Search" ? "top-3.5" : "top-1/2 -translate-y-1/2"}`}
           />
-          <input
-            type="text"
-            placeholder="Search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-sm border border-surface-border rounded-lg
-                       text-slate-700 placeholder-slate-400 outline-none bg-white
-                       focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
-          />
+          {searchType === "Batch Search" ? (
+            <textarea
+              placeholder="Search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              rows={3}
+              className="w-full resize-y pl-9 pr-3 py-2 text-sm border border-surface-border rounded-lg
+                         text-slate-700 placeholder-slate-400 outline-none bg-white
+                         focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
+            />
+          ) : (
+            <input
+              type="text"
+              placeholder="Search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && onSearch?.()}
+              className="w-full pl-9 pr-3 py-2 text-sm border border-surface-border rounded-lg
+                         text-slate-700 placeholder-slate-400 outline-none bg-white
+                         focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
+            />
+          )}
         </div>
 
         {/* Search button */}
         <button
+          type="button"
+          onClick={onSearch}
           className="px-6 py-2 text-sm font-semibold bg-primary hover:bg-primary-dark
                            text-white rounded-lg transition-colors whitespace-nowrap"
         >
