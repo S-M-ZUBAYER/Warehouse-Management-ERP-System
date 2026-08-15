@@ -147,6 +147,12 @@ const syncInventory = (skuIds) =>
         skuIds: skuIds.map(Number),
     }).then((r) => r.data);
 
+const updateInventoryStockRequest = ({ id, quantity, lock }) =>
+    api.put(`/inventory/${Number(id)}/stock`, {
+        quantity: Number(quantity),
+        lock: Number(lock),
+    }).then((r) => r.data);
+
 
 
 /**
@@ -347,6 +353,17 @@ const syncMutation = useMutation({
         toast.error(err?.message ?? 'Sync failed');
     },
 });
+
+    const updateStockMutation = useMutation({
+        mutationFn: updateInventoryStockRequest,
+        onSuccess: (data) => {
+            toast.success(data?.message ?? 'Inventory updated');
+            queryClient.invalidateQueries({ queryKey: INVENTORY_KEYS.all() });
+        },
+        onError: (err) => {
+            toast.error(err?.response?.data?.message ?? err?.message ?? 'Failed to update inventory');
+        },
+    });
     // ─────────────────────────────────────────────────────────────────────────
     // Mutation: batch delete
     // Uses existing /merchant-skus/bulk — needs merchant_sku_id not stock row id
@@ -551,5 +568,8 @@ const syncMutation = useMutation({
         handleSyncOpen,
         confirmSync,
         syncing: syncMutation.isPending,
+
+        updateInventoryStock: updateStockMutation.mutateAsync,
+        inventoryStockUpdating: updateStockMutation.isPending,
     };
 }

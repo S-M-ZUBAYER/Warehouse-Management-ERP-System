@@ -233,6 +233,13 @@ const navItems = [
             icon: AlertCircle,
           },
           {
+            label: "Return Order",
+            i18nKey: "nav.returnOrder",
+            permissionKey: "return_order",
+            to: "/warehouse_management/orders/processing/return_order",
+            icon: AlertCircle,
+          },
+          {
             label: "Canceled Order",
             i18nKey: "nav.canceledOrder",
             permissionKey: "canceled_order",

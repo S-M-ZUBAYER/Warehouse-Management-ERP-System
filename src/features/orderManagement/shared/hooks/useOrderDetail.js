@@ -3,13 +3,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   fetchOrderDetail,
+  fetchOrderSkuAdjustments,
   fetchOrderWarehouses,
   getCachedOrderDetail,
   getStoredOrderContext,
-  overrideOutOfStockSkuAndPackStock,
-  packShopeeOrders,
-  packTikTokOrders,
+  deleteOrderSkuAdjustment,
+  saveOrderSkuAdjustment,
   searchMerchantSkus,
+  setCachedOrderDetail,
+  setCachedOrderDetailForId,
   updateOrderItemMapping,
 } from "../utils/orderApi";
 
@@ -46,6 +48,20 @@ const getSkuMappedWarehouseId = (sku) => {
   const mapping = Array.isArray(sku?.raw?.mappings) ? sku.raw.mappings[0] : null;
   return mapping?.fulfillment_warehouse_id || sku?.warehouseId || "";
 };
+const getOrderIdentity = (value) => value?.rawId || value?.orderId || value?.orderNo || value?.id;
+const getAdjustmentStatus = (adjustments = []) => {
+  const active = adjustments.filter((item) => item?.status !== "packed");
+  const hasExchange = active.some((item) => item.adjustmentType === "exchange");
+  const hasAdd = active.some((item) => item.adjustmentType === "add");
+  return hasExchange && hasAdd ? "Exchange + Add" : hasExchange ? "Exchange" : hasAdd ? "Add" : "";
+};
+const getSkuDisplay = (sku = {}) => ({
+  id: sku.merchantSkuId || sku.combineSkuId || sku.id || null,
+  sku: sku.sku || sku.skuName || sku.name || null,
+  name: sku.name || sku.skuTitle || sku.sku || sku.skuName || null,
+  image: sku.image || sku.imageUrl || sku.image_url || null,
+});
+const normalizeAdjustmentPayload = (payload = {}) => payload?.data || payload;
 
 export function useOrderDetail({
   platform,
@@ -53,6 +69,7 @@ export function useOrderDetail({
   initialOrder,
   packAfterMapping = false,
   skuOverrideOnly = false,
+  sourceTab = "",
   onPackAfterMappingSuccess,
 }) {
   const queryClient = useQueryClient();
@@ -63,6 +80,7 @@ export function useOrderDetail({
   const [selectedSkuId, setSelectedSkuId] = useState(null);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState("");
   const [mappingTargetItem, setMappingTargetItem] = useState(null);
+  const [mappingQuantity, setMappingQuantity] = useState(1);
   const context = getStoredOrderContext();
   const cachedOrder = initialOrder || getCachedOrderDetail(`${platform}:${orderId}`);
 
@@ -75,12 +93,20 @@ export function useOrderDetail({
   });
 
   const order = detailQuery.data || cachedOrder;
+  const orderIdentity = order?.rawId || order?.orderId || order?.orderNo || order?.id || orderId;
 
   const { data: warehouseOptions = [] } = useQuery({
     queryKey: ["order-management", "warehouses"],
     queryFn: fetchOrderWarehouses,
     enabled: showMappingModal,
     staleTime: 1000 * 60 * 10,
+  });
+
+  const adjustmentsQuery = useQuery({
+    queryKey: ["order-management", "sku-adjustments", platform, orderIdentity],
+    queryFn: () => fetchOrderSkuAdjustments({ platform: order?.platform || platform, orderIds: [orderIdentity] }),
+    enabled: Boolean(orderIdentity && (order?.platform || platform)),
+    staleTime: 1000 * 30,
   });
 
   const getWarehouseName = (warehouseId, fallback = "-") =>
@@ -152,34 +178,96 @@ export function useOrderDetail({
     [merchantSkus, selectedSkuId]
   );
 
+  const updateCachedOrderAdjustments = (updater) => {
+    const targetOrderId = String(orderIdentity || "");
+    if (!targetOrderId) return;
+
+    const applyToOrder = (currentOrder) => {
+      if (!currentOrder || String(getOrderIdentity(currentOrder) || "") !== targetOrderId) return currentOrder;
+      const currentAdjustments = currentOrder.skuAdjustments || [];
+      const nextAdjustments = updater(currentAdjustments);
+      return {
+        ...currentOrder,
+        skuAdjustments: nextAdjustments,
+        skuAdjustmentStatus: getAdjustmentStatus(nextAdjustments),
+      };
+    };
+
+    queryClient.setQueriesData({ queryKey: ["order-management", "list"] }, (current) => {
+      if (Array.isArray(current)) return current.map(applyToOrder);
+      if (current && Array.isArray(current.orders)) {
+        return {
+          ...current,
+          orders: current.orders.map(applyToOrder),
+        };
+      }
+      return current;
+    });
+
+    queryClient.setQueryData(ORDER_DETAIL_KEYS.detail(platform, orderId), (current) => applyToOrder(current || order));
+    const nextOrder = applyToOrder(order);
+    if (nextOrder) {
+      setCachedOrderDetail(nextOrder);
+      setCachedOrderDetailForId(`${platform}:${orderId}`, nextOrder);
+    }
+  };
+
+  const upsertCachedAdjustment = ({ result, adjustmentType, item, merchantSku }) => {
+    const saved = normalizeAdjustmentPayload(result);
+    const replacementSku = getSkuDisplay({
+      ...merchantSku,
+      merchantSkuId: saved.replacementMerchantSkuId,
+      combineSkuId: saved.replacementCombineSkuId,
+    });
+    const nextAdjustment = {
+      ...saved,
+      adjustmentType,
+      platform: saved.platform || order?.platform || platform,
+      platformOrderId: saved.platformOrderId || orderIdentity,
+      platformOrderItemId: saved.platformOrderItemId || item?.platformOrderItemId || item?.id,
+      quantity: Number(saved.quantity || item?.quantity || mappingQuantity || 1),
+      sourceTab: saved.sourceTab || sourceTab,
+      status: saved.status || "active",
+      originalSku: adjustmentType === "add" ? {} : getSkuDisplay(item),
+      replacementSku,
+    };
+
+    queryClient.setQueryData(["order-management", "sku-adjustments", platform, orderIdentity], (current = []) => {
+      const withoutCurrent = (current || []).filter((item) => String(item.id) !== String(nextAdjustment.id));
+      return [...withoutCurrent, nextAdjustment];
+    });
+
+    updateCachedOrderAdjustments((current) => {
+      const withoutCurrent = (current || []).filter((item) => String(item.id) !== String(nextAdjustment.id));
+      return [...withoutCurrent, nextAdjustment];
+    });
+  };
+
+  const removeCachedAdjustment = (adjustment) => {
+    queryClient.setQueryData(["order-management", "sku-adjustments", platform, orderIdentity], (current = []) =>
+      (current || []).filter((item) => String(item.id) !== String(adjustment?.id))
+    );
+    updateCachedOrderAdjustments((current) =>
+      (current || []).filter((item) => String(item.id) !== String(adjustment?.id))
+    );
+  };
+
   const updateMappingMutation = useMutation({
     mutationFn: async () => {
       if (packAfterMapping || skuOverrideOnly) {
         const orderContext = order?.storeContext || context;
 
-        await overrideOutOfStockSkuAndPackStock({
+        await saveOrderSkuAdjustment({
           order,
-          item: mappingTargetItem,
+          item: { ...mappingTargetItem, quantity: mappingQuantity },
           merchantSku: selectedMerchantSku,
           context: orderContext,
+          adjustmentType: mappingTargetItem?.adjustmentType || "exchange",
+          sourceTab,
+          sourceItem: order?.items?.[0] || null,
         });
 
-        if (skuOverrideOnly) {
-          return { message: "Merchant mapping updated" };
-        }
-
-        const normalizedPlatform = String(order?.platform || platform || "").toLowerCase();
-        const packResult = normalizedPlatform.includes("shopee")
-          ? await packShopeeOrders({ context: orderContext, orders: [order] })
-          : normalizedPlatform.includes("tik")
-            ? await packTikTokOrders({ context: orderContext, orders: [order] })
-            : null;
-
-        if (packResult?.failedOrders?.length) {
-          throw new Error(packResult.failedOrders[0]?.reason || "Order packaging failed");
-        }
-
-        return packResult;
+        return { message: "SKU adjustment saved" };
       }
 
       const mappingResult = await updateOrderItemMapping({
@@ -191,19 +279,21 @@ export function useOrderDetail({
       return mappingResult;
     },
     onSuccess: async (data) => {
-      toast.success(packAfterMapping ? "Order packed" : data?.message || "Merchant mapping updated");
+      if (packAfterMapping || skuOverrideOnly) {
+        upsertCachedAdjustment({
+          result: data,
+          adjustmentType: mappingTargetItem?.adjustmentType || "exchange",
+          item: { ...mappingTargetItem, quantity: mappingQuantity },
+          merchantSku: selectedMerchantSku,
+        });
+      }
+      toast.success(data?.message || "Merchant mapping updated");
       setShowMappingModal(false);
       setSelectedSkuId(null);
       setSelectedWarehouseId("");
       setMappingTargetItem(null);
       queryClient.invalidateQueries({ queryKey: ["order-management"] });
-      if (packAfterMapping || skuOverrideOnly) {
-        await onPackAfterMappingSuccess?.({
-          order,
-          context: order?.storeContext || context,
-          platform: String(order?.platform || platform || "").toLowerCase(),
-        });
-      }
+      queryClient.invalidateQueries({ queryKey: ["order-management", "sku-adjustments"] });
     },
     onError: (err) => {
       toast.error(err?.response?.data?.message || err?.message || "Failed to update mapping");
@@ -211,11 +301,96 @@ export function useOrderDetail({
   });
 
   const openMappingModal = (item) => {
-    setMappingTargetItem(item);
+    setMappingTargetItem({ ...item, adjustmentType: "exchange" });
+    setMappingQuantity(Math.max(1, Number(item?.quantity || 1)));
     setSelectedSkuId(null);
     setSelectedWarehouseId("");
     setShowMappingModal(true);
   };
+
+  const openAddSkuModal = (adjustment = null) => {
+    setMappingTargetItem({
+      id: adjustment?.platformOrderItemId || `ADD-${Date.now()}`,
+      addLineId: adjustment?.platformOrderItemId || undefined,
+      name: adjustment ? "Added SKU" : "Add SKU",
+      sku: adjustment?.replacementSku?.sku || "",
+      quantity: adjustment?.quantity || 1,
+      adjustmentType: "add",
+    });
+    setMappingQuantity(Math.max(1, Number(adjustment?.quantity || 1)));
+    setSelectedSkuId(null);
+    setSelectedWarehouseId(String(adjustment?.replacementWarehouseId || ""));
+    setShowMappingModal(true);
+  };
+
+  const deleteAdjustmentMutation = useMutation({
+    mutationFn: (adjustment) => deleteOrderSkuAdjustment({ order, adjustment, context: order?.storeContext || context }),
+    onSuccess: (_data, adjustment) => {
+      removeCachedAdjustment(adjustment);
+      toast.success("SKU adjustment deleted");
+      queryClient.invalidateQueries({ queryKey: ["order-management"] });
+      queryClient.invalidateQueries({ queryKey: ["order-management", "sku-adjustments"] });
+    },
+    onError: (err) => {
+      toast.error(err?.response?.data?.message || err?.message || "Failed to delete SKU adjustment");
+    },
+  });
+
+  const updateAdjustmentQuantityMutation = useMutation({
+    mutationFn: ({ adjustment, quantity, sourceItem }) => saveOrderSkuAdjustment({
+      order,
+      item: {
+        ...(adjustment.adjustmentType === "add" ? {} : sourceItem || {}),
+        id: adjustment.platformOrderItemId,
+        addLineId: adjustment.adjustmentType === "add" ? adjustment.platformOrderItemId : undefined,
+        platformOrderItemId: adjustment.platformOrderItemId,
+        quantity,
+        adjustmentType: adjustment.adjustmentType,
+      },
+      merchantSku: {
+        id: adjustment.replacementCombineSkuId
+          ? `combine:${adjustment.replacementCombineSkuId}`
+          : `merchant:${adjustment.replacementMerchantSkuId}`,
+        skuType: adjustment.replacementCombineSkuId ? "combine" : "merchant",
+        merchantSkuId: adjustment.replacementMerchantSkuId,
+        combineSkuId: adjustment.replacementCombineSkuId,
+        warehouseId: adjustment.replacementWarehouseId,
+      },
+      context: order?.storeContext || context,
+      adjustmentType: adjustment.adjustmentType,
+      sourceTab,
+      sourceItem: sourceItem || order?.items?.[0] || null,
+    }),
+    onSuccess: (data, variables) => {
+      upsertCachedAdjustment({
+        result: data,
+        adjustmentType: variables.adjustment.adjustmentType,
+        item: {
+          ...(variables.sourceItem || {}),
+          id: variables.adjustment.platformOrderItemId,
+          platformOrderItemId: variables.adjustment.platformOrderItemId,
+          quantity: variables.quantity,
+        },
+        merchantSku: {
+          id: variables.adjustment.replacementCombineSkuId
+            ? `combine:${variables.adjustment.replacementCombineSkuId}`
+            : `merchant:${variables.adjustment.replacementMerchantSkuId}`,
+          merchantSkuId: variables.adjustment.replacementMerchantSkuId,
+          combineSkuId: variables.adjustment.replacementCombineSkuId,
+          warehouseId: variables.adjustment.replacementWarehouseId,
+          sku: variables.adjustment.replacementSku?.sku,
+          name: variables.adjustment.replacementSku?.name,
+          image: variables.adjustment.replacementSku?.image,
+        },
+      });
+      toast.success("SKU quantity updated");
+      queryClient.invalidateQueries({ queryKey: ["order-management"] });
+      queryClient.invalidateQueries({ queryKey: ["order-management", "sku-adjustments"] });
+    },
+    onError: (err) => {
+      toast.error(err?.response?.data?.message || err?.message || "Failed to update SKU quantity");
+    },
+  });
 
   const handleMappingSearch = () => setAppliedMappingSearch(mappingSearch);
   const handleWarehouseChange = (warehouseId) => {
@@ -228,7 +403,8 @@ export function useOrderDetail({
       toast.error("Please select one merchant SKU");
       return;
     }
-    if (getSkuTotalAvailable(selectedMerchantSku) < getOrderItemQuantity(mappingTargetItem)) {
+    const quantity = Math.max(1, Number(mappingQuantity || 1));
+    if (getSkuTotalAvailable(selectedMerchantSku) < quantity) {
       toast.error("Selected SKU total available quantity is not enough for this order");
       return;
     }
@@ -256,9 +432,18 @@ export function useOrderDetail({
     merchantSkusLoading: skusQuery.isLoading || skusQuery.isFetching,
     selectedSkuId,
     setSelectedSkuId,
+    mappingQuantity,
+    setMappingQuantity,
     mappingTargetItem,
     openMappingModal,
     confirmMapping,
     mappingSaving: updateMappingMutation.isPending,
+    skuAdjustments: adjustmentsQuery.data || order?.skuAdjustments || [],
+    skuAdjustmentsLoading: adjustmentsQuery.isLoading || adjustmentsQuery.isFetching,
+    openAddSkuModal,
+    deleteSkuAdjustment: (adjustment) => deleteAdjustmentMutation.mutate(adjustment),
+    deletingSkuAdjustment: deleteAdjustmentMutation.isPending,
+    updateSkuAdjustmentQuantity: (payload, options) => updateAdjustmentQuantityMutation.mutate(payload, options),
+    updatingSkuAdjustmentQuantity: updateAdjustmentQuantityMutation.isPending,
   };
 }

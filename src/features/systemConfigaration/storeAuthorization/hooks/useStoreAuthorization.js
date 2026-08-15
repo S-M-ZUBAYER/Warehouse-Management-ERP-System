@@ -5,6 +5,16 @@ import { toast } from "sonner";
 
 const PLATFORMS = ["All", "Shopee", "Lazada", "TikTok"];
 const STATUSES = ["All", "Authorized", "Disabled"];
+const AUTO_ORDER_ACCEPT_DAY_OPTIONS = [
+    { value: 0, label: "Sunday" },
+    { value: 1, label: "Monday" },
+    { value: 2, label: "Tuesday" },
+    { value: 3, label: "Wednesday" },
+    { value: 4, label: "Thursday" },
+    { value: 5, label: "Friday" },
+    { value: 6, label: "Saturday" },
+];
+const DEFAULT_AUTO_ORDER_ACCEPT_DAYS = AUTO_ORDER_ACCEPT_DAY_OPTIONS.map((day) => day.value);
 const ADD_STORE_COUNTRIES = {
     Shopee: ["SG", "MY", "TH", "VN", "PH", "ID"],
     TikTok: ["SG", "MY", "TH", "VN", "PH", "ID"],
@@ -54,6 +64,26 @@ const platformLabel = (value) => {
     return value || "-";
 };
 
+const normalizeAutoOrderAcceptDays = (value, fallback = DEFAULT_AUTO_ORDER_ACCEPT_DAYS) => {
+    const source = Array.isArray(value)
+        ? value
+        : String(value ?? "")
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean);
+    const days = [...new Set(source.map((item) => Number(item)))]
+        .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
+        .sort((a, b) => a - b);
+
+    return days.length ? days : fallback;
+};
+
+const formatAutoOrderAcceptDays = (days = DEFAULT_AUTO_ORDER_ACCEPT_DAYS) => {
+    if (days.length === AUTO_ORDER_ACCEPT_DAY_OPTIONS.length) return "Every day";
+    const labels = new Map(AUTO_ORDER_ACCEPT_DAY_OPTIONS.map((day) => [day.value, day.label.slice(0, 3)]));
+    return days.map((day) => labels.get(day) || String(day)).join(", ");
+};
+
 const formatDateTime = (value) => {
     if (!value) return "-";
     const date = new Date(value);
@@ -71,6 +101,8 @@ const formatDateTime = (value) => {
 const normalizeStore = (store) => {
     const marketplace = platformLabel(store.platform);
     const nickname = store.store_name || store.external_store_name || "-";
+    const autoOrderAccept = Boolean(store.auto_order_accept ?? store.autoOrderAccept);
+    const autoOrderAcceptDays = normalizeAutoOrderAcceptDays(store.auto_order_accept_days ?? store.autoOrderAcceptDays);
     return {
         id: store.id,
         raw: store,
@@ -82,6 +114,10 @@ const normalizeStore = (store) => {
         cipher: store.store_cipher || "-",
         country: store.region || "-",
         authStatus: store.is_active ? "Authorized" : "Disabled",
+        autoOrderAccept,
+        autoOrderAcceptLabel: autoOrderAccept ? "On" : "Off",
+        autoOrderAcceptDays,
+        autoOrderAcceptDaysLabel: formatAutoOrderAcceptDays(autoOrderAcceptDays),
         createdAt: formatDateTime(store.createdAt || store.created_at),
         defaultWarehouse: store.defaultWarehouse?.name || store.defaultWarehouse?.code || "-",
     };
@@ -121,6 +157,14 @@ export function useStoreAuthorization() {
     const [permSelected, setPermSelected] = useState([]);
     const [permEditIds, setPermEditIds] = useState([]);
     const [unlinkModal, setUnlinkModal] = useState({ open: false, store: null, loading: false });
+    const [autoOrderAcceptModal, setAutoOrderAcceptModal] = useState({
+        open: false,
+        mode: "toggle",
+        store: null,
+        nextValue: false,
+        selectedDays: DEFAULT_AUTO_ORDER_ACCEPT_DAYS,
+        loading: false,
+    });
     const [addStoreModal, setAddStoreModal] = useState({
         open: false,
         platform: "",
@@ -170,7 +214,7 @@ export function useStoreAuthorization() {
         if (search.trim()) {
             const q = search.trim().toLowerCase();
             list = list.filter((s) =>
-                [s.marketplace, s.nickname, s.storeId, s.shopId, s.openId, s.country, s.authStatus, s.defaultWarehouse]
+                [s.marketplace, s.nickname, s.storeId, s.shopId, s.openId, s.country, s.authStatus, s.autoOrderAcceptLabel, s.autoOrderAcceptDaysLabel, s.defaultWarehouse]
                     .some((value) => String(value || "").toLowerCase().includes(q))
             );
         }
@@ -307,6 +351,81 @@ export function useStoreAuthorization() {
         }
     };
 
+    const requestAutoOrderAcceptToggle = (store) => {
+        if (!store?.id) return;
+        setAutoOrderAcceptModal({
+            open: true,
+            mode: "toggle",
+            store,
+            nextValue: !store.autoOrderAccept,
+            selectedDays: normalizeAutoOrderAcceptDays(store.autoOrderAcceptDays),
+            loading: false,
+        });
+    };
+
+    const requestAutoOrderAcceptDays = (store) => {
+        if (!store?.id) return;
+        setAutoOrderAcceptModal({
+            open: true,
+            mode: "days",
+            store,
+            nextValue: store.autoOrderAccept,
+            selectedDays: normalizeAutoOrderAcceptDays(store.autoOrderAcceptDays),
+            loading: false,
+        });
+    };
+
+    const toggleAutoOrderAcceptDay = (day) => {
+        setAutoOrderAcceptModal((prev) => {
+            const selected = new Set(prev.selectedDays || []);
+            if (selected.has(day)) {
+                selected.delete(day);
+            } else {
+                selected.add(day);
+            }
+            return {
+                ...prev,
+                selectedDays: [...selected].sort((a, b) => a - b),
+            };
+        });
+    };
+
+    const closeAutoOrderAcceptModal = () => {
+        setAutoOrderAcceptModal((prev) => {
+            if (prev.loading) return prev;
+            return { open: false, mode: "toggle", store: null, nextValue: false, selectedDays: DEFAULT_AUTO_ORDER_ACCEPT_DAYS, loading: false };
+        });
+    };
+
+    const confirmAutoOrderAcceptToggle = async () => {
+        const { store, nextValue, mode, selectedDays } = autoOrderAcceptModal;
+        if (!store?.id) return;
+        const normalizedDays = normalizeAutoOrderAcceptDays(selectedDays, []);
+        if ((mode === "days" || nextValue) && normalizedDays.length === 0) {
+            toast.error("Select at least one auto process day");
+            return;
+        }
+
+        setAutoOrderAcceptModal((prev) => ({ ...prev, loading: true }));
+        try {
+            await api.put(
+                `/platform-stores/${store.id}`,
+                mode === "days"
+                    ? { autoOrderAcceptDays: normalizedDays }
+                    : {
+                        autoOrderAccept: nextValue,
+                        ...(nextValue ? { autoOrderAcceptDays: normalizedDays } : {}),
+                    }
+            );
+            toast.success(mode === "days" ? "Auto process days updated" : "Auto Order Accept updated");
+            setAutoOrderAcceptModal({ open: false, mode: "toggle", store: null, nextValue: false, selectedDays: DEFAULT_AUTO_ORDER_ACCEPT_DAYS, loading: false });
+            await loadStores();
+        } catch (err) {
+            toast.error(err?.response?.data?.message || err?.message || (mode === "days" ? "Failed to update Auto Process Days" : "Failed to update Auto Order Accept"));
+            setAutoOrderAcceptModal((prev) => ({ ...prev, loading: false }));
+        }
+    };
+
     const loadPermissionUsers = useCallback(async (store) => {
         setPermModal({ open: true, store, loading: true, saving: false });
         setPermAccounts([]);
@@ -419,6 +538,13 @@ export function useStoreAuthorization() {
         closeNickname, setNickname, handleNicknameSubmit,
         unlinkStore: requestUnlinkStore,
         unlinkModal, closeUnlinkModal, confirmUnlinkStore,
+        autoOrderAcceptModal,
+        autoOrderAcceptDayOptions: AUTO_ORDER_ACCEPT_DAY_OPTIONS,
+        requestAutoOrderAcceptToggle,
+        requestAutoOrderAcceptDays,
+        toggleAutoOrderAcceptDay,
+        closeAutoOrderAcceptModal,
+        confirmAutoOrderAcceptToggle,
         permModal, permSearch, setPermSearch,
         permRole, setPermRole,
         permRoles,

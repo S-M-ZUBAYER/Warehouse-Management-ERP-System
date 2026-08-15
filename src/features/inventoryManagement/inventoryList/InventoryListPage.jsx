@@ -1,8 +1,9 @@
 import { useRef, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
-    Search, ChevronDown, Trash2, X, Loader2, AlertCircle, RefreshCw,
+    Search, ChevronDown, Trash2, X, Loader2, AlertCircle, RefreshCw, MoreHorizontal, Pencil,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import Topbar from '../../../components/layout/Topbar';
 import StockAlertBadge from './component/StockAlertBadge';
 import { exportRowsToCsv, exportRowsToXlsx, printRows } from '../../../utils/tableOutput';
@@ -22,12 +23,17 @@ export default function InventoryListPage() {
     const [showBulkDrop,      setShowBulkDrop]      = useState(false);
     const [showSkuDrop,       setShowSkuDrop]        = useState(false);
     const [showWarehouseDrop, setShowWarehouseDrop]  = useState(false);
+    const [openActionId, setOpenActionId] = useState(null);
+    const [editItem, setEditItem] = useState(null);
+    const [editDraft, setEditDraft] = useState({ quantity: '', lock: '' });
+    const [editStep, setEditStep] = useState('form');
     const location = useLocation();
     const initialStockAlertStatus = location.state?.stockAlertStatus || '';
 
     const bulkRef  = useRef(null);
     const skuRef   = useRef(null);
     const wareRef  = useRef(null);
+    const actionRef = useRef(null);
 
     // Close dropdowns on outside click
     useEffect(() => {
@@ -35,6 +41,7 @@ export default function InventoryListPage() {
             if (bulkRef.current  && !bulkRef.current.contains(e.target))  setShowBulkDrop(false);
             if (skuRef.current   && !skuRef.current.contains(e.target))   setShowSkuDrop(false);
             if (wareRef.current  && !wareRef.current.contains(e.target))  setShowWarehouseDrop(false);
+            if (actionRef.current && !actionRef.current.contains(e.target)) setOpenActionId(null);
         };
         document.addEventListener('mousedown', handler);
         return () => document.removeEventListener('mousedown', handler);
@@ -78,6 +85,9 @@ export default function InventoryListPage() {
         handleSyncOpen,
         confirmSync,
         syncing,
+
+        updateInventoryStock,
+        inventoryStockUpdating,
     } = useInventoryList({ initialStockAlertStatus });
 
     // ── Tab labels with counts ────────────────────────────────────────────────
@@ -93,6 +103,59 @@ export default function InventoryListPage() {
     const selectedRows = selectedItems.length === selectedIds.length
         ? selectedItems
         : items.filter((item) => selectedIds.includes(item.id));
+
+    const editQuantity = Number(editDraft.quantity);
+    const editLock = Number(editDraft.lock);
+    const editValid = editDraft.quantity !== ''
+        && editDraft.lock !== ''
+        && Number.isInteger(editQuantity)
+        && Number.isInteger(editLock)
+        && editQuantity >= 0
+        && editLock >= 0
+        && editLock <= editQuantity;
+    const editAvailable = editValid ? Math.max(0, editQuantity - editLock) : 0;
+
+    const openEditModal = (item) => {
+        setOpenActionId(null);
+        setEditItem(item);
+        setEditDraft({
+            quantity: String(item.qty_on_hand ?? 0),
+            lock: String(item.qty_reserved ?? 0),
+        });
+        setEditStep('form');
+    };
+
+    const closeEditModal = () => {
+        if (inventoryStockUpdating) return;
+        setEditItem(null);
+        setEditStep('form');
+    };
+
+    const requestEditConfirm = () => {
+        if (!editValid) {
+            toast.error('Enter valid quantity and lock. Lock cannot be more than quantity.');
+            return;
+        }
+        setEditStep('confirm');
+    };
+
+    const confirmEditSave = async () => {
+        if (!editItem || !editValid) return;
+        await updateInventoryStock({
+            id: editItem.id,
+            quantity: editQuantity,
+            lock: editLock,
+        });
+        setEditItem(null);
+        setEditStep('form');
+    };
+
+    const openDeleteConfirmForRow = (item) => {
+        setOpenActionId(null);
+        const alreadySelected = selectedIds.includes(item.id);
+        if (!alreadySelected) toggleSelect(item.id);
+        setShowBatchDeleteModal(true);
+    };
 
     return (
         <div className="space-y-4 font-body">
@@ -271,10 +334,10 @@ export default function InventoryListPage() {
                             }}
                         />
                     ) : (
-                        <table className="w-full text-sm font-body">
+                        <table className="w-full table-fixed text-sm font-body">
                             <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                                 <tr className="border-b border-surface-border">
-                                    <th className="py-3 pl-5 w-36 text-left">
+                                    <th className="py-3 pl-5 w-28 text-left">
                                         <label className="flex items-center gap-2 cursor-pointer select-none">
                                             {selectionLoading ? (
                                                 <Loader2 size={16} className="text-primary animate-spin" />
@@ -292,13 +355,16 @@ export default function InventoryListPage() {
                                     </th>
                                     {[
                                         { label: 'Image',          cls: 'w-14' },
-                                        { label: 'SKU Name',       cls: 'w-28' },
-                                        { label: 'Warehouse Name', cls: '' },
-                                        { label: 'Quantity',       cls: 'w-24 text-right pr-12' },
-                                        { label: 'Stock Alert',    cls: 'w-36' },
-                                        { label: 'Action',         cls: 'w-16 pr-5' },
+                                        { label: 'SKU Name',       cls: 'w-44' },
+                                        { label: 'Warehouse Name', cls: 'w-52' },
+                                        { label: 'Quantity',       cls: 'w-28 text-center' },
+                                        { label: 'Lock Quantity',  cls: 'w-32 text-center' },
+                                        { label: 'Stock Alert',    cls: 'w-36 text-center' },
+                                        { label: 'Sync Status',    cls: 'w-36 text-center' },
+                                        { label: 'Last Sync',      cls: 'w-40 text-center' },
+                                        { label: 'Action',         cls: 'w-20 text-center' },
                                     ].map(({ label, cls }) => (
-                                        <th key={label} className={`py-3 pr-4 text-left text-sm font-bold text-slate-800 ${cls}`}>
+                                        <th key={label} className={`py-3 px-3 text-left text-sm font-bold text-slate-800 ${cls}`}>
                                             {label}
                                         </th>
                                     ))}
@@ -308,7 +374,7 @@ export default function InventoryListPage() {
                             <tbody className="divide-y divide-surface-border">
                                 {items.length === 0 ? (
                                     <tr>
-                                        <td colSpan={7} className="py-14 text-center">
+                                        <td colSpan={10} className="py-14 text-center">
                                             <div className="flex flex-col items-center gap-2 text-slate-400">
                                                 <Search size={28} className="opacity-30" />
                                                 <p className="text-sm">No inventory items found</p>
@@ -321,6 +387,7 @@ export default function InventoryListPage() {
 
                                         // Derive stock alert status from API data
                                         const alertStatus = deriveAlertStatus(item);
+                                        const syncSummary = getSyncSummary(item);
 
                                         return (
                                             <tr
@@ -338,7 +405,7 @@ export default function InventoryListPage() {
                                                 </td>
 
                                                 {/* Image */}
-                                                <td className="py-3 pr-4">
+                                                <td className="py-3 px-3 text-center">
                                                     <img
                                                         src={item.merchantSku?.image_url || item.image_url || 'https://placehold.co/36x36/E6ECF0/004368?text=?'}
                                                         alt={item.merchantSku?.sku_name ?? 'SKU'}
@@ -348,41 +415,71 @@ export default function InventoryListPage() {
                                                 </td>
 
                                                 {/* SKU Name */}
-                                                <td className="py-3 pr-4 font-medium text-slate-800 font-mono text-xs">
+                                                <td className="py-3 px-3 font-medium text-slate-800 font-mono text-xs truncate">
                                                     {item.merchantSku?.sku_name ?? item.sku_name ?? '—'}
                                                 </td>
 
                                                 {/* Warehouse Name */}
-                                                <td className="py-3 pr-4 text-slate-700">
+                                                <td className="py-3 px-3 text-slate-700 truncate">
                                                     {item.warehouse?.name ?? '—'}
                                                 </td>
 
                                                 {/* Quantity */}
-                                                <td className="py-3 pr-12 text-right text-slate-700 font-medium">
+                                                <td className="py-3 px-3 text-center text-slate-700 font-medium">
                                                     {String(item.qty_on_hand ?? 0).padStart(2, '0')}
                                                 </td>
 
+                                                {/* Lock Quantity */}
+                                                <td className="py-3 px-3 text-center text-slate-700 font-medium">
+                                                    {String(item.qty_reserved ?? 0).padStart(2, '0')}
+                                                </td>
+
                                                 {/* Stock Alert badge */}
-                                                <td className="py-3 pr-4">
+                                                <td className="py-3 px-3 text-center">
                                                     <StockAlertBadge status={alertStatus} />
                                                 </td>
 
                                                 {/* Action — delete */}
-                                                <td className="py-3 pr-5">
+                                                <td className="py-3 px-3 text-center">
+                                                    <span className={`inline-flex items-center justify-center min-w-24 px-2.5 py-1 rounded-full text-xs font-semibold ${syncSummary.className}`}>
+                                                        {syncSummary.label}
+                                                    </span>
+                                                </td>
+
+                                                <td className="py-3 px-3 text-center text-xs text-slate-600">
+                                                    {syncSummary.lastSync}
+                                                </td>
+
+                                                <td
+                                                    ref={openActionId === item.id ? actionRef : null}
+                                                    className="py-3 px-3 text-center relative"
+                                                >
                                                     <button
-                                                        onClick={() => {
-                                                            // Single delete: select this item then open batch delete
-                                                            // handled via dedicated single-delete if needed
-                                                            // For now mirrors the Figma design: opens batch delete with this single item
-                                                            const alreadySelected = selectedIds.includes(item.id);
-                                                            if (!alreadySelected) toggleSelect(item.id);
-                                                            setShowBatchDeleteModal(true);
-                                                        }}
-                                                        className="text-slate-400 hover:text-red-500 transition-colors p-1 rounded-lg hover:bg-red-50"
-                                                        title="Delete"
+                                                        type="button"
+                                                        onClick={() => setOpenActionId((current) => current === item.id ? null : item.id)}
+                                                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:text-primary hover:bg-primary/5 transition-colors"
+                                                        title="Actions"
                                                     >
-                                                        <Trash2 size={15} />
+                                                        <MoreHorizontal size={17} />
                                                     </button>
+                                                    {openActionId === item.id && (
+                                                        <div className="absolute right-3 top-10 z-30 w-36 rounded-xl border border-surface-border bg-white shadow-lg py-1 text-left">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openEditModal(item)}
+                                                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-surface-card transition-colors"
+                                                            >
+                                                                <Pencil size={14} /> Edit
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openDeleteConfirmForRow(item)}
+                                                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                                                            >
+                                                                <Trash2 size={14} /> Delete
+                                                            </button>
+                                                        </div>
+                                                    )}
                                                 </td>
                                             </tr>
                                         );
@@ -462,20 +559,29 @@ export default function InventoryListPage() {
                             { label: 'Seller SKU', render: (row) => row.merchantSku?.sku_name || row.sku_name || '' },
                             { label: 'Warehouse', render: (row) => row.warehouse?.name || '' },
                             { label: 'Quantity', key: 'qty_on_hand' },
+                            { label: 'Lock Quantity', key: 'qty_reserved' },
                             { label: 'Stock Alert', render: deriveAlertStatus },
+                            { label: 'Sync Status', render: (row) => getSyncSummary(row).label },
+                            { label: 'Last Sync', render: (row) => getSyncSummary(row).lastSync },
                         ], 'inventory-list.csv', 'inventory item')}
                         onExportXlsx={() => exportRowsToXlsx(selectedRows, [
                             { label: 'Seller SKU', render: (row) => row.merchantSku?.sku_name || row.sku_name || '' },
                             { label: 'Warehouse', render: (row) => row.warehouse?.name || '' },
                             { label: 'Quantity', key: 'qty_on_hand' },
+                            { label: 'Lock Quantity', key: 'qty_reserved' },
                             { label: 'Stock Alert', render: deriveAlertStatus },
+                            { label: 'Sync Status', render: (row) => getSyncSummary(row).label },
+                            { label: 'Last Sync', render: (row) => getSyncSummary(row).lastSync },
                         ], 'inventory-list.xlsx', 'inventory item')}
                     />
                     <button onClick={() => printRows(selectedRows, [
                         { label: 'Seller SKU', render: (row) => row.merchantSku?.sku_name || row.sku_name || '' },
                         { label: 'Warehouse', render: (row) => row.warehouse?.name || '' },
                         { label: 'Quantity', key: 'qty_on_hand' },
+                        { label: 'Lock Quantity', key: 'qty_reserved' },
                         { label: 'Stock Alert', render: deriveAlertStatus },
+                        { label: 'Sync Status', render: (row) => getSyncSummary(row).label },
+                        { label: 'Last Sync', render: (row) => getSyncSummary(row).lastSync },
                     ], 'Selected Inventory Items', 'inventory item')} className="px-16 py-2.5 text-base font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors">
                         Print
                     </button>
@@ -485,6 +591,127 @@ export default function InventoryListPage() {
             {/* ═══════════════════════════════════════════════════════════════
                 Set Stock Alert Modal (Image 4)
             ═══════════════════════════════════════════════════════════════ */}
+            {editItem && (
+                <Modal onClose={closeEditModal} maxWidth="460px">
+                    {editStep === 'confirm' ? (
+                        <div className="p-8">
+                            <div className="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-4">
+                                <AlertCircle size={22} className="text-amber-500" />
+                            </div>
+                            <h2 className="text-lg font-bold text-slate-800 font-display text-center mb-2">Confirm Inventory Update</h2>
+                            <p className="text-sm text-slate-500 text-center mb-5">
+                                This will directly change inventory quantity and lock quantity, then mark mapped platform SKUs out of sync.
+                            </p>
+                            <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 text-sm text-slate-700 space-y-2 mb-6">
+                                <div className="flex justify-between gap-4">
+                                    <span>SKU</span>
+                                    <span className="font-semibold text-slate-900 text-right">{editItem.merchantSku?.sku_name || editItem.sku_name || '--'}</span>
+                                </div>
+                                <div className="flex justify-between gap-4">
+                                    <span>Quantity</span>
+                                    <span className="font-semibold text-slate-900">{editItem.qty_on_hand ?? 0} -&gt; {editQuantity}</span>
+                                </div>
+                                <div className="flex justify-between gap-4">
+                                    <span>Lock Quantity</span>
+                                    <span className="font-semibold text-slate-900">{editItem.qty_reserved ?? 0} -&gt; {editLock}</span>
+                                </div>
+                                <div className="flex justify-between gap-4">
+                                    <span>Available</span>
+                                    <span className="font-semibold text-slate-900">{editAvailable}</span>
+                                </div>
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setEditStep('form')}
+                                    disabled={inventoryStockUpdating}
+                                    className="flex-1 py-2.5 rounded-xl text-sm font-semibold border border-surface-border text-slate-700 bg-white hover:bg-surface-card transition-colors disabled:opacity-50"
+                                >
+                                    Back
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={confirmEditSave}
+                                    disabled={inventoryStockUpdating}
+                                    className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                                >
+                                    {inventoryStockUpdating && <Loader2 size={14} className="animate-spin" />}
+                                    {inventoryStockUpdating ? 'Saving...' : 'Confirm Save'}
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="p-7">
+                            <div className="flex items-start justify-between gap-4 mb-5">
+                                <div>
+                                    <h2 className="text-lg font-bold text-slate-800 font-display">Edit Inventory</h2>
+                                    <p className="text-sm text-slate-500 mt-1">{editItem.merchantSku?.sku_name || editItem.sku_name || '--'}</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={closeEditModal}
+                                    className="text-slate-400 hover:text-slate-700 transition-colors"
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3 mb-4">
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">Quantity</label>
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        step={1}
+                                        value={editDraft.quantity}
+                                        onChange={(e) => setEditDraft((current) => ({ ...current, quantity: e.target.value }))}
+                                        className="w-full px-3.5 py-2.5 text-sm border border-surface-border rounded-xl bg-white text-slate-700 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">Lock Quantity</label>
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        step={1}
+                                        value={editDraft.lock}
+                                        onChange={(e) => setEditDraft((current) => ({ ...current, lock: e.target.value }))}
+                                        className="w-full px-3.5 py-2.5 text-sm border border-surface-border rounded-xl bg-white text-slate-700 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
+                                    />
+                                </div>
+                            </div>
+                            {!editValid && (
+                                <p className="text-xs font-semibold text-red-600 mb-4">
+                                    Quantity and lock must be 0 or more. Lock quantity cannot be more than quantity.
+                                </p>
+                            )}
+                            {editValid && (
+                                <div className="rounded-xl bg-surface-card border border-surface-border px-4 py-3 text-sm text-slate-600 mb-5 flex justify-between">
+                                    <span>Available for platform</span>
+                                    <span className="font-semibold text-slate-900">{editAvailable}</span>
+                                </div>
+                            )}
+                            <div className="flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={closeEditModal}
+                                    className="flex-1 py-2.5 rounded-xl text-sm font-semibold border border-surface-border text-slate-700 bg-white hover:bg-surface-card transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={requestEditConfirm}
+                                    disabled={!editValid}
+                                    className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-primary hover:bg-primary-dark text-white transition-colors disabled:opacity-60"
+                                >
+                                    Save
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </Modal>
+            )}
+
             {showStockAlertModal && (
                 <Modal onClose={() => !stockAlertSaving && setShowStockAlertModal(false)}>
                     <div className="p-8 text-center">
@@ -629,11 +856,65 @@ function deriveAlertStatus(item) {
     return 'In Stock';
 }
 
+function getSyncSummary(item) {
+    const mappings = Array.isArray(item.mappings) ? item.mappings : [];
+    if (!mappings.length) {
+        return {
+            label: 'Unmapped',
+            className: 'bg-slate-100 text-slate-500 border border-slate-200',
+            lastSync: '--',
+        };
+    }
+
+    const statuses = mappings.map((mapping) => String(mapping.sync_status || 'pending').toLowerCase());
+    const priority = ['failed', 'out_of_sync', 'pending', 'synced'];
+    const status = priority.find((candidate) => statuses.includes(candidate)) || 'pending';
+    const latestSync = mappings
+        .map((mapping) => mapping.last_synced_at ? new Date(mapping.last_synced_at) : null)
+        .filter((date) => date && !Number.isNaN(date.getTime()))
+        .sort((a, b) => b.getTime() - a.getTime())[0];
+
+    const config = {
+        synced: {
+            label: 'Synced',
+            className: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+        },
+        out_of_sync: {
+            label: 'Out of Sync',
+            className: 'bg-amber-50 text-amber-700 border border-amber-200',
+        },
+        failed: {
+            label: 'Sync Failed',
+            className: 'bg-red-50 text-red-700 border border-red-200',
+        },
+        pending: {
+            label: 'Pending',
+            className: 'bg-blue-50 text-blue-700 border border-blue-200',
+        },
+    };
+
+    return {
+        ...(config[status] || config.pending),
+        lastSync: latestSync ? formatSyncDate(latestSync) : '--',
+    };
+}
+
+function formatSyncDate(date) {
+    return new Intl.DateTimeFormat('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+    }).format(date);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Sub-components
 // ─────────────────────────────────────────────────────────────────────────────
 
-function Modal({ children, onClose }) {
+function Modal({ children, onClose, maxWidth = '380px' }) {
     return (
         <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -642,7 +923,7 @@ function Modal({ children, onClose }) {
         >
             <div
                 className="bg-white rounded-2xl shadow-xl w-full font-body"
-                style={{ maxWidth: '380px', animation: 'popIn 0.18s ease both' }}
+                style={{ maxWidth, animation: 'popIn 0.18s ease both' }}
             >
                 {children}
             </div>

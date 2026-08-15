@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { Gift, Plus, Search } from "lucide-react";
+import { Gift, Loader2, Plus, Search, UploadCloud } from "lucide-react";
 import Topbar from "../../../components/layout/Topbar";
 import OrderFooter from "../shared/components/OrderFooter";
 import PageSizePagination from "../shared/components/PageSizePagination";
@@ -13,16 +14,18 @@ import {
   fetchManualOrders,
   normalizeManualOrder,
   refreshManualOrderStatus,
-  updateManualOrderCodSettlement,
+  updateManualOrderDeliveryInfo,
 } from "../shared/utils/orderApi";
 import AddManualOrderPage from "./component/AddManualOrderPage";
 import ManualOrderDetailModal from "./component/ManualOrderDetailModal";
 import ManualOrderTable from "./component/ManualOrderTable";
+import { translateStaticText } from "../../../i18nDomTranslator";
 
 const STATUS_FILTERS = [
   { value: "CREATED", label: "Created", group: "Order" },
   { value: "BOOKING_PENDING", label: "Booking Pending", group: "Order" },
   { value: "BOOKING_FAILED", label: "Booking Failed", group: "Order" },
+  { value: "MANUAL_DELIVERY", label: "Self-arranged Delivery", group: "Order" },
   { value: "SCHEDULE_IN_ARRANGEMENT", label: "Schedule In Arrangement", group: "Pending AWB" },
   { value: "TO_BE_COLLECTED", label: "To Be Collected", group: "On Going" },
   { value: "DROP_OFF", label: "Drop Off", group: "On Going" },
@@ -45,15 +48,24 @@ const MANUAL_ORDER_OUTPUT_COLUMNS = [
   { label: "Receiver", key: "buyer.name" },
   { label: "Payment", key: "paymentType" },
   { label: "Courier", key: "logisticCompany" },
-  { label: "COD", key: "codAmount" },
-  { label: "AWB", key: "awbNumber" },
+  { label: "Tracking Number", key: "awbNumber" },
   { label: "Shipment Status", key: "status" },
-  { label: "COD Status", key: "codStatus" },
   { label: "Created", key: "createdAt" },
 ];
 const DEFAULT_MANUAL_ORDER_PAGE_SIZE = 10;
 
+const fileToDataUrl = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Unable to read waybill PDF file"));
+    reader.readAsDataURL(file);
+  });
+
 export default function ManualOrderPage() {
+  const { i18n } = useTranslation();
+  const language = i18n.resolvedLanguage || i18n.language || "en";
+  const tr = (text) => translateStaticText(text, language);
   const queryClient = useQueryClient();
   const [activeStatus, setActiveStatus] = useState("CREATED");
   const [paymentType, setPaymentType] = useState("ALL");
@@ -70,6 +82,8 @@ export default function ManualOrderPage() {
   const [showAddPage, setShowAddPage] = useState(false);
   const [addMode, setAddMode] = useState("order");
   const [detailOrder, setDetailOrder] = useState(null);
+  const [deliveryEditOrder, setDeliveryEditOrder] = useState(null);
+  const [deliveryForm, setDeliveryForm] = useState({ logisticCompany: "", trackingNumber: "", waybillUrl: "", waybillFile: null, note: "" });
   const [waybillPdf, setWaybillPdf] = useState({ open: false, url: "", filename: "easyparcel-waybill.pdf" });
 
   const queryParams = useMemo(() => ({
@@ -166,23 +180,16 @@ export default function ManualOrderPage() {
     onError: (err) => toast.error(err?.response?.data?.message || err?.message || "Failed to cancel EasyParcel shipment"),
   });
 
-  const codSettlementMutation = useMutation({
-    mutationFn: (order) => {
-      const amount = Number(order?.codAmount || order?.orderValue || 0);
-      const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-      return updateManualOrderCodSettlement(order, {
-        codStatus: "COD_PAID_TO_COMPANY",
-        paidAmount: amount,
-        settlementAmount: amount,
-        reference: `EP-COD-PAYOUT-${today}`,
-        note: "Verified from EasyParcel dashboard",
-      });
-    },
+  const deliveryInfoMutation = useMutation({
+    mutationFn: ({ order, payload }) => updateManualOrderDeliveryInfo(order, payload),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["manual-orders"] });
-      toast.success(data?.message || "COD marked as paid");
+      const updated = data?.order ? normalizeManualOrder(data.order) : null;
+      if (updated && detailOrder) setDetailOrder(updated);
+      setDeliveryEditOrder(null);
+      toast.success(data?.message || "Delivery information updated");
     },
-    onError: (err) => toast.error(err?.response?.data?.message || err?.message || "Failed to mark COD paid"),
+    onError: (err) => toast.error(err?.response?.data?.message || err?.message || "Failed to update delivery information"),
   });
 
   if (showAddPage) {
@@ -240,6 +247,11 @@ export default function ManualOrderPage() {
     waybillMutation.mutate(order);
   };
 
+  const handleDetails = (order) => {
+    setDetailOrder(null);
+    detailMutation.mutate(order);
+  };
+
   const handleSearch = () => {
     setAppliedSearch(search);
     setSelectedIds([]);
@@ -253,6 +265,47 @@ export default function ManualOrderPage() {
     setPage(1);
   };
 
+  const openDeliveryEditor = (order) => {
+    const info = order?.manualDeliveryInfo || {};
+    setDetailOrder(null);
+    setDeliveryEditOrder(order);
+    setDeliveryForm({
+      logisticCompany: order?.logisticCompany || info.logisticCompany || "",
+      trackingNumber: order?.awbNumber || order?.trackingNo || info.trackingNumber || "",
+      waybillUrl: order?.waybillPdfUrl || info.waybillUrl || "",
+      waybillFile: null,
+      note: info.note || "",
+    });
+  };
+
+  const submitDeliveryInfo = () => {
+    if (!deliveryEditOrder) return;
+    deliveryInfoMutation.mutate({ order: deliveryEditOrder, payload: deliveryForm });
+  };
+
+  const handleDeliveryWaybillFile = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (file.type !== "application/pdf") {
+      toast.error(tr("Waybill upload must be a PDF file."));
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error(tr("Waybill PDF file size must be 5MB or less."));
+      return;
+    }
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      setDeliveryForm((current) => ({
+        ...current,
+        waybillFile: { name: file.name, type: file.type, size: file.size, dataUrl },
+      }));
+    } catch (err) {
+      toast.error(err?.message || tr("Failed to read waybill PDF file"));
+    }
+  };
+
   return (
     <div className="space-y-4 font-body">
       <Topbar PageTitle="Manual Order" />
@@ -262,6 +315,7 @@ export default function ManualOrderPage() {
           <div className="col-span-12 md:col-span-3">
             <p className="mb-1.5 text-xs font-semibold text-slate-600">Manual Order Status</p>
             <select
+              key={`manual-status-select-${language}`}
               value={activeStatus}
               onChange={(event) => {
                 setActiveStatus(event.target.value);
@@ -271,10 +325,10 @@ export default function ManualOrderPage() {
               className="w-full rounded-lg border border-surface-border bg-white px-3 py-2 text-sm text-slate-600 outline-none focus:border-primary"
             >
               {STATUS_GROUP_LABELS.map((group) => (
-                <optgroup key={group} label={group}>
+                <optgroup key={`${group}-${language}`} label={tr(group)}>
                   {STATUS_FILTERS.filter((status) => status.group === group).map((status) => (
-                    <option key={status.value} value={status.value}>
-                      {status.label}{status.value !== "ALL" && statusCounts[status.value] !== undefined ? ` (${statusCounts[status.value]})` : ""}
+                    <option key={`${status.value}-${language}`} value={status.value}>
+                      {tr(status.label)}{status.value !== "ALL" && statusCounts[status.value] !== undefined ? ` (${statusCounts[status.value]})` : ""}
                     </option>
                   ))}
                 </optgroup>
@@ -290,7 +344,6 @@ export default function ManualOrderPage() {
             >
               <option value="ALL">All</option>
               <option value="PREPAID">Prepaid</option>
-              <option value="COD">COD</option>
             </select>
           </div>
           <div className="col-span-12 md:col-span-2">
@@ -347,7 +400,7 @@ export default function ManualOrderPage() {
           <div className="flex items-center gap-5 border-b border-surface-border overflow-x-auto">
             {STATUS_FILTERS.map((status) => (
               <button
-                key={status.value}
+                key={`${status.value}-${language}`}
                 onClick={() => {
                 setActiveStatus(status.value);
                 setSelectedIds([]);
@@ -355,7 +408,7 @@ export default function ManualOrderPage() {
               }}
                 className={`relative whitespace-nowrap pb-3 text-sm font-medium transition-colors ${activeStatus === status.value ? "font-semibold text-primary after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-primary" : "text-slate-500 hover:text-slate-700"}`}
               >
-                {status.label}
+                {tr(status.label)}
               </button>
             ))}
           </div>
@@ -370,15 +423,14 @@ export default function ManualOrderPage() {
           selectionLoading={selectionLoading}
           onToggleSelect={toggleSelect}
           onToggleAll={toggleAll}
-          onDetails={(order) => detailMutation.mutate(order)}
+          onDetails={handleDetails}
           onPush={handlePush}
           onCancel={(order) => cancelShipmentMutation.mutate(order)}
           onRefreshStatus={(order) => refreshStatusMutation.mutate(order)}
-          onMarkCodPaid={(order) => codSettlementMutation.mutate(order)}
+          onUpdateManualDelivery={openDeliveryEditor}
           pushLoadingId={waybillMutation.isPending ? waybillMutation.variables?.id : ""}
           cancelLoadingId={cancelShipmentMutation.isPending ? cancelShipmentMutation.variables?.id : ""}
           refreshLoadingId={refreshStatusMutation.isPending ? refreshStatusMutation.variables?.id : ""}
-          codSettlementLoadingId={codSettlementMutation.isPending ? codSettlementMutation.variables?.id : ""}
         />
 
         <PageSizePagination
@@ -409,7 +461,102 @@ export default function ManualOrderPage() {
         order={detailOrder}
         onClose={() => setDetailOrder(null)}
         onPrintWaybill={openWaybill}
+        onUpdateManualDelivery={openDeliveryEditor}
       />
+
+      {detailMutation.isPending && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 px-4">
+          <div className="flex w-full max-w-sm flex-col items-center rounded-2xl bg-white px-8 py-7 text-center shadow-2xl">
+            <Loader2 size={30} className="animate-spin text-primary" />
+            <h3 className="mt-4 text-base font-bold text-slate-900">{tr("Loading Details")}</h3>
+            <p className="mt-2 text-sm text-slate-500">{tr("Loading manual order details...")}</p>
+          </div>
+        </div>
+      )}
+
+      {deliveryEditOrder && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 px-4 py-6">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
+            <div className="border-b border-surface-border px-6 py-5">
+              <h3 className="text-base font-bold text-slate-900">{tr("Update Delivery Information")}</h3>
+              <p className="mt-1 text-xs text-slate-500">{deliveryEditOrder.orderNo}</p>
+            </div>
+            <div className="space-y-4 px-6 py-5">
+              {[
+                [tr("Courier / Delivery Company"), "logisticCompany", tr("Courier name")],
+                [tr("Tracking Number / AWB"), "trackingNumber", tr("Tracking number")],
+                [tr("Waybill URL"), "waybillUrl", "https://..."],
+              ].map(([label, key, placeholder]) => (
+                <label key={key} className="block">
+                  <span className="mb-1 block text-xs font-semibold text-slate-600">{label}</span>
+                  <input
+                    value={deliveryForm[key]}
+                    onChange={(event) => setDeliveryForm((current) => ({ ...current, [key]: event.target.value }))}
+                    placeholder={placeholder}
+                    className="w-full rounded-lg border border-surface-border px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary"
+                  />
+                </label>
+              ))}
+              <div>
+                <span className="mb-1 block text-xs font-semibold text-slate-600">{tr("Waybill PDF")}</span>
+                <input
+                  id="manual-delivery-waybill-upload"
+                  type="file"
+                  accept="application/pdf"
+                  onChange={handleDeliveryWaybillFile}
+                  className="hidden"
+                />
+                <label
+                  htmlFor="manual-delivery-waybill-upload"
+                  className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-surface-border px-3 py-3 text-sm font-semibold text-slate-600 hover:border-primary hover:text-primary"
+                >
+                  <UploadCloud size={16} />
+                  {deliveryForm.waybillFile ? tr("Change Waybill PDF") : tr("Upload Waybill PDF")}
+                </label>
+                {deliveryForm.waybillFile && (
+                  <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                    <span className="min-w-0 truncate" title={deliveryForm.waybillFile.name}>{deliveryForm.waybillFile.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => setDeliveryForm((current) => ({ ...current, waybillFile: null }))}
+                      className="font-semibold text-red-500 hover:underline"
+                    >
+                      {tr("Remove")}
+                    </button>
+                  </div>
+                )}
+              </div>
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-slate-600">{tr("Note")}</span>
+                <textarea
+                  value={deliveryForm.note}
+                  onChange={(event) => setDeliveryForm((current) => ({ ...current, note: event.target.value }))}
+                  rows={3}
+                  placeholder={tr("Delivery note")}
+                  className="w-full resize-none rounded-lg border border-surface-border px-3 py-2 text-sm text-slate-700 outline-none focus:border-primary"
+                />
+              </label>
+            </div>
+            <div className="flex justify-end gap-3 border-t border-surface-border px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setDeliveryEditOrder(null)}
+                className="rounded-xl border border-surface-border px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-surface-card"
+              >
+                {tr("Cancel")}
+              </button>
+              <button
+                type="button"
+                onClick={submitDeliveryInfo}
+                disabled={deliveryInfoMutation.isPending}
+                className="rounded-xl bg-primary px-5 py-2 text-sm font-semibold text-white hover:bg-primary-dark disabled:opacity-60"
+              >
+                {deliveryInfoMutation.isPending ? tr("Saving...") : tr("Save")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

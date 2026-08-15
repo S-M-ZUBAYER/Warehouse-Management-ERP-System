@@ -21,6 +21,7 @@ import OrderFooter from "../shared/components/OrderFooter";
 import PageSizePagination from "../shared/components/PageSizePagination";
 import api from "../../../lib/api";
 import { filterWarehousesByPermission } from "../../../utils/permissions";
+import { formatPlatformDateTime, resolvePlatformRegion } from "../shared/utils/platformDateTime";
 
 const STATUS_OPTIONS = ["All", "Processed", "On The Way", "Shipped", "Delivered", "Completed", "Cancelled"];
 const SEARCH_TYPES = ["Single Search", "Batch Search"];
@@ -85,12 +86,10 @@ const getWarehouseSenderInfo = (warehouse = {}) => {
   };
 };
 
-const formatPlatformManualOrderDate = (value, fallbackDate, fallbackTime) => {
+const formatPlatformManualOrderDate = (value, fallbackDate, fallbackTime, region) => {
   const rawValue = value || (fallbackDate ? `${fallbackDate}${fallbackTime ? `T${fallbackTime}` : ""}` : "");
   if (!rawValue) return "-";
-  const date = new Date(rawValue);
-  if (Number.isNaN(date.getTime())) return String(rawValue);
-  return date.toLocaleString();
+  return formatPlatformDateTime(rawValue, region);
 };
 
 const parseJsonField = (value, fallback) => {
@@ -923,12 +922,13 @@ function PlatformManualOrderDetailModal({ order, onClose }) {
   const sender = order.sender || {};
   const logistic = order.logistic || {};
   const packageInfo = order.package || {};
+  const orderRegion = resolvePlatformRegion(buyer.country, order.buyerCountry, sender.country, order.country);
   const infoRows = [
     ["Order Number", order.orderNumber],
     ["Shipment Status", order.shipmentStatus],
     ["Order Date", order.orderDate],
     ["Order Time", order.orderTime],
-    ["Created", formatPlatformManualOrderDate(order.createdAt, order.orderDate, order.orderTime)],
+    ["Created", formatPlatformManualOrderDate(order.createdAt, order.orderDate, order.orderTime, orderRegion)],
     ["Warehouse ID", order.warehouseId],
     ["Tracking Number", logistic.trackingNumber],
     ["Delivery Company", logistic.deliveryCompany],
@@ -1422,10 +1422,11 @@ function PlatformManualOrderList({ orders, loading, error, warehouses, companyId
                 </tr>
               ) : paginatedOrders.map((order) => {
                 const country = valueOrDash(order.buyer?.country, order.buyerCountry, order.country);
+                const orderRegion = resolvePlatformRegion(order.buyer?.country, order.buyerCountry, order.sender?.country, order.country);
                 const receiver = valueOrDash(order.buyer?.name, order.buyerName, order.receiverName, order.receiver);
                 const courier = valueOrDash(order.logistic?.deliveryCompany, order.deliveryCompany, order.logisticCompany, order.courier);
                 const trackingNumber = valueOrDash(order.logistic?.trackingNumber, order.trackingNumber, order.awbNumber, order.awb, order.waybillNumber);
-                const createdAt = formatPlatformManualOrderDate(order.createdAt, order.orderDate, order.orderTime);
+                const createdAt = formatPlatformManualOrderDate(order.createdAt, order.orderDate, order.orderTime, orderRegion);
                 return (
                   <tr key={order.id} className="hover:bg-surface/50">
                     <td className="py-3 pl-5 pr-4">

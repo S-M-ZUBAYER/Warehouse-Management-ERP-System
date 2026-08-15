@@ -37,19 +37,34 @@ export default function OrderTable({
   errorMessage = "Failed to load orders",
   onRetry,
   showActionsCol = true,
+  showSkuAdjustmentColumn = true,
   actionMenuPlacement = "down",
   compact = false,
 }) {
   const someSelected =
     orders.some((o) => selectedIds.includes(o.id)) && !allSelected;
   const [detailOrder, setDetailOrder] = useState(null);
+  const [adjustmentOrder, setAdjustmentOrder] = useState(null);
   const [openMenuId, setOpenMenuId] = useState(null);
   const tableTextClass = compact ? "text-sm font-body" : "text-sm";
   const headerTextClass = compact
     ? "text-sm font-bold text-slate-800"
     : "text-base font-semibold text-primary-text";
   const smallCellTextClass = compact ? "text-sm" : "text-xs";
-  const totalColumns = showActionsCol && actionLabel ? 13 : 12;
+  const standardColumns = [
+    "Image",
+    "SKU",
+    "Order Number",
+    "Platform",
+    "Store",
+    "Warehouse package No.",
+    "Tracking Number",
+    ...(showSkuAdjustmentColumn ? ["Exchange / Add SKU"] : []),
+    "Create Time",
+    statusLabel,
+    "Details",
+  ];
+  const totalColumns = 1 + standardColumns.length + (showActionsCol && actionLabel ? 1 : 0);
   const nextStatusSortDirection = statusSortDirection === "asc" ? "desc" : "asc";
 
   useEffect(() => {
@@ -99,19 +114,7 @@ export default function OrderTable({
                   Select All
                 </span>
               </th>
-              {[
-                "Image",
-                "SKU",
-                "Order Number",
-                "Platform",
-                "Store",
-                "Warehouse package No.",
-                "Tracking Number",
-                "Price",
-                "Create Time",
-                statusLabel,
-                "Details",
-              ].map((h) => (
+              {standardColumns.map((h) => (
                 <th
                   key={h}
                   className={`py-3 pr-4 text-left ${headerTextClass}`}
@@ -239,10 +242,11 @@ export default function OrderTable({
                     {order.trackingNo}
                   </td>
 
-                  {/* Price */}
-                  <td className="py-3 pr-4 text-slate-700 font-medium">
-                    {order.price}
-                  </td>
+                  {showSkuAdjustmentColumn && (
+                    <td className="py-3 pr-4">
+                      <SkuAdjustmentBadge order={order} onOpen={() => setAdjustmentOrder(order)} />
+                    </td>
+                  )}
 
                   {/* Create Time */}
                   <td className={`py-3 pr-4 text-slate-500 ${smallCellTextClass}`}>
@@ -437,6 +441,99 @@ export default function OrderTable({
           { label: "Status", key: "status" },
         ]}
       />
+      <SkuAdjustmentModal order={adjustmentOrder} onClose={() => setAdjustmentOrder(null)} />
+    </div>
+  );
+}
+
+function formatAdjustmentSku(adjustment) {
+  const replacement = adjustment?.replacementSku || {};
+  return replacement.sku || replacement.name || "-";
+}
+
+function buildAdjustmentTooltip(adjustments = []) {
+  if (!adjustments.length) return "No exchange/add SKU";
+  return adjustments
+    .map((item) => {
+      const type = item.adjustmentType === "add" ? "Add" : "Exchange";
+      const original = item.originalSku?.sku || item.originalSku?.name || "Original";
+      const replacement = formatAdjustmentSku(item);
+      return item.adjustmentType === "add"
+        ? `${type}: ${replacement} x ${item.quantity || 1}`
+        : `${type}: ${original} -> ${replacement} x ${item.quantity || 1}`;
+    })
+    .join("\n");
+}
+
+function SkuAdjustmentBadge({ order, onOpen }) {
+  const adjustments = order?.skuAdjustments || [];
+  const status = order?.skuAdjustmentStatus || "";
+  if (!adjustments.length || !status) {
+    return <span className="text-xs text-slate-400">--</span>;
+  }
+
+  return (
+    <button
+      type="button"
+      title={buildAdjustmentTooltip(adjustments)}
+      onClick={onOpen}
+      className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-100"
+    >
+      {status}
+    </button>
+  );
+}
+
+function SkuAdjustmentModal({ order, onClose }) {
+  if (!order) return null;
+  const adjustments = order.skuAdjustments || [];
+  const exchanges = adjustments.filter((item) => item.adjustmentType === "exchange");
+  const adds = adjustments.filter((item) => item.adjustmentType === "add");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-2xl overflow-hidden rounded-xl bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-surface-border px-5 py-4">
+          <div>
+            <h3 className="text-base font-bold text-slate-800">Exchange / Add SKU</h3>
+            <p className="mt-1 text-xs text-slate-500">{order.orderNo || order.id}</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-xl leading-none text-slate-400 hover:text-slate-600">
+            X
+          </button>
+        </div>
+        <div className="max-h-[70vh] space-y-5 overflow-y-auto px-5 py-4">
+          <AdjustmentList title="Exchange SKU" rows={exchanges} />
+          <AdjustmentList title="Add SKU" rows={adds} />
+        </div>
+        <div className="flex justify-end border-t border-surface-border px-5 py-4">
+          <button type="button" onClick={onClose} className="h-9 rounded-lg bg-primary px-5 text-sm font-semibold text-white">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdjustmentList({ title, rows }) {
+  return (
+    <div>
+      <h4 className="mb-2 text-sm font-bold text-slate-800">{title}</h4>
+      {!rows.length ? (
+        <p className="rounded-lg border border-surface-border px-3 py-3 text-xs text-slate-400">No SKU</p>
+      ) : (
+        <div className="overflow-hidden rounded-lg border border-surface-border">
+          {rows.map((item) => (
+            <div key={item.id} className="grid grid-cols-[1fr_auto_1fr_auto] items-center gap-3 border-b border-surface-border px-3 py-2 last:border-b-0">
+              <span className="min-w-0 truncate text-xs text-slate-600">{item.adjustmentType === "add" ? "Added SKU" : item.originalSku?.sku || item.originalSku?.name || "-"}</span>
+              <span className="text-xs font-semibold text-slate-400">{item.adjustmentType === "add" ? "+" : "->"}</span>
+              <span className="min-w-0 truncate text-xs font-semibold text-slate-800">{formatAdjustmentSku(item)}</span>
+              <span className="rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">x {item.quantity || 1}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

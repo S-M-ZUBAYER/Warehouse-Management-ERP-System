@@ -249,6 +249,7 @@ export default function CanceledOrder() {
           statusSortDirection={list.statusSortDirection}
           onStatusSortChange={list.setStatusSortDirection}
           showActionsCol={false}
+          showSkuAdjustmentColumn={list.showSkuAdjustmentColumn}
           compact
           onDetails={handleDetails}
         />

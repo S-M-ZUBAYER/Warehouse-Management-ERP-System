@@ -12,7 +12,13 @@ export const endOfTodaySeconds = () => Math.floor(Date.now() / 1000);
 
 const presetRangeCache = new Map();
 
+const getLookbackStartSeconds = (days) => {
+  if (!days) return null;
+  return endOfTodaySeconds() - Math.max(1, Number(days) || 1) * SECONDS_IN_DAY;
+};
+
 export const getPresetRange = (preset) => {
+  if (preset === "all_dates") return { start: null, end: null };
   const todayKey = new Date().toISOString().slice(0, 10);
   const cacheKey = `${preset || "last_7_days"}:${todayKey}`;
   const cachedRange = presetRangeCache.get(cacheKey);
@@ -30,6 +36,7 @@ export const getPresetRange = (preset) => {
 };
 
 export const formatDateInput = (seconds) => {
+  if (!seconds) return "";
   const date = new Date(seconds * 1000);
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -47,16 +54,20 @@ const dateInputToSeconds = (value, endOfDay = false) => {
 };
 
 export const getDateRangeLabel = (datePreset, dateRange) => {
+  if (datePreset === "all_dates") return "All dates";
   if (datePreset === "today") return "Today";
   if (datePreset === "last_month") return "Last 1 Month";
   if (datePreset === "custom") return `${formatDateInput(dateRange.start)} to ${formatDateInput(dateRange.end)}`;
   return "Last 7 Days";
 };
 
-export default function OrderDateRangePicker({ datePreset, setDatePreset, dateRange, setDateRange }) {
+export default function OrderDateRangePicker({ datePreset, setDatePreset, dateRange, setDateRange, allowAllDates = false, maxLookbackDays = null }) {
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [customStart, setCustomStart] = useState(() => formatDateInput(dateRange.start));
   const [customEnd, setCustomEnd] = useState(() => formatDateInput(dateRange.end));
+  const minStartSeconds = getLookbackStartSeconds(maxLookbackDays);
+  const minStartDate = formatDateInput(minStartSeconds);
+  const maxEndDate = formatDateInput(endOfTodaySeconds());
 
   useEffect(() => {
     setCustomStart(formatDateInput(dateRange.start));
@@ -74,6 +85,8 @@ export default function OrderDateRangePicker({ datePreset, setDatePreset, dateRa
     const start = dateInputToSeconds(customStart);
     const end = dateInputToSeconds(customEnd, true);
     if (!start || !end || start > end) return;
+    if (minStartSeconds && start < minStartSeconds) return;
+    if (end > endOfTodaySeconds()) return;
     setDatePreset("custom");
     setDateRange({ start, end });
     setDatePickerOpen(false);
@@ -106,6 +119,7 @@ export default function OrderDateRangePicker({ datePreset, setDatePreset, dateRa
 
           <div className="grid grid-cols-3 gap-2">
             {[
+              ...(allowAllDates ? [["all_dates", "All dates"]] : []),
               ["today", "Today"],
               ["last_7_days", "Last 7 Days"],
               ["last_month", "Last 1 Month"],
@@ -132,6 +146,8 @@ export default function OrderDateRangePicker({ datePreset, setDatePreset, dateRa
                 type="date"
                 value={customStart}
                 onChange={(event) => setCustomStart(event.target.value)}
+                min={minStartDate}
+                max={maxEndDate}
                 className="mt-1 w-full rounded-lg border border-surface-border px-2 py-1.5 text-xs text-slate-700 outline-none focus:border-primary"
               />
             </label>
@@ -141,6 +157,8 @@ export default function OrderDateRangePicker({ datePreset, setDatePreset, dateRa
                 type="date"
                 value={customEnd}
                 onChange={(event) => setCustomEnd(event.target.value)}
+                min={minStartDate}
+                max={maxEndDate}
                 className="mt-1 w-full rounded-lg border border-surface-border px-2 py-1.5 text-xs text-slate-700 outline-none focus:border-primary"
               />
             </label>

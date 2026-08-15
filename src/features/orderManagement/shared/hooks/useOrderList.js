@@ -8,6 +8,7 @@ import {
   ALL_STORE_VALUE,
   consumeOrderDetailReturnContext,
   deleteOrderSkuOverride,
+  fetchOrderSkuAdjustments,
   fetchOrders,
   generateShopeeAwbPdf,
   generateTikTokAwbPdf,
@@ -19,6 +20,7 @@ import {
   packTikTokOrders,
   removeFailedPackOrders,
   removeWithdrawOrders,
+  runAutoOrderAcceptNow,
   runOrderAction,
   saveFailedPackOrders,
   savePushSuccessfulOrders,
@@ -39,6 +41,22 @@ const SEARCH_TYPES = ["Single Search", "Batch Search"];
 const SKU_TYPES = ["SKU", "Package Number", "Order Number", "Tracking Number"];
 const DEFAULT_ORDER_PAGE_SIZE = 10;
 const ORDER_LIST_CACHE_TIME = 1000 * 60 * 30;
+const SKU_ADJUSTMENT_LIST_PAGES = ["new", "processed", "pickup"];
+
+const getOrderAdjustmentId = (order) => order?.rawId || order?.orderId || order?.orderNo || order?.id;
+
+const normalizeOrderPlatform = (order) => {
+  const platformName = String(order?.platform || order?.storeContext?.platform || "").toLowerCase();
+  if (platformName.includes("tik")) return "tiktok";
+  if (platformName.includes("shopee")) return "shopee";
+  return platformName;
+};
+
+const getAdjustmentStatus = (adjustments = []) => {
+  const hasExchange = adjustments.some((item) => item.adjustmentType === "exchange");
+  const hasAdd = adjustments.some((item) => item.adjustmentType === "add");
+  return hasExchange && hasAdd ? "Exchange + Add" : hasExchange ? "Exchange" : hasAdd ? "Add" : "";
+};
 
 const getStatusSortValue = (order) =>
   String(order?.status || "").trim().toLowerCase();
@@ -86,6 +104,8 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
     })
   );
   const detailReturnQuerySignatureRef = useRef(null);
+  const autoOrderAcceptSignatureRef = useRef("");
+  const autoOrderAcceptRunningRef = useRef(false);
   const didMountRef = useRef(false);
   const storedSearch = getStoredSearchContext();
   const storedOrderContext = getStoredOrderContext();
@@ -153,6 +173,7 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
   const [multiPlatformActionLoading, setMultiPlatformActionLoading] = useState(false);
   const [multiPlatformAwbResults, setMultiPlatformAwbResults] = useState([]);
   const [multiPlatformAwbRefreshId, setMultiPlatformAwbRefreshId] = useState("");
+  const [dataRefreshKey, setDataRefreshKey] = useState(0);
   const platformValue = String(storeContext?.platform || "").toLowerCase();
   const allStoreScope =
     storeContext?.isAllStoreContext === true ||
@@ -171,6 +192,8 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
   const queryPage = serverPaginated || detailPaginated ? page : 1;
   const queryCursor = serverPaginated ? pageCursors[page] || "" : "";
   const queryStoreContext = useMemo(() => getStoredStoreContext(storeContext), [storeContext]);
+  const showSkuAdjustmentColumn = SKU_ADJUSTMENT_LIST_PAGES.includes(pageType);
+  const shouldLoadVisibleSkuAdjustments = showSkuAdjustmentColumn && pageType !== "new";
   const persistPageState = useCallback(
     (nextPage, nextPageCursors = pageCursors) => {
       setStoredSearchContext({
@@ -374,12 +397,105 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
     const start = (effectivePage - 1) * pageSize;
     return sortedAllOrders.slice(start, start + pageSize);
   }, [effectivePage, pageSize, serverPaginated, sortedAllOrders]);
+  const visibleSkuAdjustmentQueryKey = useMemo(
+    () =>
+      orders
+        .map((order) => `${normalizeOrderPlatform(order)}:${getOrderAdjustmentId(order) || ""}`)
+        .filter((value) => !value.endsWith(":"))
+        .join("|"),
+    [orders]
+  );
+  const visibleSkuAdjustmentQuery = useQuery({
+    queryKey: ["order-management", "visible-sku-adjustments", pageType, visibleSkuAdjustmentQueryKey, dataRefreshKey],
+    queryFn: async () => {
+      const groups = new Map();
+      orders.forEach((order) => {
+        const platformName = normalizeOrderPlatform(order);
+        const orderId = getOrderAdjustmentId(order);
+        if (!["shopee", "tiktok"].includes(platformName) || !orderId) return;
+        const current = groups.get(platformName) || [];
+        current.push(String(orderId));
+        groups.set(platformName, current);
+      });
+
+      const results = await Promise.allSettled(
+        [...groups.entries()].map(([platformName, orderIds]) =>
+          fetchOrderSkuAdjustments({ platform: platformName, orderIds })
+        )
+      );
+
+      return results.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
+    },
+    enabled: shouldLoadVisibleSkuAdjustments && Boolean(visibleSkuAdjustmentQueryKey),
+    staleTime: 1000 * 30,
+    refetchOnWindowFocus: false,
+  });
+  const displayOrders = useMemo(() => {
+    if (!shouldLoadVisibleSkuAdjustments) return orders;
+
+    const byOrder = new Map();
+    (visibleSkuAdjustmentQuery.data || []).forEach((adjustment) => {
+      const orderId = String(adjustment.platformOrderId || "");
+      if (!orderId) return;
+      const current = byOrder.get(orderId) || [];
+      current.push(adjustment);
+      byOrder.set(orderId, current);
+    });
+
+    return orders.map((order) => {
+      const orderAdjustments = byOrder.get(String(getOrderAdjustmentId(order))) || [];
+      return {
+        ...order,
+        skuAdjustments: orderAdjustments,
+        skuAdjustmentStatus: getAdjustmentStatus(orderAdjustments),
+      };
+    });
+  }, [orders, shouldLoadVisibleSkuAdjustments, visibleSkuAdjustmentQuery.data]);
 
   const invalidateOrderManagementData = useCallback(() => {
+    setDataRefreshKey((current) => current + 1);
     queryClient.invalidateQueries({ queryKey: ORDER_LIST_KEYS.all() });
     queryClient.invalidateQueries({ queryKey: ["order-management", "new-order-tab-counts"] });
     queryClient.invalidateQueries({ queryKey: ["order-management", "processed-order-tab-counts"] });
   }, [queryClient]);
+
+  useEffect(() => {
+    if (pageType !== "new" || activeTab !== "To Pack" || !hasStore || isOrderDetailReturnQuery) return;
+
+    const signature = JSON.stringify({
+      platform: queryStoreContext?.platform || "",
+      storeId: queryStoreContext?.platform_store_id || "",
+      isAllStoreContext: queryStoreContext?.isAllStoreContext === true,
+      tabRefreshKey,
+    });
+
+    if (autoOrderAcceptSignatureRef.current === signature || autoOrderAcceptRunningRef.current) return;
+
+    autoOrderAcceptSignatureRef.current = signature;
+    autoOrderAcceptRunningRef.current = true;
+    let cancelled = false;
+
+    runAutoOrderAcceptNow({ context: queryStoreContext })
+      .then((result) => {
+        if (cancelled) return;
+        const packed = Number(result?.totals?.packed || 0);
+        const failed = Number(result?.totals?.failed || 0);
+        if (packed > 0 || failed > 0) {
+          invalidateOrderManagementData();
+        }
+      })
+      .catch((error) => {
+        console.warn("Auto Order Accept run failed.", error);
+      })
+      .finally(() => {
+        autoOrderAcceptRunningRef.current = false;
+        if (!cancelled) refetch();
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, hasStore, invalidateOrderManagementData, isOrderDetailReturnQuery, pageType, queryStoreContext, refetch, tabRefreshKey]);
 
   const actionMutation = useMutation({
     mutationFn: runOrderAction,
@@ -1150,7 +1266,7 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
     setShowSearchTypeDropdown,
 
     // data
-    orders,
+    orders: displayOrders,
     allOrders,
     pagination,
     page: effectivePage,
@@ -1164,14 +1280,16 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
     error,
     refetch,
     hasStore,
+    dataRefreshKey,
+    showSkuAdjustmentColumn,
 
     // selection
     selectedIds,
     selectionLoading,
     toggleSelect,
     toggleAll,
-    allSelected: orders.length > 0 && orders.every((order) => selectedIds.includes(order.id)),
-    someSelected: orders.some((order) => selectedIds.includes(order.id)),
+    allSelected: displayOrders.length > 0 && displayOrders.every((order) => selectedIds.includes(order.id)),
+    someSelected: displayOrders.some((order) => selectedIds.includes(order.id)),
 
     // actions
     runAction,

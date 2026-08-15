@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Search, Calendar, ChevronDown, Trash2, UploadCloud } from "lucide-react";
+import { AlertTriangle, Search, Calendar, ChevronDown, Trash2, UploadCloud } from "lucide-react";
 import Topbar from "../../../../components/layout/Topbar";
 import {
   createManualOrder,
@@ -11,6 +11,7 @@ import {
   searchWarehouseProducts,
 } from "../../shared/utils/orderApi";
 import { filterWarehousesByPermission } from "../../../../utils/permissions";
+import { translateStaticText } from "../../../../i18nDomTranslator";
 
 function FormInput({
   label,
@@ -169,6 +170,8 @@ const normalizeCountryCode = (value, fallback = "MY") => {
   if (["SINGAPORE", "SGP"].includes(raw)) return "SG";
   if (["THAILAND", "THAI", "THA"].includes(raw)) return "TH";
   if (["INDONESIA", "IDN"].includes(raw)) return "ID";
+  if (["PHILIPPINES", "PHILIPPINE", "PHL"].includes(raw)) return "PH";
+  if (["VIETNAM", "VIET NAM", "VNM"].includes(raw)) return "VN";
   return raw.slice(0, 2);
 };
 
@@ -177,6 +180,8 @@ const countryOptions = [
   { value: "SG", label: "Singapore" },
   { value: "TH", label: "Thailand" },
   { value: "ID", label: "Indonesia" },
+  { value: "PH", label: "Philippines" },
+  { value: "VN", label: "Vietnam" },
 ];
 
 const formatRateMoney = (rate) => {
@@ -187,6 +192,7 @@ const formatRateMoney = (rate) => {
 
 export default function AddManualOrderPage({ mode = "order", onBack, onCreated }) {
   const isGift = mode === "gift";
+  const tr = (text) => translateStaticText(text);
 
   const [buyerForm, setBuyerForm] = useState({
     buyerName: "",
@@ -231,11 +237,11 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
   const [searchResults, setSearchResults] = useState(null);
   const [productSearchLoading, setProductSearchLoading] = useState(false);
   const [addedProducts, setAddedProducts] = useState([]);
-  const [paymentType, setPaymentType] = useState("COD");
-  const [codAmount, setCodAmount] = useState("");
+  const [paymentType] = useState("Prepaid");
   const [discounts, setDiscounts] = useState("$0");
   const [shippingFee, setShippingFee] = useState("$0");
   const [paymentCertificate, setPaymentCertificate] = useState(null);
+  const [showNoCourierModal, setShowNoCourierModal] = useState(false);
 
   const dropdownsQuery = useQuery({
     queryKey: ["manual-order-dropdowns"],
@@ -317,14 +323,6 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
   const subtotal = orderIncome;
   const orderValue = orderIncome - parseCurrencyNumber(discounts) + parseCurrencyNumber(shippingFee);
   const estimatedProfitRate = orderIncome > 0 ? "100%" : "0%";
-  const effectiveCodAmount = paymentType === "COD" ? parseCurrencyNumber(codAmount || orderValue || subtotal) : 0;
-
-  useEffect(() => {
-    if (paymentType === "COD" && !codAmount && orderValue > 0) {
-      setCodAmount(String(orderValue));
-    }
-  }, [codAmount, orderValue, paymentType]);
-
 
   const easyParcelQuery = useQuery({
     queryKey: [
@@ -376,22 +374,9 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
   });
 
   const easyParcelServices = easyParcelQuery.data?.services || [];
-  const selectableEasyParcelServices = paymentType === "COD"
-    ? easyParcelServices.filter((service) => service.codAvailable)
-    : easyParcelServices;
-  const logisticOptions = selectableEasyParcelServices.map((service) => ({
-    value: service.serviceId || service.id,
-    label: `${service.company}${service.serviceName ? ` - ${service.serviceName}` : ""} (${formatRateMoney(service)})${paymentType === "COD" ? " - COD" : ""}`,
-  }));
   const selectedLogistic = easyParcelServices.find(
     (service) => String(service.serviceId || service.id) === String(orderForm.logistic)
   );
-
-  useEffect(() => {
-    if (paymentType === "COD" && selectedLogistic && !selectedLogistic.codAvailable) {
-      setOrderForm((prev) => ({ ...prev, logistic: "" }));
-    }
-  }, [paymentType, selectedLogistic]);
 
   useEffect(() => {
     if (!selectedLogistic) return;
@@ -513,7 +498,11 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
   };
 
   const addProductFromSearch = (product) => {
-    if (addedProducts.find((p) => String(p.id) === String(product.id))) return;
+    if (addedProducts.find((p) => String(p.id) === String(product.id))) {
+      setSearchResults(null);
+      setProductSearch("");
+      return;
+    }
     const availableForPlatform = Number(product.availableForPlatform ?? product.available ?? 0);
     if (availableForPlatform <= 0) {
       toast.error("This SKU has no available inventory");
@@ -562,23 +551,14 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
     if (!buyerForm.zipCode.trim()) missing.push("receiver postcode");
     if (receiverCountry === "MY" && !buyerForm.state.trim()) missing.push("receiver state");
 
-    if (!["MY", "SG", "TH", "ID"].includes(senderCountry) || !["MY", "SG", "TH", "ID"].includes(receiverCountry)) {
-      toast.error("EasyParcel manual booking is enabled only for Malaysia, Singapore, Thailand and Indonesia.");
+    if (!["MY", "SG", "TH", "ID", "PH", "VN"].includes(senderCountry) || !["MY", "SG", "TH", "ID", "PH", "VN"].includes(receiverCountry)) {
+      toast.error("Manual shipment booking is enabled only for Malaysia, Singapore, Thailand, Indonesia, Philippines and Vietnam.");
       return false;
     }
     if (senderCountry !== receiverCountry) {
       toast.error("EasyParcel manual booking supports domestic shipment only. Sender and receiver country must be the same.");
       return false;
     }
-    if (paymentType === "COD" && selectedLogistic && !selectedLogistic.codAvailable) {
-      toast.error("Selected EasyParcel courier does not support COD. Select a COD-supported courier or change payment type to Prepaid.");
-      return false;
-    }
-    if (paymentType === "COD" && effectiveCodAmount <= 0) {
-      toast.error("COD amount must be greater than 0.");
-      return false;
-    }
-
     if (missing.length) {
       toast.error(`Missing EasyParcel information: ${missing.join(", ")}`);
       return false;
@@ -586,7 +566,7 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
     return true;
   };
 
-  const buildManualOrderPayload = ({ bookNow = false } = {}) => ({
+  const buildManualOrderPayload = ({ bookNow = false, manualDelivery = false } = {}) => ({
     type: isGift ? "gift" : "manual_order",
     warehouseId: Number(orderForm.warehouseId),
     orderNumber: orderForm.orderNumber,
@@ -623,24 +603,26 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
       discounts: parseCurrencyNumber(discounts),
       shippingFee: parseCurrencyNumber(shippingFee),
       orderValue,
-      codAmount: effectiveCodAmount,
+      codAmount: 0,
       paymentCertificate: paymentCertificate
         ? { name: paymentCertificate.name, type: paymentCertificate.type, size: paymentCertificate.size }
         : null,
     },
     paymentCertificate,
     easyParcel: {
-      bookNow,
+      bookNow: manualDelivery ? false : bookNow,
+      manualDelivery,
+      selfArranged: manualDelivery,
       sender: senderForm,
       receiverEmail: buyerForm.email,
       selectedRate: selectedLogistic || null,
       collectDate: orderForm.selectDate,
       content: easyParcelContent,
-      parcelValue: Math.max(1, paymentType === "COD" ? effectiveCodAmount : (orderValue || subtotal || 1)),
+      parcelValue: Math.max(1, orderValue || subtotal || 1),
     },
   });
 
-  const handleSave = ({ bookNow = false } = {}) => {
+  const handleSave = ({ bookNow = false, manualDelivery = false } = {}) => {
     if (!orderForm.warehouseId) {
       toast.error("Warehouse is required");
       return;
@@ -657,9 +639,34 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
       toast.error("Product quantity must be at least 1");
       return;
     }
-    if (bookNow && !validateEasyParcelBeforeBooking()) return;
+    if (bookNow && !manualDelivery && !validateEasyParcelBeforeBooking()) return;
 
-    saveMutation.mutate(buildManualOrderPayload({ bookNow }));
+    saveMutation.mutate(buildManualOrderPayload({ bookNow, manualDelivery }));
+  };
+
+  const rateMessage = easyParcelQuery.data?.message || "";
+  const isEasyParcelUnavailableMessage =
+    /no .*courier|no .*service|not found|route|missing|client id|client secret|credential|api client/i.test(rateMessage || "");
+  const rateDisplayMessage = isEasyParcelUnavailableMessage
+    ? tr("No courier service found for this route.")
+    : rateMessage;
+  const noCourierRoute = Boolean(
+    easyParcelQuery.data &&
+      easyParcelServices.length === 0 &&
+      isEasyParcelUnavailableMessage
+  );
+
+  const handleSubmitOrder = () => {
+    if (!selectedLogistic && noCourierRoute) {
+      setShowNoCourierModal(true);
+      return;
+    }
+    handleSave({ bookNow: true });
+  };
+
+  const handleProcessManually = () => {
+    setShowNoCourierModal(false);
+    handleSave({ manualDelivery: true });
   };
 
   return (
@@ -715,8 +722,8 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
             onChange={handleOrderChange}
           />
         </div>
-        {easyParcelQuery.data?.message && (
-          <p className="mt-2 text-xs text-amber-600">{easyParcelQuery.data.message}</p>
+        {rateDisplayMessage && (
+          <p className="mt-2 text-xs text-amber-600">{rateDisplayMessage}</p>
         )}
       </div>
 
@@ -725,7 +732,7 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
           <div className="bg-white rounded-xl border border-surface-border p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-slate-800 font-display">Sender / Warehouse Information</h3>
-              <span className="text-[11px] text-slate-400">Used only for EasyParcel rates and booking</span>
+              <span className="text-[11px] text-slate-400">{tr("Used only for shipment rates and booking")}</span>
             </div>
             <div className="grid grid-cols-3 gap-3 mb-3">
               <FormInput label="Sender Name" placeholder="Warehouse contact name" name="senderName" value={senderForm.senderName} onChange={handleSenderChange} />
@@ -842,7 +849,7 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
               <table className="w-full text-sm">
                 <thead className="[&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
                   <tr className="border-b border-surface-border">
-                    {["Image", "Product Name", "* Quantity", "Available For Platform", "Unit Price", "Weight", "Total", "Action"].map((h) => (
+                    {["Image", "Product Name", "SKU", "* Quantity", "Available For Platform", "Unit Price", "Weight", "Total", "Action"].map((h) => (
                       <th key={h} className="py-2.5 text-left text-xs font-semibold text-slate-600 pr-3">{h}</th>
                     ))}
                   </tr>
@@ -852,6 +859,7 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
                     <tr key={product.id} className="hover:bg-surface/50 transition-colors">
                       <td className="py-3 pr-3"><img src={product.image} alt={product.sku} className="w-9 h-9 rounded-lg object-cover" /></td>
                       <td className="py-3 pr-3 text-xs text-slate-700"><span className="block max-w-44 truncate">{product.name}</span></td>
+                      <td className="py-3 pr-3 text-xs font-mono text-slate-700">{product.sku || "-"}</td>
                       <td className="py-3 pr-3">
                         <input
                           type="number"
@@ -892,51 +900,46 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
               </div>
             </div>
             <div className="grid grid-cols-3 gap-3 mt-3">
-              <FormInput className="col-span-3" label="EasyParcel Content" placeholder="Product description for MY/SG/TH/ID domestic shipment" name="easyParcelContent" value={easyParcelContent} onChange={(e) => setEasyParcelContent(e.target.value)} />
+              <FormInput className="col-span-3" label={tr("Shipment Content")} placeholder={tr("Product description for domestic shipment")} name="easyParcelContent" value={easyParcelContent} onChange={(e) => setEasyParcelContent(e.target.value)} />
             </div>
           </div>
 
           <div className="bg-white rounded-xl border border-surface-border p-5">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <h3 className="text-sm font-bold text-slate-800 font-display">EasyParcel Courier Rates</h3>
-                <p className="text-xs text-slate-400 mt-1">Fill sender, receiver and package information to show available courier companies and prices.</p>
+                <h3 className="text-sm font-bold text-slate-800 font-display">{tr("Courier Rates")}</h3>
+                <p className="text-xs text-slate-400 mt-1">{tr("Fill sender, receiver and package information to show available courier companies and prices.")}</p>
               </div>
               <button
                 onClick={() => easyParcelQuery.refetch()}
                 disabled={!orderForm.warehouseId || !senderForm.postcode || !buyerForm.zipCode || easyParcelQuery.isFetching}
                 className="px-4 py-2 text-xs font-semibold border border-surface-border rounded-lg text-slate-600 hover:bg-surface-card disabled:opacity-60 whitespace-nowrap"
               >
-                {easyParcelQuery.isFetching ? "Checking..." : "Check Rates"}
+                {easyParcelQuery.isFetching ? tr("Checking...") : tr("Check Rates")}
               </button>
             </div>
 
             {easyParcelServices.length === 0 ? (
               <div className="rounded-lg border border-dashed border-surface-border p-4 text-xs text-slate-400">
-                {easyParcelQuery.data?.message || "No courier rates loaded yet."}
+                {rateDisplayMessage || tr("No courier rates loaded yet.")}
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 {easyParcelServices.map((service) => {
                   const serviceKey = service.serviceId || service.id;
                   const active = String(orderForm.logistic) === String(serviceKey);
-                  const disabledForCod = paymentType === "COD" && !service.codAvailable;
                   return (
                     <button
                       key={String(serviceKey)}
                       type="button"
-                      disabled={disabledForCod}
                       onClick={() => setOrderForm((prev) => ({ ...prev, logistic: String(serviceKey) }))}
-                      className={`text-left rounded-xl border p-4 transition-all disabled:cursor-not-allowed disabled:opacity-60 ${active ? "border-primary bg-primary/5" : "border-surface-border bg-white hover:border-primary/50"}`}
+                      className={`text-left rounded-xl border p-4 transition-all ${active ? "border-primary bg-primary/5" : "border-surface-border bg-white hover:border-primary/50"}`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-bold text-slate-800">{service.company}</p>
                           <p className="text-xs text-slate-500 mt-1">{service.serviceName || service.serviceDetail || "Courier service"}</p>
                           {service.delivery && <p className="text-[11px] text-slate-400 mt-1">Delivery: {service.delivery}</p>}
-                          <p className={`text-[11px] mt-1 ${service.codAvailable ? "text-emerald-600" : "text-slate-400"}`}>
-                            {service.codAvailable ? "COD available" : "COD not available"}
-                          </p>
                         </div>
                         <span className="text-sm font-bold text-primary whitespace-nowrap">{formatRateMoney(service)}</span>
                       </div>
@@ -947,7 +950,7 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
             )}
 
             <p className="mt-4 text-xs text-slate-500">
-              Save + Submit EasyParcel will create the MY/SG/TH/ID domestic shipment through the current EasyParcel Open API connection.
+              {tr("Submit Order will create the domestic shipment when a courier service is available.")}
             </p>
           </div>
         </div>
@@ -980,24 +983,11 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
               </div>
             ))}
 
-            {paymentType === "COD" && (
-              <div className="flex items-center justify-between gap-2 rounded-lg bg-amber-50 px-3 py-2">
-                <span className="text-xs font-semibold text-amber-700 flex-1">COD Amount</span>
-                <input
-                  type="text"
-                  value={codAmount}
-                  onChange={(e) => setCodAmount(e.target.value)}
-                  placeholder={String(orderValue || subtotal || 0)}
-                  className="w-24 px-2 py-1 text-xs border border-amber-200 rounded-lg text-right text-slate-700 outline-none focus:border-primary"
-                />
-              </div>
-            )}
-
             <div className="border-t border-surface-border pt-3 space-y-2">
               {[
                 ["Order Value", `$ ${orderValue}`],
                 ["Selected Courier", selectedLogistic ? `${selectedLogistic.company} - ${formatRateMoney(selectedLogistic)}` : "Not selected"],
-                ["COD Amount", paymentType === "COD" ? `$ ${effectiveCodAmount}` : "Not COD"],
+                ["Payment Type", "Prepaid"],
                 ["Estimated Profit", `$ ${orderIncome}`],
                 ["Estimated Profit Rate", estimatedProfitRate],
               ].map(([label, val]) => (
@@ -1016,20 +1006,8 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
             </div>
 
             <div>
-              <p className="text-xs font-semibold text-slate-700 mb-2">Select Payment Type</p>
-              <div className="flex items-center gap-4">
-                {["COD", "Prepaid"].map((type) => (
-                  <label key={type} className="flex items-center gap-2 cursor-pointer">
-                    <div
-                      onClick={() => setPaymentType(type)}
-                      className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors cursor-pointer ${paymentType === type ? "border-primary" : "border-slate-300"}`}
-                    >
-                      {paymentType === type && <div className="w-2 h-2 rounded-full bg-primary" />}
-                    </div>
-                    <span className="text-xs text-slate-700 select-none">{type}</span>
-                  </label>
-                ))}
-              </div>
+              <p className="text-xs font-semibold text-slate-700 mb-2">{tr("Payment Type")}</p>
+              <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">{tr("Prepaid")}</div>
             </div>
 
             <div className="space-y-2">
@@ -1075,21 +1053,57 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
           Cancel
         </button>
         <button
-          onClick={() => handleSave({ bookNow: false })}
-          disabled={saveMutation.isPending}
-          className="px-7 py-2.5 text-sm font-semibold border border-primary text-primary rounded-xl hover:bg-primary/5 transition-colors disabled:opacity-60 whitespace-nowrap"
-        >
-          {saveMutation.isPending ? "Saving..." : "Save Only"}
-        </button>
-        <button
-          onClick={() => handleSave({ bookNow: true })}
+          onClick={handleSubmitOrder}
           disabled={saveMutation.isPending}
           className="px-7 py-2.5 text-sm font-semibold bg-primary hover:bg-primary-dark whitespace-nowrap
                            text-white rounded-xl transition-colors disabled:opacity-60"
         >
-          {saveMutation.isPending ? "Processing..." : "Save + Submit EasyParcel"}
+          {saveMutation.isPending ? tr("Processing...") : tr("Submit Order")}
         </button>
       </div>
+
+      {showNoCourierModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/45 px-4">
+          <div className="w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="border-b border-surface-border px-6 py-5">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+                  <AlertTriangle size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">{tr("No courier service found")}</h3>
+                  <div className="mt-2 space-y-2 text-sm leading-6 text-slate-600">
+                    <p>{tr("No courier service found for this route.")}</p>
+                    <p>
+                      {tr("You can still process this order manually. Please arrange delivery by yourself or manage it outside this system. After you send the parcel, you can update the courier, tracking number and waybill information from this order.")}
+                    </p>
+                    <p className="rounded-xl bg-slate-50 px-3 py-2 font-medium text-slate-700">
+                      {tr("Inventory and mapped platform stock will be reduced only after you choose Process Manually.")}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setShowNoCourierModal(false)}
+                className="rounded-xl border border-surface-border px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-surface-card"
+              >
+                {tr("Cancel")}
+              </button>
+              <button
+                type="button"
+                onClick={handleProcessManually}
+                disabled={saveMutation.isPending}
+                className="rounded-xl bg-primary px-5 py-2 text-sm font-semibold text-white hover:bg-primary-dark disabled:opacity-60"
+              >
+                {saveMutation.isPending ? tr("Processing...") : tr("Process Manually")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
