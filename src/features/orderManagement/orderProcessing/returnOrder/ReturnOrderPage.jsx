@@ -13,6 +13,8 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import Topbar from "../../../../components/layout/Topbar";
 import OrderFilterBar from "../../shared/components/OrderFilterBar";
 import OrderFooter from "../../shared/components/OrderFooter";
@@ -86,7 +88,30 @@ const PRIMARY_BUTTON_CLASS =
 const SECONDARY_BUTTON_CLASS =
   "inline-flex items-center justify-center gap-2 rounded-lg border border-surface-border bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-surface-card";
 
-const getRows = (response) => (Array.isArray(response?.data) ? response.data : []);
+const unwrapResponseData = (response) => response?.data?.data || response?.data || response;
+const getRows = (response) => {
+  const payload = unwrapResponseData(response);
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.rows)) return payload.rows;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.orders)) return payload.orders;
+  if (Array.isArray(payload?.returnOrders)) return payload.returnOrders;
+  return [];
+};
+const getResponseData = (response) => unwrapResponseData(response);
+
+const getSavedReturnOrder = (response) => {
+  const payload = getResponseData(response);
+  return (
+    payload?.order ||
+    payload?.returnOrder ||
+    payload?.manualReturnOrder ||
+    payload?.manualOrder ||
+    payload?.item ||
+    payload
+  );
+};
 
 const getPagination = (response, fallback = {}) => ({
   total: response?.pagination?.total ?? fallback.total ?? 0,
@@ -135,12 +160,54 @@ const normalizeWarehouse = (warehouse) => ({
   code: warehouse.code || warehouse.warehouse_code || "",
 });
 
-const normalizeStore = (store) => ({
-  id: String(store.id ?? ""),
-  label: store.store_name || store.storeName || store.external_store_id || store.store_shop_id || "Store",
-  platform: store.platform || "",
-  region: store.region || store.country || "",
-});
+const toNumberOrNull = (value) => {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+};
+
+const getDaysUntil = (value) => {
+  if (!value) return null;
+  const expiryTime = new Date(value).getTime();
+  if (!Number.isFinite(expiryTime)) return null;
+  return Math.ceil((expiryTime - Date.now()) / (24 * 60 * 60 * 1000));
+};
+
+const getStoreSubscriptionSnapshot = (store = {}) => {
+  const subscription = store.subscription || {};
+  return {
+    status: subscription.status ?? store.subscriptionStatus ?? store.subscription_status,
+    remainingDays: subscription.remainingDays ?? subscription.remaining_days ?? store.remainingDays ?? store.remaining_days,
+    expiresAt: subscription.expiresAt ?? subscription.expires_at ?? store.expiresAt ?? store.expires_at,
+  };
+};
+
+const hasUsableStoreSubscription = (store = {}) => {
+  const subscription = getStoreSubscriptionSnapshot(store);
+  const hasSubscriptionInfo =
+    subscription.status !== undefined ||
+    subscription.remainingDays !== undefined ||
+    subscription.expiresAt !== undefined;
+
+  if (!hasSubscriptionInfo) return false;
+
+  const status = String(subscription.status || "").toLowerCase();
+  const remainingDays =
+    toNumberOrNull(subscription.remainingDays) ?? getDaysUntil(subscription.expiresAt);
+
+  return status !== "expired" && Number(remainingDays) > 0;
+};
+
+const normalizeStore = (store) => {
+  const subscription = getStoreSubscriptionSnapshot(store);
+  return {
+    id: String(store.id ?? ""),
+    label: store.store_name || store.storeName || store.external_store_id || store.store_shop_id || "Store",
+    platform: store.platform || "",
+    region: store.region || store.country || "",
+    subscription,
+    isSubscriptionExpired: !hasUsableStoreSubscription(store),
+  };
+};
 
 const normalizePlatformValue = (value) => String(value || "").trim().toLowerCase();
 
@@ -150,6 +217,27 @@ const storeMatchesPlatform = (store, platform) => {
   if (!storePlatform || !platformValue) return false;
   if (platformValue === "tiktok") return storePlatform.includes("tiktok") || storePlatform.includes("tik tok");
   return storePlatform.includes(platformValue);
+};
+
+const getReturnOrderStoreKeys = (order = {}) => [
+  order.platformStoreId,
+  order.platform_store_id,
+  order.storeId,
+  order.store_id,
+  order.raw?.platformStoreId,
+  order.raw?.platform_store_id,
+  order.storeName,
+].map((value) => String(value || "").trim()).filter(Boolean);
+
+const filterOrdersByUsableStores = (rows = [], usableStores = []) => {
+  const usableIds = new Set(usableStores.map((item) => String(item.id || "")).filter(Boolean));
+  const usableLabels = new Set(usableStores.map((item) => String(item.label || "")).filter(Boolean));
+  if (!usableIds.size && !usableLabels.size) return [];
+
+  return rows.filter((order) => {
+    const keys = getReturnOrderStoreKeys(order);
+    return keys.some((key) => usableIds.has(key) || usableLabels.has(key));
+  });
 };
 
 const normalizeSku = (sku) => {
@@ -238,6 +326,12 @@ const getPlatformInfoItems = (order = {}) => {
 
 const getOrderDisplayNumber = (order) =>
   order?.orderNumber || order?.orderNo || order?.platformReturnId || String(order?.id || "");
+
+const formatSelectedReturnOrder = (order) => ({
+  ...order,
+  returnStatusLabel: getStatusLabel(order.returnStatus),
+  orderNumber: getOrderDisplayNumber(order),
+});
 
 const statusClass = (status) => {
   if (status === "resalable_item") return "bg-emerald-50 text-emerald-700 border-emerald-100";
@@ -333,6 +427,9 @@ function PlatformInformation({ order }) {
 }
 
 export default function ReturnOrderPage() {
+  const { i18n, t } = useTranslation();
+  const navigate = useNavigate();
+  const language = i18n.resolvedLanguage || i18n.language || "en";
   const [mode, setMode] = useState("list");
   const [detailOrderId, setDetailOrderId] = useState(null);
   const [orders, setOrders] = useState([]);
@@ -341,6 +438,8 @@ export default function ReturnOrderPage() {
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [selectedRowsById, setSelectedRowsById] = useState({});
+  const [selectingAll, setSelectingAll] = useState(false);
   const [stores, setStores] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [datePreset, setDatePreset] = useState("last_month");
@@ -361,9 +460,11 @@ export default function ReturnOrderPage() {
   const [openActionId, setOpenActionId] = useState(null);
   const [openActionAnchor, setOpenActionAnchor] = useState(null);
   const [syncConfirmOpen, setSyncConfirmOpen] = useState(false);
+  const [accessWarningOpen, setAccessWarningOpen] = useState(false);
   const [syncStatusPolling, setSyncStatusPolling] = useState(false);
   const syncWaitScopeRef = useRef(null);
   const pageOpenSyncStartedRef = useRef(false);
+  const pendingManualReturnRef = useRef(null);
 
   const storeOptions = useMemo(
     () => ["All Stores", ...stores.map((item) => item.label)],
@@ -371,16 +472,36 @@ export default function ReturnOrderPage() {
   );
 
   const selectedRows = useMemo(
-    () =>
-      orders
-        .filter((order) => selectedIds.includes(order.id))
-        .map((order) => ({
-          ...order,
-          returnStatusLabel: getStatusLabel(order.returnStatus),
-          orderNumber: getOrderDisplayNumber(order),
-        })),
-    [orders, selectedIds]
+    () => {
+      const visibleById = new Map(orders.map((order) => [String(order.id), order]));
+      return selectedIds
+        .map((id) => selectedRowsById[String(id)] || visibleById.get(String(id)))
+        .filter(Boolean)
+        .map(formatSelectedReturnOrder);
+    },
+    [orders, selectedIds, selectedRowsById]
   );
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds([]);
+    setSelectedRowsById({});
+  }, []);
+
+  const getReturnOrderParams = useCallback((overrides = {}) => {
+    const selectedStore = stores.find((item) => item.label === store);
+    return {
+      page: pagination.page,
+      limit: pagination.limit,
+      platform: platformParam(platform),
+      storeId: selectedStore?.id || "all",
+      search: appliedSearch.trim() || undefined,
+      searchType: appliedSearch.trim() ? appliedSearchType : undefined,
+      skuType: appliedSearch.trim() ? appliedSkuType : undefined,
+      startDate: dateRange.start || undefined,
+      endDate: dateRange.end || undefined,
+      ...overrides,
+    };
+  }, [appliedSearch, appliedSearchType, appliedSkuType, dateRange.end, dateRange.start, pagination.limit, pagination.page, platform, store, stores]);
 
   const loadWarehouses = useCallback(async () => {
     try {
@@ -394,7 +515,15 @@ export default function ReturnOrderPage() {
   const loadStores = useCallback(async () => {
     try {
       const response = await api.get("/platform-stores", { params: { page: 1, limit: 1000 } });
-      setStores(getRows(response).map(normalizeStore));
+      const usableStores = getRows(response)
+        .filter(hasUsableStoreSubscription)
+        .map(normalizeStore);
+      setStores(usableStores);
+      setStore((currentStore) =>
+        currentStore === "All Stores" || usableStores.some((item) => item.label === currentStore)
+          ? currentStore
+          : "All Stores"
+      );
     } catch (error) {
       toast.error(error?.response?.data?.message || tr("Failed to load stores"));
     }
@@ -404,23 +533,30 @@ export default function ReturnOrderPage() {
     let keepLoadingForSync = false;
     setLoading(true);
     try {
-      const selectedStore = stores.find((item) => item.label === store);
       const response = await api.get("/return-orders", {
-        params: {
-          page: pagination.page,
-          limit: pagination.limit,
-          platform: platformParam(platform),
-          storeId: selectedStore?.id || "all",
-          search: appliedSearch.trim() || undefined,
-          searchType: appliedSearch.trim() ? appliedSearchType : undefined,
-          skuType: appliedSearch.trim() ? appliedSkuType : undefined,
-          startDate: dateRange.start || undefined,
-          endDate: dateRange.end || undefined,
-        },
+        params: getReturnOrderParams(),
       });
-      setOrders(getRows(response));
-      setPagination((prev) => getPagination(response, prev));
-      setSelectedIds([]);
+      const rows = filterOrdersByUsableStores(getRows(response), stores);
+      const pendingManualReturn = pendingManualReturnRef.current;
+      const responseIncludesPending = pendingManualReturn?.id && rows.some((order) => String(order.id) === String(pendingManualReturn.id));
+      const nextRows = pendingManualReturn?.id && !responseIncludesPending
+        ? [pendingManualReturn, ...rows]
+        : rows;
+      if (responseIncludesPending) {
+        pendingManualReturnRef.current = null;
+      }
+      setOrders(nextRows);
+      setPagination((prev) => {
+        const nextPagination = getPagination(response, prev);
+        if (pendingManualReturn?.id && nextRows.length > rows.length) {
+          return {
+            ...nextPagination,
+            total: Math.max(nextPagination.total + 1, nextRows.length),
+            totalPages: Math.max(nextPagination.totalPages, Math.ceil(Math.max(nextPagination.total + 1, nextRows.length) / nextPagination.limit)),
+          };
+        }
+        return nextPagination;
+      });
       try {
         const statusResponse = await getReturnSyncStatus();
         if (isRelevantSyncRunning(statusResponse, syncWaitScopeRef.current)) {
@@ -435,12 +571,13 @@ export default function ReturnOrderPage() {
     } finally {
       if (!keepLoadingForSync) setLoading(false);
     }
-  }, [pagination.page, pagination.limit, platform, store, stores, appliedSearch, appliedSearchType, appliedSkuType, dateRange.start, dateRange.end, searchSubmitKey]);
+  }, [getReturnOrderParams, searchSubmitKey, stores]);
 
   const handleDateRangeChange = useCallback((nextRange) => {
+    clearSelection();
     setDateRange(nextRange);
     setPagination((prev) => ({ ...prev, page: 1 }));
-  }, []);
+  }, [clearSelection]);
 
   const handleSearch = useCallback(() => {
     const normalizedSearch =
@@ -454,9 +591,10 @@ export default function ReturnOrderPage() {
     setAppliedSearch(normalizedSearch);
     setAppliedSearchType(searchType);
     setAppliedSkuType(skuType);
+    clearSelection();
     setSearchSubmitKey((value) => value + 1);
     setPagination((prev) => ({ ...prev, page: 1 }));
-  }, [search, searchType, skuType]);
+  }, [clearSelection, search, searchType, skuType]);
 
   const handlePageSizeSearch = useCallback(() => {
     const nextLimit = Math.max(1, Number.parseInt(pageSizeInput, 10) || 10);
@@ -465,6 +603,11 @@ export default function ReturnOrderPage() {
   }, [pageSizeInput]);
 
   const syncReturnOrders = useCallback(async ({ silent = false, platforms = ["tiktok", "shopee"], storeIds = [] } = {}) => {
+    if (!stores.length) {
+      if (!silent) setAccessWarningOpen(true);
+      return;
+    }
+
     setSyncing(true);
     try {
       const selectedPlatforms = platforms.filter((item) => ["tiktok", "shopee"].includes(item));
@@ -525,6 +668,27 @@ export default function ReturnOrderPage() {
     await syncReturnOrders(options);
     setSyncConfirmOpen(false);
   }, [syncReturnOrders]);
+
+  const openSyncConfirm = useCallback(() => {
+    if (!stores.length) {
+      setAccessWarningOpen(true);
+      return;
+    }
+    setSyncConfirmOpen(true);
+  }, [stores.length]);
+
+  const openManualReturn = useCallback(() => {
+    if (!stores.length) {
+      setAccessWarningOpen(true);
+      return;
+    }
+    setMode("manual");
+  }, [stores.length]);
+
+  const goToReturnPurchasePlan = useCallback(() => {
+    setAccessWarningOpen(false);
+    navigate("/warehouse_management/pricing");
+  }, [navigate]);
 
   useEffect(() => {
     loadWarehouses();
@@ -602,22 +766,93 @@ export default function ReturnOrderPage() {
     };
   }, [loadOrders, syncStatusPolling]);
 
+  const fetchAllFilteredReturnOrders = useCallback(async () => {
+    const pageLimit = 100;
+    const firstResponse = await api.get("/return-orders", {
+      params: getReturnOrderParams({ page: 1, limit: pageLimit }),
+    });
+    const firstRows = filterOrdersByUsableStores(getRows(firstResponse), stores);
+    const firstPagination = getPagination(firstResponse, { page: 1, limit: pageLimit, totalPages: 1 });
+    const totalPages = Math.max(1, Number(firstPagination.totalPages) || 1);
+    const allRows = [...firstRows];
+
+    for (let pageNumber = 2; pageNumber <= totalPages; pageNumber += 1) {
+      const response = await api.get("/return-orders", {
+        params: getReturnOrderParams({ page: pageNumber, limit: pageLimit }),
+      });
+      allRows.push(...filterOrdersByUsableStores(getRows(response), stores));
+    }
+
+    return allRows;
+  }, [getReturnOrderParams, stores]);
+
   const toggleSelect = (id) => {
-    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
+    const idKey = String(id);
+    const row = orders.find((order) => String(order.id) === idKey);
+    const selected = selectedIds.some((item) => String(item) === idKey);
+
+    setSelectedIds((prev) =>
+      selected ? prev.filter((item) => String(item) !== idKey) : [...prev, idKey]
+    );
+    setSelectedRowsById((prev) => {
+      if (selected) {
+        const next = { ...prev };
+        delete next[idKey];
+        return next;
+      }
+      return row ? { ...prev, [idKey]: row } : prev;
+    });
   };
 
-  const toggleAll = () => {
-    setSelectedIds((prev) => (prev.length === orders.length ? [] : orders.map((order) => order.id)));
+  const toggleAll = async () => {
+    if (loading || selectingAll) return;
+    const selectedTotal = Number(pagination.total) || orders.length;
+    const allSelected = selectedTotal > 0 && selectedIds.length >= selectedTotal;
+    if (allSelected) {
+      clearSelection();
+      return;
+    }
+
+    setSelectingAll(true);
+    try {
+      const allRows = await fetchAllFilteredReturnOrders();
+      const nextRowsById = {};
+      const nextIds = [];
+      allRows.forEach((order) => {
+        const idKey = String(order.id || "");
+        if (!idKey || nextRowsById[idKey]) return;
+        nextRowsById[idKey] = order;
+        nextIds.push(idKey);
+      });
+      setSelectedRowsById(nextRowsById);
+      setSelectedIds(nextIds);
+      if (nextIds.length) {
+        toast.success(`${nextIds.length} ${tr("Return Orders")} ${tr("selected")}`);
+      }
+    } catch (error) {
+      toast.error(error?.response?.data?.message || tr("Failed to load return orders"));
+    } finally {
+      setSelectingAll(false);
+    }
   };
 
   const handleStatusUpdated = (updated) => {
     setOrders((prev) => prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)));
+    setSelectedRowsById((prev) => {
+      const idKey = String(updated.id || "");
+      return prev[idKey] ? { ...prev, [idKey]: { ...prev[idKey], ...updated } } : prev;
+    });
     setStatusModalOrder(null);
   };
 
   const handleDeleted = (id) => {
     setOrders((prev) => prev.filter((item) => item.id !== id));
-    setSelectedIds((prev) => prev.filter((item) => item !== id));
+    setSelectedIds((prev) => prev.filter((item) => String(item) !== String(id)));
+    setSelectedRowsById((prev) => {
+      const next = { ...prev };
+      delete next[String(id)];
+      return next;
+    });
     setDeleteOrder(null);
   };
 
@@ -627,14 +862,21 @@ export default function ReturnOrderPage() {
   };
 
   const handleManualSaved = useCallback((savedOrder) => {
-    if (savedOrder?.id) {
+    const normalizedSavedOrder = getSavedReturnOrder(savedOrder);
+    if (normalizedSavedOrder?.id) {
+      const manualSavedOrder = {
+        ...normalizedSavedOrder,
+        source: normalizedSavedOrder.source || normalizedSavedOrder.orderSource || "manual",
+        orderSource: normalizedSavedOrder.orderSource || normalizedSavedOrder.source || "manual",
+      };
+      pendingManualReturnRef.current = manualSavedOrder;
       setOrders((prev) => {
-        const exists = prev.some((item) => item.id === savedOrder.id);
+        const exists = prev.some((item) => String(item.id) === String(manualSavedOrder.id));
         return exists
-          ? prev.map((item) => (item.id === savedOrder.id ? { ...item, ...savedOrder } : item))
-          : [{ ...savedOrder }, ...prev];
+          ? prev.map((item) => (String(item.id) === String(manualSavedOrder.id) ? { ...item, ...manualSavedOrder } : item))
+          : [{ ...manualSavedOrder }, ...prev];
       });
-      setPagination((prev) => ({ ...prev, total: prev.total + 1 }));
+      setPagination((prev) => ({ ...prev, total: Math.max(prev.total + 1, 1) }));
     }
     window.setTimeout(() => {
       loadOrders();
@@ -644,12 +886,12 @@ export default function ReturnOrderPage() {
   if (mode === "manual") {
     return (
       <ManualReturnOrderForm
+        language={language}
         warehouses={warehouses}
         stores={stores}
         onSaved={handleManualSaved}
         onBack={() => {
           setMode("list");
-          loadOrders();
         }}
       />
     );
@@ -658,15 +900,25 @@ export default function ReturnOrderPage() {
   if (mode === "details" && detailOrderId) {
     return (
       <ReturnOrderDetails
+        language={language}
         orderId={detailOrderId}
         warehouses={warehouses}
         stores={stores}
         onOrderUpdated={(updated) => {
           setOrders((prev) => prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)));
+          setSelectedRowsById((prev) => {
+            const idKey = String(updated.id || "");
+            return prev[idKey] ? { ...prev, [idKey]: { ...prev[idKey], ...updated } } : prev;
+          });
         }}
         onOrderDeleted={(id) => {
           setOrders((prev) => prev.filter((item) => item.id !== id));
-          setSelectedIds((prev) => prev.filter((item) => item !== id));
+          setSelectedIds((prev) => prev.filter((item) => String(item) !== String(id)));
+          setSelectedRowsById((prev) => {
+            const next = { ...prev };
+            delete next[String(id)];
+            return next;
+          });
         }}
         onBack={() => {
           setMode("list");
@@ -677,19 +929,21 @@ export default function ReturnOrderPage() {
   }
 
   return (
-    <div className="space-y-4 font-body">
+    <div className="space-y-4 font-body" data-language={language}>
       <Topbar PageTitle="Order Processing" />
 
       <OrderFilterBar
         platform={platform}
         setPlatform={(value) => {
           setPlatform(value);
+          clearSelection();
           setPagination((prev) => ({ ...prev, page: 1 }));
         }}
         platforms={PLATFORM_OPTIONS}
         store={store}
         setStore={(value) => {
           setStore(value);
+          clearSelection();
           setPagination((prev) => ({ ...prev, page: 1 }));
         }}
         stores={storeOptions}
@@ -717,10 +971,15 @@ export default function ReturnOrderPage() {
                 dateRange={dateRange}
                 setDateRange={handleDateRangeChange}
                 maxLookbackDays={RETURN_DATE_MAX_LOOKBACK_DAYS}
+                onApply={() => {
+                  clearSelection();
+                  setSearchSubmitKey((value) => value + 1);
+                  setPagination((prev) => ({ ...prev, page: 1 }));
+                }}
               />
               <button
                 type="button"
-                onClick={() => setSyncConfirmOpen(true)}
+                onClick={openSyncConfirm}
                 disabled={syncing}
                 className="inline-flex items-center gap-2 rounded-lg border border-surface-border bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-surface-card disabled:opacity-60"
               >
@@ -729,7 +988,7 @@ export default function ReturnOrderPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setMode("manual")}
+                onClick={openManualReturn}
                 className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-dark"
               >
                 <Plus size={14} />
@@ -743,13 +1002,17 @@ export default function ReturnOrderPage() {
           <table className="w-full min-w-[1280px] text-sm">
             <thead className="bg-white">
               <tr className="border-y border-surface-border text-left text-slate-800">
-                <th className="w-16 px-5 py-3">
-                  <input
-                    type="checkbox"
-                    checked={orders.length > 0 && selectedIds.length === orders.length}
-                    onChange={toggleAll}
-                    className="h-4 w-4 rounded accent-primary"
-                  />
+                <th className="w-20 px-5 py-3">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={pagination.total > 0 && selectedIds.length >= pagination.total}
+                      onChange={toggleAll}
+                      disabled={loading || selectingAll || !orders.length}
+                      className="h-4 w-4 rounded accent-primary"
+                    />
+                    {selectingAll ? <Loader2 size={14} className="animate-spin text-primary" /> : null}
+                  </div>
                 </th>
                 {[
                   { label: "Platform" },
@@ -788,7 +1051,7 @@ export default function ReturnOrderPage() {
                     <td className="px-5 py-3">
                       <input
                         type="checkbox"
-                        checked={selectedIds.includes(order.id)}
+                        checked={selectedIds.some((id) => String(id) === String(order.id))}
                         onChange={() => toggleSelect(order.id)}
                         className="h-4 w-4 rounded accent-primary"
                       />
@@ -919,6 +1182,14 @@ export default function ReturnOrderPage() {
         </div>
         )}
 
+        {(selectingAll || selectedIds.length > 0) && (
+          <div className="border-t border-surface-border px-5 py-3 text-xs font-semibold text-slate-600">
+            {selectingAll
+              ? tr("Selecting all return orders...")
+              : `${selectedIds.length} ${tr("Return Orders")} ${tr("selected")}`}
+          </div>
+        )}
+
         <OrderFooter
           selectedRows={selectedRows}
           columns={RETURN_ORDER_COLUMNS}
@@ -944,6 +1215,10 @@ export default function ReturnOrderPage() {
         onClose={() => setManualEditOrder(null)}
         onUpdated={(updated) => {
           setOrders((prev) => prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)));
+          setSelectedRowsById((prev) => {
+            const idKey = String(updated.id || "");
+            return prev[idKey] ? { ...prev, [idKey]: { ...prev[idKey], ...updated } } : prev;
+          });
           setManualEditOrder(null);
         }}
       />
@@ -954,6 +1229,14 @@ export default function ReturnOrderPage() {
           stores={stores}
           onClose={() => setSyncConfirmOpen(false)}
           onConfirm={confirmSyncReturnOrders}
+        />
+      )}
+
+      {accessWarningOpen && (
+        <ReturnOrderAccessWarningModal
+          t={t}
+          onClose={() => setAccessWarningOpen(false)}
+          onPricing={goToReturnPurchasePlan}
         />
       )}
     </div>
@@ -1056,6 +1339,38 @@ function ReturnOrderRowActions({ order, open, anchor, onToggle, onClose, onDetai
         </button>
       </PortalActionMenu>
     </div>
+  );
+}
+
+function ReturnOrderAccessWarningModal({ t, onClose, onPricing }) {
+  return (
+    <ModalShell onClose={onClose} width="max-w-md">
+      <div className="px-6 py-6 text-center">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <AlertTriangle size={28} />
+        </div>
+
+        <h3 className="mt-5 text-lg font-bold text-slate-900">
+          {t("subscription.manualOrderAccessTitle", { defaultValue: "Purchase Plan Required" })}
+        </h3>
+
+        <p className="mt-3 text-sm leading-6 text-slate-600">
+          {t("subscription.returnOrderAccessMessage", {
+            defaultValue:
+              "Return Orders are available only when this company has at least one store with active plan days or free trial days. Please purchase any plan for any store first, then you can use this section.",
+          })}
+        </p>
+      </div>
+
+      <div className="flex gap-3 border-t border-surface-border px-6 py-4">
+        <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-surface-border px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50">
+          {t("subscription.cancel", { defaultValue: "Cancel" })}
+        </button>
+        <button type="button" onClick={onPricing} className="flex-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-dark">
+          {t("subscription.manualOrderAccessPurchasePlan", { defaultValue: "Purchase Plan" })}
+        </button>
+      </div>
+    </ModalShell>
   );
 }
 
@@ -1422,7 +1737,6 @@ function ManualReturnEditModal({ order, warehouses, stores, onClose, onUpdated }
     buyerEmail: "",
     refundCurrency: "",
     refundTotal: "",
-    returnReason: "",
     returnReasonText: "",
     returnType: "by_logistic",
     warehousePackageNo: "",
@@ -1520,7 +1834,7 @@ function ManualReturnEditModal({ order, warehouses, stores, onClose, onUpdated }
 
     setSaving(true);
     try {
-      const response = await api.patch(`/return-orders/${order.id}`, {
+      const response = await api.patch(`/return-orders/${order.id}/manual`, {
         ...form,
         warehouseId: Number(form.warehouseId),
         platformStoreId: Number(form.platformStoreId),
@@ -1547,7 +1861,7 @@ function ManualReturnEditModal({ order, warehouses, stores, onClose, onUpdated }
   };
 
   return (
-    <ModalShell onClose={onClose} width="max-w-5xl">
+    <ModalShell onClose={onClose} width="max-w-5xl" closeOnBackdrop={false}>
       <div className="flex items-start justify-between border-b border-surface-border px-5 py-4">
         <div>
           <h3 className="text-base font-bold text-slate-900">{tr("Edit Manual Return Order")}</h3>
@@ -1779,7 +2093,6 @@ function ManualReturnOrderForm({ warehouses, stores, onBack, onSaved }) {
     buyerEmail: "",
     refundCurrency: "",
     refundTotal: "",
-    returnReason: "",
     returnReasonText: "",
     returnType: "by_logistic",
     warehousePackageNo: "",
@@ -1879,6 +2192,18 @@ function ManualReturnOrderForm({ warehouses, stores, onBack, onSaved }) {
     if (!form.platformStoreId) {
       return "Store is required";
     }
+    if (!form.returnId.trim()) {
+      return "Return ID is required";
+    }
+    if (!form.refundCurrency.trim()) {
+      return "Refund currency is required";
+    }
+    if (!form.returnReasonText.trim()) {
+      return "Return reason text is required";
+    }
+    if (!form.remark.trim()) {
+      return "Return notes are required";
+    }
     if (!lines.length) {
       return "Select at least one merchant SKU";
     }
@@ -1923,7 +2248,7 @@ function ManualReturnOrderForm({ warehouses, stores, onBack, onSaved }) {
       });
       toast.success(tr("Manual return order saved"));
       setConfirmingSave(false);
-      onSaved?.(response.data || response);
+      onSaved?.(getResponseData(response));
       onBack();
     } catch (error) {
       toast.error(error?.response?.data?.message || tr("Failed to save manual return order"));
@@ -1941,7 +2266,7 @@ function ManualReturnOrderForm({ warehouses, stores, onBack, onSaved }) {
         PageTitle={
           <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-slate-900">
             <ArrowLeft size={18} />
-            Back to Return Order
+            {tr("Back to Return Order")}
           </button>
         }
       />
@@ -1957,7 +2282,7 @@ function ManualReturnOrderForm({ warehouses, stores, onBack, onSaved }) {
               }}
               className={INPUT_CLASS}
             >
-              <option value="">Warehouse name here</option>
+              <option value="">{tr("Warehouse name here")}</option>
               {warehouses.map((warehouse) => (
                 <option key={warehouse.id} value={warehouse.id}>
                   {warehouse.name}{warehouse.code ? ` (${warehouse.code})` : ""}
@@ -1989,7 +2314,7 @@ function ManualReturnOrderForm({ warehouses, stores, onBack, onSaved }) {
               }}
               className={INPUT_CLASS}
             >
-              <option value="">Store name here</option>
+              <option value="">{tr("Store name here")}</option>
               {platformStores.map((storeOption) => (
                 <option key={storeOption.id} value={storeOption.id}>
                   {storeOption.label}
@@ -2002,19 +2327,20 @@ function ManualReturnOrderForm({ warehouses, stores, onBack, onSaved }) {
               <input
                 value={form.orderNumber}
                 onChange={(event) => setForm((prev) => ({ ...prev, orderNumber: event.target.value }))}
-                placeholder="Order number here"
+                placeholder={tr("Order number here")}
                 className={INPUT_CLASS}
               />
               <button type="button" onClick={lookupOrderDetails} disabled={lookupLoading} className={PRIMARY_BUTTON_CLASS}>
-                {lookupLoading ? "Searching..." : "Search"}
+                {lookupLoading ? tr("Searching...") : tr("Search")}
               </button>
             </div>
           </FormField>
-          <FormField label="Return ID">
+          <FormField label="Return ID" required>
             <input
+              required
               value={form.returnId}
               onChange={(event) => setForm((prev) => ({ ...prev, returnId: event.target.value }))}
-              placeholder="Return ID here"
+              placeholder={tr("Return ID here")}
               className={INPUT_CLASS}
             />
           </FormField>
@@ -2022,7 +2348,7 @@ function ManualReturnOrderForm({ warehouses, stores, onBack, onSaved }) {
             <input
               value={form.warehousePackageNo}
               onChange={(event) => setForm((prev) => ({ ...prev, warehousePackageNo: event.target.value }))}
-              placeholder="Warehouse package No. here"
+              placeholder={tr("Warehouse package No. here")}
               className={INPUT_CLASS}
             />
           </FormField>
@@ -2030,7 +2356,7 @@ function ManualReturnOrderForm({ warehouses, stores, onBack, onSaved }) {
             <input
               value={form.buyerUsername}
               onChange={(event) => setForm((prev) => ({ ...prev, buyerUsername: event.target.value }))}
-              placeholder="Buyer username here"
+              placeholder={tr("Buyer username here")}
               className={INPUT_CLASS}
             />
           </FormField>
@@ -2038,7 +2364,7 @@ function ManualReturnOrderForm({ warehouses, stores, onBack, onSaved }) {
             <input
               value={form.buyerEmail}
               onChange={(event) => setForm((prev) => ({ ...prev, buyerEmail: event.target.value }))}
-              placeholder="Buyer email here"
+              placeholder={tr("Buyer email here")}
               className={INPUT_CLASS}
             />
           </FormField>
@@ -2046,7 +2372,7 @@ function ManualReturnOrderForm({ warehouses, stores, onBack, onSaved }) {
             <input
               value={form.trackingNumber}
               onChange={(event) => setForm((prev) => ({ ...prev, trackingNumber: event.target.value }))}
-              placeholder="Tracking number here"
+              placeholder={tr("Tracking number here")}
               className={INPUT_CLASS}
             />
           </FormField>
@@ -2054,7 +2380,7 @@ function ManualReturnOrderForm({ warehouses, stores, onBack, onSaved }) {
             <input
               value={form.localReturnTrackingNo}
               onChange={(event) => setForm((prev) => ({ ...prev, localReturnTrackingNo: event.target.value }))}
-              placeholder="Additional tracking number here"
+              placeholder={tr("Additional tracking number here")}
               className={INPUT_CLASS}
             />
           </FormField>
@@ -2062,15 +2388,16 @@ function ManualReturnOrderForm({ warehouses, stores, onBack, onSaved }) {
             <input
               value={form.logisticName}
               onChange={(event) => setForm((prev) => ({ ...prev, logisticName: event.target.value }))}
-              placeholder="Logistic name here"
+              placeholder={tr("Logistic name here")}
               className={INPUT_CLASS}
             />
           </FormField>
-          <FormField label="Refund Currency">
+          <FormField label="Refund Currency" required>
             <input
+              required
               value={form.refundCurrency}
               onChange={(event) => setForm((prev) => ({ ...prev, refundCurrency: event.target.value }))}
-              placeholder="Currency"
+              placeholder={tr("Currency")}
               className={INPUT_CLASS}
             />
           </FormField>
@@ -2080,7 +2407,7 @@ function ManualReturnOrderForm({ warehouses, stores, onBack, onSaved }) {
               min="0"
               value={form.refundTotal}
               onChange={(event) => setForm((prev) => ({ ...prev, refundTotal: event.target.value }))}
-              placeholder="Refund amount"
+              placeholder={tr("Refund amount")}
               className={INPUT_CLASS}
             />
           </FormField>
@@ -2092,33 +2419,27 @@ function ManualReturnOrderForm({ warehouses, stores, onBack, onSaved }) {
             >
               {RETURN_TYPE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
-                  {option.label}
+                  {tr(option.label)}
                 </option>
               ))}
             </select>
           </FormField>
-          <FormField label="Return Reason">
-            <input
-              value={form.returnReason}
-              onChange={(event) => setForm((prev) => ({ ...prev, returnReason: event.target.value }))}
-              placeholder="Return reason code"
-              className={INPUT_CLASS}
-            />
-          </FormField>
         </div>
-        <FormField label="Return Reason Text" className="mt-4">
+        <FormField label="Return Reason Text" required className="mt-4">
           <input
+            required
             value={form.returnReasonText}
             onChange={(event) => setForm((prev) => ({ ...prev, returnReasonText: event.target.value }))}
-            placeholder="Return reason text"
+            placeholder={tr("Return reason text")}
             className={INPUT_CLASS}
           />
         </FormField>
-        <FormField label="Return Notes" className="mt-4">
+        <FormField label="Return Notes" required className="mt-4">
           <input
+            required
             value={form.remark}
             onChange={(event) => setForm((prev) => ({ ...prev, remark: event.target.value }))}
-            placeholder="Return notes here"
+            placeholder={tr("Return notes here")}
             className={INPUT_CLASS}
           />
         </FormField>
@@ -2126,7 +2447,10 @@ function ManualReturnOrderForm({ warehouses, stores, onBack, onSaved }) {
 
       <div className="rounded-xl border border-surface-border bg-white">
         <div className="flex items-center justify-between border-b border-surface-border p-5">
-          <h2 className="text-base font-bold text-slate-800">Product Information</h2>
+          <h2 className="text-base font-bold text-slate-800">
+            <span className="text-red-500">*</span>
+            {tr("Product Information")}
+          </h2>
           <button
             type="button"
             onClick={() => {
@@ -2139,14 +2463,14 @@ function ManualReturnOrderForm({ warehouses, stores, onBack, onSaved }) {
             className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-dark"
           >
             <Plus size={14} />
-            Select Merchant SKU
+            {tr("Select Merchant SKU")}
           </button>
         </div>
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-surface-border text-left text-slate-800">
               {["Image", "Product Name", "SKU", "Quantity", "Action"].map((header) => (
-                <th key={header} className="px-5 py-3 font-bold">{header}</th>
+                <th key={header} className="px-5 py-3 font-bold">{tr(header)}</th>
               ))}
             </tr>
           </thead>
@@ -2154,7 +2478,7 @@ function ManualReturnOrderForm({ warehouses, stores, onBack, onSaved }) {
             {lines.length === 0 ? (
               <tr>
                 <td colSpan={5} className="h-28 text-center text-slate-400">
-                  No items selected
+                  {tr("No items selected")}
                 </td>
               </tr>
             ) : (
@@ -2171,7 +2495,7 @@ function ManualReturnOrderForm({ warehouses, stores, onBack, onSaved }) {
                   <td className="px-5 py-3">
                     <div className="font-mono text-slate-700">{line.sku || "-"}</div>
                     {!line.merchantSkuId ? (
-                      <div className="mt-1 text-xs font-semibold text-orange-600">Mapping required</div>
+                      <div className="mt-1 text-xs font-semibold text-orange-600">{tr("Mapping required")}</div>
                     ) : null}
                   </td>
                   <td className="px-5 py-3">
@@ -2201,7 +2525,7 @@ function ManualReturnOrderForm({ warehouses, stores, onBack, onSaved }) {
 
       <div className="flex justify-end gap-3">
         <button type="button" onClick={onBack} className={SECONDARY_BUTTON_CLASS}>
-          Cancel
+          {tr("Cancel")}
         </button>
         <button type="button" onClick={requestSaveManualReturn} disabled={saving} className={PRIMARY_BUTTON_CLASS}>
           {tr("Save")}
@@ -2354,24 +2678,24 @@ function ReturnSkuPickerModal({ open, warehouseId, existingIds, onClose, onConfi
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search merchant SKU from selected warehouse"
+              placeholder={tr("Search merchant SKU from selected warehouse")}
               className={`${INPUT_CLASS} pl-9`}
             />
           </div>
           <button type="button" onClick={loadSkus} className={PRIMARY_BUTTON_CLASS}>
-            Search
+            {tr("Search")}
           </button>
         </div>
       </div>
       <div className="grid min-h-[300px] grid-cols-1 divide-y divide-surface-border md:grid-cols-2 md:divide-x md:divide-y-0">
         <div className="min-h-0">
-          <h3 className="border-b border-surface-border px-5 py-3 text-sm font-bold text-slate-800">Select Merchant SKU</h3>
+          <h3 className="border-b border-surface-border px-5 py-3 text-sm font-bold text-slate-800">{tr("Select Merchant SKU")}</h3>
           <div className="max-h-[360px] overflow-y-auto">
             <table className="w-full text-xs">
               <thead className="sticky top-0 z-10 bg-white">
                 <tr className="border-b border-surface-border text-left text-slate-800">
                   {["Select", "Image", "Product Name", "SKU", "Warehouse Stock"].map((header) => (
-                    <th key={header} className="px-4 py-2 font-bold">{header}</th>
+                    <th key={header} className="px-4 py-2 font-bold">{tr(header)}</th>
                   ))}
                 </tr>
               </thead>
@@ -2385,7 +2709,7 @@ function ReturnSkuPickerModal({ open, warehouseId, existingIds, onClose, onConfi
                 ) : skus.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="h-24 text-center text-slate-400">
-                      No SKUs found
+                      {tr("No SKUs found")}
                     </td>
                   </tr>
                 ) : (
@@ -2425,9 +2749,9 @@ function ReturnSkuPickerModal({ open, warehouseId, existingIds, onClose, onConfi
         </div>
         <div className="min-h-0">
           <div className="flex items-center justify-between border-b border-surface-border px-5 py-3">
-            <h3 className="text-sm font-bold text-slate-800">Preview selection</h3>
+            <h3 className="text-sm font-bold text-slate-800">{tr("Preview selection")}</h3>
             <button type="button" onClick={() => { setSelectedIds([]); setQtyById({}); }} className="text-xs font-semibold text-red-500">
-              Clear all
+              {tr("Clear all")}
             </button>
           </div>
           <div className="max-h-[360px] overflow-y-auto">
@@ -2435,7 +2759,7 @@ function ReturnSkuPickerModal({ open, warehouseId, existingIds, onClose, onConfi
               <thead>
                 <tr className="border-b border-surface-border text-left text-slate-800">
                   {["Image", "Product Name", "SKU", "Quantity", "Action"].map((header) => (
-                    <th key={header} className="px-4 py-2 font-bold">{header}</th>
+                    <th key={header} className="px-4 py-2 font-bold">{tr(header)}</th>
                   ))}
                 </tr>
               </thead>
@@ -2443,7 +2767,7 @@ function ReturnSkuPickerModal({ open, warehouseId, existingIds, onClose, onConfi
                 {previewItems.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="h-24 text-center text-slate-400">
-                      No items selected
+                      {tr("No items selected")}
                     </td>
                   </tr>
                 ) : (
@@ -2694,12 +3018,14 @@ function ReturnOrderDetailsSkeleton() {
   );
 }
 
-function ModalShell({ children, onClose, width = "max-w-lg" }) {
+function ModalShell({ children, onClose, width = "max-w-lg", closeOnBackdrop = true }) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: "rgba(15,23,42,0.35)", backdropFilter: "blur(3px)" }}
-      onClick={(event) => event.target === event.currentTarget && onClose?.()}
+      onClick={(event) => {
+        if (closeOnBackdrop && event.target === event.currentTarget) onClose?.();
+      }}
     >
       <div className={`relative max-h-[92vh] w-full overflow-auto rounded-2xl bg-white shadow-xl ${width}`}>
         {children}
@@ -2713,7 +3039,7 @@ function FormField({ label, required = false, className = "", children }) {
     <label className={`block ${className}`}>
       <span className="mb-1.5 block text-xs font-semibold text-slate-700">
         {required ? <span className="text-red-500">*</span> : null}
-        {label}
+        {tr(label)}
       </span>
       {children}
     </label>

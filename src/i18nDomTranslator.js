@@ -5597,6 +5597,7 @@ const inventoryUiDictionaryAdditions = {
     "Permissions": "\u6743\u9650",
     "Password(LogIn & Sub Account Keep Same)": "\u5bc6\u7801\uff08\u767b\u5f55\u4e0e\u5b50\u8d26\u53f7\u4fdd\u6301\u4e00\u81f4\uff09",
     "Email(LogIn & Sub Account Use Same)": "\u90ae\u7bb1\uff08\u767b\u5f55\u4e0e\u5b50\u8d26\u53f7\u4f7f\u7528\u76f8\u540c\uff09",
+    "To register as a sub-account, enter the email address and password that you previously used to create your account in this system or in the Grozziie app. Please make sure the credentials are correct before continuing.": "\u8981\u6ce8\u518c\u4e3a\u5b50\u8d26\u53f7\uff0c\u8bf7\u8f93\u5165\u60a8\u4e4b\u524d\u5728\u672c\u7cfb\u7edf\u6216 Grozziie App \u521b\u5efa\u8d26\u53f7\u65f6\u4f7f\u7528\u7684\u90ae\u7bb1\u548c\u5bc6\u7801\u3002\u7ee7\u7eed\u524d\u8bf7\u786e\u4fdd\u51ed\u636e\u6b63\u786e\u3002",
     "Input seller SKU here": "\u5728\u6b64\u8f93\u5165\u5356\u5bb6 SKU",
     "optional \u2014 blank = all": "\u53ef\u9009 \u2014 \u7559\u7a7a = \u5168\u90e8",
     "optional \u2014 blank = all stores": "\u53ef\u9009 \u2014 \u7559\u7a7a = \u5168\u90e8\u5e97\u94fa",
@@ -5621,6 +5622,7 @@ const inventoryUiDictionaryAdditions = {
     "Permissions": "Mga Pahintulot",
     "Password(LogIn & Sub Account Keep Same)": "Password(LogIn at Sub Account pareho)",
     "Email(LogIn & Sub Account Use Same)": "Email(LogIn at Sub Account pareho)",
+    "To register as a sub-account, enter the email address and password that you previously used to create your account in this system or in the Grozziie app. Please make sure the credentials are correct before continuing.": "Upang mag-register bilang sub-account, ilagay ang email address at password na ginamit mo dati sa paggawa ng account sa system na ito o sa Grozziie app. Siguraduhing tama ang credentials bago magpatuloy.",
     "Input seller SKU here": "Ilagay ang seller SKU dito",
     "optional \u2014 blank = all": "opsyonal \u2014 blank = lahat",
     "optional \u2014 blank = all stores": "opsyonal \u2014 blank = lahat ng store",
@@ -5645,6 +5647,7 @@ const inventoryUiDictionaryAdditions = {
     "Permissions": "Izin",
     "Password(LogIn & Sub Account Keep Same)": "Kata sandi(Login & Sub Akun sama)",
     "Email(LogIn & Sub Account Use Same)": "Email(Login & Sub Akun sama)",
+    "To register as a sub-account, enter the email address and password that you previously used to create your account in this system or in the Grozziie app. Please make sure the credentials are correct before continuing.": "Untuk mendaftar sebagai sub akun, masukkan alamat email dan kata sandi yang sebelumnya Anda gunakan untuk membuat akun di sistem ini atau di aplikasi Grozziie. Pastikan kredensial sudah benar sebelum melanjutkan.",
     "Input seller SKU here": "Masukkan SKU penjual di sini",
     "optional \u2014 blank = all": "opsional \u2014 kosong = semua",
     "optional \u2014 blank = all stores": "opsional \u2014 kosong = semua toko",
@@ -5669,6 +5672,7 @@ const inventoryUiDictionaryAdditions = {
     "Permissions": "\u0e2a\u0e34\u0e17\u0e18\u0e34\u0e4c",
     "Password(LogIn & Sub Account Keep Same)": "\u0e23\u0e2b\u0e31\u0e2a\u0e1c\u0e48\u0e32\u0e19(\u0e40\u0e02\u0e49\u0e32\u0e23\u0e30\u0e1a\u0e1a\u0e41\u0e25\u0e30\u0e1a\u0e31\u0e0d\u0e0a\u0e35\u0e22\u0e48\u0e2d\u0e22\u0e40\u0e2b\u0e21\u0e37\u0e2d\u0e19\u0e01\u0e31\u0e19)",
     "Email(LogIn & Sub Account Use Same)": "\u0e2d\u0e35\u0e40\u0e21\u0e25(\u0e40\u0e02\u0e49\u0e32\u0e23\u0e30\u0e1a\u0e1a\u0e41\u0e25\u0e30\u0e1a\u0e31\u0e0d\u0e0a\u0e35\u0e22\u0e48\u0e2d\u0e22\u0e43\u0e0a\u0e49\u0e40\u0e2b\u0e21\u0e37\u0e2d\u0e19\u0e01\u0e31\u0e19)",
+    "To register as a sub-account, enter the email address and password that you previously used to create your account in this system or in the Grozziie app. Please make sure the credentials are correct before continuing.": "\u0e40\u0e1e\u0e37\u0e48\u0e2d\u0e25\u0e07\u0e17\u0e30\u0e40\u0e1a\u0e35\u0e22\u0e19\u0e40\u0e1b\u0e47\u0e19\u0e1a\u0e31\u0e0d\u0e0a\u0e35\u0e22\u0e48\u0e2d\u0e22 \u0e43\u0e2b\u0e49\u0e43\u0e2a\u0e48\u0e2d\u0e35\u0e40\u0e21\u0e25\u0e41\u0e25\u0e30\u0e23\u0e2b\u0e31\u0e2a\u0e1c\u0e48\u0e32\u0e19\u0e17\u0e35\u0e48\u0e40\u0e04\u0e22\u0e43\u0e0a\u0e49\u0e2a\u0e23\u0e49\u0e32\u0e07\u0e1a\u0e31\u0e0d\u0e0a\u0e35\u0e43\u0e19\u0e23\u0e30\u0e1a\u0e1a\u0e19\u0e35\u0e49\u0e2b\u0e23\u0e37\u0e2d\u0e43\u0e19\u0e41\u0e2d\u0e1b Grozziie \u0e42\u0e1b\u0e23\u0e14\u0e15\u0e23\u0e27\u0e08\u0e2a\u0e2d\u0e1a\u0e43\u0e2b\u0e49\u0e16\u0e39\u0e01\u0e15\u0e49\u0e2d\u0e07\u0e01\u0e48\u0e2d\u0e19\u0e14\u0e33\u0e40\u0e19\u0e34\u0e19\u0e01\u0e32\u0e23\u0e15\u0e48\u0e2d",
     "Input seller SKU here": "\u0e1b\u0e49\u0e2d\u0e19 seller SKU \u0e17\u0e35\u0e48\u0e19\u0e35\u0e48",
     "optional \u2014 blank = all": "\u0e44\u0e21\u0e48\u0e1a\u0e31\u0e07\u0e04\u0e31\u0e1a \u2014 \u0e27\u0e48\u0e32\u0e07 = \u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14",
     "optional \u2014 blank = all stores": "\u0e44\u0e21\u0e48\u0e1a\u0e31\u0e07\u0e04\u0e31\u0e1a \u2014 \u0e27\u0e48\u0e32\u0e07 = \u0e17\u0e38\u0e01\u0e23\u0e49\u0e32\u0e19",
@@ -5693,6 +5697,7 @@ const inventoryUiDictionaryAdditions = {
     "Permissions": "Quyen",
     "Password(LogIn & Sub Account Keep Same)": "Mat khau(Dang nhap va Tai khoan phu giong nhau)",
     "Email(LogIn & Sub Account Use Same)": "Email(Dang nhap va Tai khoan phu dung chung)",
+    "To register as a sub-account, enter the email address and password that you previously used to create your account in this system or in the Grozziie app. Please make sure the credentials are correct before continuing.": "De dang ky lam tai khoan phu, hay nhap dia chi email va mat khau ban da dung truoc day de tao tai khoan trong he thong nay hoac trong ung dung Grozziie. Vui long dam bao thong tin dang nhap chinh xac truoc khi tiep tuc.",
     "Input seller SKU here": "Nhap seller SKU tai day",
     "optional \u2014 blank = all": "tuy chon \u2014 de trong = tat ca",
     "optional \u2014 blank = all stores": "tuy chon \u2014 de trong = tat ca cua hang",
@@ -5717,6 +5722,7 @@ const inventoryUiDictionaryAdditions = {
     "Permissions": "Kebenaran",
     "Password(LogIn & Sub Account Keep Same)": "Kata laluan(LogIn & Sub Akaun sama)",
     "Email(LogIn & Sub Account Use Same)": "E-mel(LogIn & Sub Akaun sama)",
+    "To register as a sub-account, enter the email address and password that you previously used to create your account in this system or in the Grozziie app. Please make sure the credentials are correct before continuing.": "Untuk mendaftar sebagai sub akaun, masukkan alamat e-mel dan kata laluan yang pernah anda gunakan untuk mencipta akaun dalam sistem ini atau dalam aplikasi Grozziie. Pastikan kelayakan adalah betul sebelum meneruskan.",
     "Input seller SKU here": "Masukkan SKU penjual di sini",
     "optional \u2014 blank = all": "pilihan \u2014 kosong = semua",
     "optional \u2014 blank = all stores": "pilihan \u2014 kosong = semua kedai",
@@ -8899,6 +8905,41 @@ const returnOrderLanguageFixes = {
 };
 
 Object.entries(returnOrderLanguageFixes).forEach(([language, additions]) => {
+  dictionaries[language] = { ...(dictionaries[language] || {}), ...additions };
+});
+
+const returnManualOrderFormLanguageFixes = {
+  zh: {
+    "Return ID here": "\u5728\u6b64\u8f93\u5165\u9000\u8d27 ID",
+    "Buyer Username": "\u4e70\u5bb6\u7528\u6237\u540d",
+    "Buyer username here": "\u5728\u6b64\u8f93\u5165\u4e70\u5bb6\u7528\u6237\u540d",
+    "Buyer Email": "\u4e70\u5bb6\u90ae\u7bb1",
+    "Buyer email here": "\u5728\u6b64\u8f93\u5165\u4e70\u5bb6\u90ae\u7bb1",
+    "Tracking Number": "\u7269\u6d41\u5355\u53f7",
+    "Additional Tracking Number": "\u9644\u52a0\u7269\u6d41\u5355\u53f7",
+    "Additional tracking number here": "\u5728\u6b64\u8f93\u5165\u9644\u52a0\u7269\u6d41\u5355\u53f7",
+    "Refund Currency": "\u9000\u6b3e\u5e01\u79cd",
+    "Currency": "\u5e01\u79cd",
+    "Refund amount": "\u9000\u6b3e\u91d1\u989d",
+    "Return reason code": "\u9000\u8d27\u539f\u56e0\u4ee3\u7801",
+    "Return Reason Text": "\u9000\u8d27\u539f\u56e0\u6587\u672c",
+    "Return reason text": "\u9000\u8d27\u539f\u56e0\u6587\u672c",
+    "Mapping required": "\u9700\u8981\u6620\u5c04",
+    "No SKUs found": "\u672a\u627e\u5230 SKU",
+    "Select": "\u9009\u62e9",
+    "Action": "\u64cd\u4f5c",
+    "Search": "\u641c\u7d22",
+    "Cancel": "\u53d6\u6d88",
+    "Save": "\u4fdd\u5b58",
+    "Return ID is required": "\u9000\u8d27 ID \u4e3a\u5fc5\u586b\u9879",
+    "Refund currency is required": "\u9000\u6b3e\u5e01\u79cd\u4e3a\u5fc5\u586b\u9879",
+    "Return reason is required": "\u9000\u8d27\u539f\u56e0\u4e3a\u5fc5\u586b\u9879",
+    "Return reason text is required": "\u9000\u8d27\u539f\u56e0\u6587\u672c\u4e3a\u5fc5\u586b\u9879",
+    "Return notes are required": "\u9000\u8d27\u5907\u6ce8\u4e3a\u5fc5\u586b\u9879",
+  },
+};
+
+Object.entries(returnManualOrderFormLanguageFixes).forEach(([language, additions]) => {
   dictionaries[language] = { ...(dictionaries[language] || {}), ...additions };
 });
 

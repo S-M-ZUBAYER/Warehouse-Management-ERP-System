@@ -1023,6 +1023,7 @@ export const BY_PRODUCT_KEYS = {
 
 const PAGE_SIZE = 10;
 const STATUS_FETCH_LIMIT = 200;
+const GENERATE_SKU_CHUNK_SIZE = 15;
 
 const fetchProducts = (params) => {
     const qs = new URLSearchParams();
@@ -1117,12 +1118,83 @@ const fetchCounts = (params) => {
 // POST /api/v1/platform-products/sync
 // Now accepts { platform, platformStoreId } to sync specific platform/store
 const syncProducts = (body) =>
-    api.post('/platform-products/sync', {}, { params: body }).then((r) => r.data);
+    api.post('/platform-products/sync', {}, { params: body, timeout: 60000 }).then((r) => r.data);
 
 // POST /api/v1/platform-products/generate-sku
 // Auto-creates merchant SKU from platform product (uses seller_sku as sku_name)
-const generateSku = (body) =>
-    api.post('/platform-products/generate-sku', body).then((r) => r.data);
+const normalizeGenerateResult = (response) => response?.data ?? response ?? {};
+
+const mergeGenerateResult = (target, result) => {
+    target.created += Number(result.created ?? 0);
+    target.reused += Number(result.reused ?? 0);
+    target.mapped += Number(result.mapped ?? result.skus?.length ?? 0);
+    target.skipped += Number(result.skipped ?? result.skippedItems?.length ?? 0);
+    target.failed += Number(result.failed ?? result.failedItems?.length ?? 0);
+    target.skus.push(...(Array.isArray(result.skus) ? result.skus : []));
+    target.skippedItems.push(...(Array.isArray(result.skippedItems) ? result.skippedItems : []));
+    target.failedItems.push(...(Array.isArray(result.failedItems) ? result.failedItems : []));
+};
+
+const buildGenerateMessage = (result) => {
+    const parts = [];
+    if (result.created) parts.push(`${result.created} created`);
+    if (result.reused) parts.push(`${result.reused} reused`);
+    if (result.mapped) parts.push(`${result.mapped} mapped`);
+    if (result.skipped) parts.push(`${result.skipped} skipped`);
+    if (result.failed) parts.push(`${result.failed} failed`);
+    return parts.length
+        ? `Merchant SKU generation completed: ${parts.join(', ')}`
+        : 'No Merchant SKU(s) generated';
+};
+
+const generateSku = async (body) => {
+    const selectedIds = Array.isArray(body?.platformProductIds) ? body.platformProductIds : [];
+
+    if (selectedIds.length <= GENERATE_SKU_CHUNK_SIZE) {
+        return api.post('/platform-products/generate-sku', body, { timeout: 60000 }).then((r) => r.data);
+    }
+
+    const aggregate = {
+        created: 0,
+        reused: 0,
+        mapped: 0,
+        skipped: 0,
+        failed: 0,
+        skus: [],
+        skippedItems: [],
+        failedItems: [],
+    };
+
+    for (let index = 0; index < selectedIds.length; index += GENERATE_SKU_CHUNK_SIZE) {
+        const chunkIds = selectedIds.slice(index, index + GENERATE_SKU_CHUNK_SIZE);
+
+        try {
+            const response = await api.post(
+                '/platform-products/generate-sku',
+                { ...body, platformProductIds: chunkIds },
+                { timeout: 60000 }
+            );
+            mergeGenerateResult(aggregate, normalizeGenerateResult(response.data));
+        } catch (err) {
+            const status = err?.response?.status;
+            if (status === 401 || status === 403) throw err;
+
+            const reason = err?.response?.data?.message ?? err?.message ?? 'Generation failed for this chunk';
+            aggregate.failed += chunkIds.length;
+            aggregate.failedItems.push(...chunkIds.map((id) => ({
+                platformProductId: id,
+                reason,
+            })));
+        }
+    }
+
+    aggregate.message = buildGenerateMessage(aggregate);
+    return {
+        success: aggregate.failed === 0,
+        message: aggregate.message,
+        data: aggregate,
+    };
+};
 
 // POST /api/v1/platform-products/auto-mapping
 // Requires platform + platformStoreId now (mandatory in updated hook)
@@ -1160,6 +1232,8 @@ export function useByProductMapping() {
     const [showGenModal,     setShowGenModal]     = useState(false);
     const [genWarehouseId,   setGenWarehouseId]   = useState('');
     const [genWarehouseName, setGenWarehouseName] = useState('');
+    const [generateResult,   setGenerateResult]   = useState(null);
+    const [showGenerateResultModal, setShowGenerateResultModal] = useState(false);
 
     // ── Auto Mapping modal — now requires platform + store ────────────────────
     const [showAutoMapModal,    setShowAutoMapModal]    = useState(false);
@@ -1280,9 +1354,24 @@ export function useByProductMapping() {
     const generateMutation = useMutation({
         mutationFn: generateSku,
         onSuccess: (data) => {
-            toast.success(data.message ?? 'Merchant SKU(s) generated');
+            const result = data?.data ?? data ?? {};
+            const mappedCount = Number(result.mapped ?? result.skus?.length ?? 0);
+            const skippedCount = Number(result.skipped ?? result.skippedItems?.length ?? 0);
+            const failedCount = Number(result.failed ?? result.failedItems?.length ?? 0);
+            const message = result.message ?? data?.message ?? 'Merchant SKU generation completed';
+
+            if (failedCount > 0 && mappedCount === 0) {
+                toast.error(message);
+            } else if (failedCount > 0 || skippedCount > 0) {
+                toast.warning(message);
+            } else {
+                toast.success(message);
+            }
+
+            setGenerateResult(result);
+            setShowGenerateResultModal(true);
             setShowGenModal(false);
-            setSelectedIds([]);
+            if (mappedCount > 0) setSelectedIds([]);
             queryClient.invalidateQueries({ queryKey: BY_PRODUCT_KEYS.all() });
         },
         onError: (err) => toast.error(err?.response?.data?.message ?? 'Generation failed'),
@@ -1486,6 +1575,8 @@ export function useByProductMapping() {
         showGenModal, setShowGenModal,
         genWarehouseId, setGenWarehouseId,
         genWarehouseName, setGenWarehouseName,
+        generateResult, setGenerateResult,
+        showGenerateResultModal, setShowGenerateResultModal,
         handleGenerateClick,
         confirmGenerateSku,
         generating: generateMutation.isPending,

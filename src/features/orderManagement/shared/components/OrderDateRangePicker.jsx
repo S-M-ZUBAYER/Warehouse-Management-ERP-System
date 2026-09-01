@@ -14,7 +14,10 @@ const presetRangeCache = new Map();
 
 const getLookbackStartSeconds = (days) => {
   if (!days) return null;
-  return endOfTodaySeconds() - Math.max(1, Number(days) || 1) * SECONDS_IN_DAY;
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  start.setDate(start.getDate() - Math.max(1, Number(days) || 1));
+  return Math.floor(start.getTime() / 1000);
 };
 
 export const getPresetRange = (preset) => {
@@ -61,7 +64,15 @@ export const getDateRangeLabel = (datePreset, dateRange) => {
   return "Last 7 Days";
 };
 
-export default function OrderDateRangePicker({ datePreset, setDatePreset, dateRange, setDateRange, allowAllDates = false, maxLookbackDays = null }) {
+export default function OrderDateRangePicker({
+  datePreset,
+  setDatePreset,
+  dateRange,
+  setDateRange,
+  allowAllDates = false,
+  maxLookbackDays = null,
+  onApply,
+}) {
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [customStart, setCustomStart] = useState(() => formatDateInput(dateRange.start));
   const [customEnd, setCustomEnd] = useState(() => formatDateInput(dateRange.end));
@@ -78,17 +89,23 @@ export default function OrderDateRangePicker({ datePreset, setDatePreset, dateRa
     const nextRange = getPresetRange(preset);
     setDatePreset(preset);
     setDateRange(nextRange);
+    onApply?.(nextRange);
     setDatePickerOpen(false);
   };
 
   const applyCustomRange = () => {
     const start = dateInputToSeconds(customStart);
-    const end = dateInputToSeconds(customEnd, true);
+    const nowSeconds = endOfTodaySeconds();
+    const end = customEnd === formatDateInput(nowSeconds)
+      ? nowSeconds
+      : dateInputToSeconds(customEnd, true);
     if (!start || !end || start > end) return;
     if (minStartSeconds && start < minStartSeconds) return;
-    if (end > endOfTodaySeconds()) return;
+    if (end > nowSeconds) return;
+    const nextRange = { start, end };
     setDatePreset("custom");
-    setDateRange({ start, end });
+    setDateRange(nextRange);
+    onApply?.(nextRange);
     setDatePickerOpen(false);
   };
 

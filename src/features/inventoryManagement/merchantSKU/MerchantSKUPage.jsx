@@ -21,6 +21,8 @@ import RecordDetailModal from "../../../components/shared/RecordDetailModal";
 import { exportRowsToCsv, exportRowsToXlsx, printRows } from "../../../utils/tableOutput";
 import ExportMenu from "../../../components/shared/ExportMenu";
 import ListPageSizePagination from "../../../components/shared/ListPageSizePagination";
+import useCompanyPlanAccessGuard from "../../../hooks/useCompanyPlanAccessGuard";
+import CompanyPlanAccessModal from "../../../components/shared/CompanyPlanAccessModal";
 
 const MERCHANT_SKU_SEARCH_FIELDS = [
   { label: "SKU Name", value: "sku_name" },
@@ -60,25 +62,6 @@ const merchantSkuTemplateRows = [
   },
 ];
 
-const parseProductDetails = (row) => {
-  const value = row?.product_details ?? row?.productDetails;
-  if (!value) return {};
-  if (typeof value === "object") return value;
-  if (typeof value !== "string") return {};
-
-  const trimmed = value.trim();
-  if (!trimmed || !["{", "["].includes(trimmed[0])) return {};
-
-  try {
-    const parsed = JSON.parse(trimmed);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? parsed
-      : {};
-  } catch {
-    return {};
-  }
-};
-
 const firstValue = (...values) =>
   values.find((value) => value !== null && value !== undefined && value !== "") ?? "-";
 
@@ -97,16 +80,6 @@ const formatDateTime = (value) => {
     hour12: false,
   }).format(date);
 };
-
-const detailField = (key, fallbackKey) => ({
-  label: key
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase()),
-  render: (row) => {
-    const details = parseProductDetails(row);
-    return firstValue(details[key], fallbackKey ? row?.[fallbackKey] : undefined, row?.[key]);
-  },
-});
 
 const tableHeadings = [
   { label: "Image" },
@@ -128,6 +101,7 @@ export default function MerchantSKUPage() {
   const [showBulkDrop, setShowBulkDrop] = useState(false);
   const [detailSku, setDetailSku] = useState(null);
   const bulkRef = useRef(null);
+  const { requireCompanyPlan, companyPlanModalProps } = useCompanyPlanAccessGuard();
 
   const {
     setSearch,
@@ -349,8 +323,8 @@ export default function MerchantSKUPage() {
             </div>
 
             <AddMerchantSkuMenu
-              onAddSingle={() => setShowAddModal(true)}
-              onImport={() => setShowImportModal(true)}
+              onAddSingle={() => requireCompanyPlan(() => setShowAddModal(true))}
+              onImport={() => requireCompanyPlan(() => setShowImportModal(true))}
               onDownloadTemplate={handleDownloadTemplate}
             />
           </div>
@@ -660,7 +634,7 @@ export default function MerchantSKUPage() {
           { label: 'Merchant SKU ID', render: (row) => firstValue(row.id) },
           { label: 'SKU', render: (row) => row.sku_name || row.skuName || '—' },
           { label: 'Product Name', render: (row) => row.sku_title || row.skuTitle || '—' },
-          { label: 'Details', render: (row) => firstValue(row.product_details, row.productDetails), fullWidth: true },
+          { label: 'Details', render: (row) => firstValue(row.product_details, row.productDetails), fullWidth: true, display: "keyValue" },
           { label: 'GTIN', key: 'gtin' },
           { label: 'Weight', key: 'weight' },
           { label: 'Price', key: 'price' },
@@ -672,15 +646,8 @@ export default function MerchantSKUPage() {
           { label: 'Warehouse', render: (row) => firstValue(row.warehouse?.name, row.warehouse_name, row.warehouseName) },
           { label: 'Warehouse ID', render: (row) => firstValue(row.warehouse_id, row.warehouseId) },
           { label: 'Country', render: (row) => firstValue(row.country) },
-          detailField('source'),
-          detailField('platform'),
-          detailField('platform_store_id'),
-          detailField('platform_product_id'),
-          detailField('platform_sku_id'),
-          detailField('seller_sku'),
-          detailField('variant_name'),
-          { label: 'Created', render: (row) => row.created_at || row.createdAt || '—' },
-          { label: 'Updated', render: (row) => row.updated_at || row.updatedAt || '—' },
+          { label: 'Created', render: (row) => formatDateTime(firstValue(row.created_at, row.createdAt)) },
+          { label: 'Updated', render: (row) => formatDateTime(firstValue(row.updated_at, row.updatedAt)) },
         ]}
       />
 
@@ -885,6 +852,8 @@ export default function MerchantSKUPage() {
           warehouseLoading={edit.warehouseLoading}
         />
       )}
+
+      <CompanyPlanAccessModal {...companyPlanModalProps} />
     </div>
   );
 }

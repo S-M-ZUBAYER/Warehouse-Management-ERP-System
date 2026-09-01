@@ -643,6 +643,9 @@ export default function AddAccountPage({
                 {form.photoPreview ? "Change Photo" : "Browse File"}
               </button>
             </label>
+            <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium leading-5 text-amber-700">
+              To register as a sub-account, enter the email address and password that you previously used to create your account in this system or in the Grozziie app. Please make sure the credentials are correct before continuing.
+            </p>
           </div>
 
           {/* API-level error banner */}
@@ -683,13 +686,18 @@ export default function AddAccountPage({
             />
 
             <FormInput
-              label="Account ID"
-              name="accountId"
-              value={form.accountId}
+              label="Email(LogIn & Sub Account Use Same)"
+              name="email"
+              type="email"
+              value={form.email}
               onChange={onChange}
-              placeholder="ID here"
+              placeholder={
+                isEdit
+                  ? "Leave blank to keep current Email"
+                  : "Write email here"
+              }
               required
-              error={errors.accountId}
+              error={errors.email}
             />
 
             {/* Password: required on create, optional on edit */}
@@ -754,18 +762,13 @@ export default function AddAccountPage({
             />
 
             <FormInput
-              label="Email(LogIn & Sub Account Use Same)"
-              name="email"
-              type="email"
-              value={form.email}
+              label="Account ID"
+              name="accountId"
+              value={form.accountId}
               onChange={onChange}
-              placeholder={
-                isEdit
-                  ? "Leave blank to keep current Email"
-                  : "Write email here"
-              }
+              placeholder="ID here"
               required
-              error={errors.email}
+              error={errors.accountId}
             />
 
             <FormInput

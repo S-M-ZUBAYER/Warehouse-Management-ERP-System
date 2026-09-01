@@ -2523,6 +2523,7 @@ import {
     Unlink, Link2, X, RefreshCw, CheckCircle2, XCircle, AlertTriangle,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 
 import Topbar                        from '../../../../components/layout/Topbar';
 import { useByProductMapping }       from '../hooks/useByProductMapping';
@@ -2533,6 +2534,8 @@ import ConfirmModal                  from '../components/ConfirmModal';
 import { TableSkeleton, EmptyState } from '../components/TableHelpers';
 import ListPageSizePagination        from '../../../../components/shared/ListPageSizePagination';
 import ExportMenu                    from '../../../../components/shared/ExportMenu';
+import useCompanyPlanAccessGuard     from '../../../../hooks/useCompanyPlanAccessGuard';
+import CompanyPlanAccessModal        from '../../../../components/shared/CompanyPlanAccessModal';
 import api                           from '../../../../lib/api';
 import { toast } from 'sonner';
 import { exportRowsToCsv, exportRowsToXlsx, printRows } from '../../../../utils/tableOutput';
@@ -2551,8 +2554,10 @@ const SKU_TYPES = [
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ByProductSKUMappingPage() {
+    const { t } = useTranslation();
     const { platforms, getStoresForPlatform, warehouses } = useSkuMappingDropdowns();
     const addFromProduct = useAddMappingFromProduct();
+    const { requireCompanyPlan, companyPlanModalProps } = useCompanyPlanAccessGuard();
 
     // ── Sync modal state ──────────────────────────────────────────────────────
     const [showSyncModal, setShowSyncModal]   = useState(false);
@@ -2580,6 +2585,8 @@ export default function ByProductSKUMappingPage() {
         showGenModal, setShowGenModal,
         genWarehouseId, setGenWarehouseId,
         setGenWarehouseName,
+        generateResult, setGenerateResult,
+        showGenerateResultModal, setShowGenerateResultModal,
         confirmGenerateSku,
         generating,
         showAutoMapModal, setShowAutoMapModal,
@@ -2608,6 +2615,16 @@ export default function ByProductSKUMappingPage() {
             : counts.unmapped
         })`,
     }));
+    const generateSummaryParts = [
+        generateResult?.created ? t('skuMapping.generateSummaryCreated', { count: generateResult.created }) : null,
+        generateResult?.reused ? t('skuMapping.generateSummaryReused', { count: generateResult.reused }) : null,
+        generateResult?.mapped ? t('skuMapping.generateSummaryMapped', { count: generateResult.mapped }) : null,
+        generateResult?.skipped ? t('skuMapping.generateSummarySkipped', { count: generateResult.skipped }) : null,
+        generateResult?.failed ? t('skuMapping.generateSummaryFailed', { count: generateResult.failed }) : null,
+    ].filter(Boolean);
+    const generateResultMessage = generateSummaryParts.length
+        ? t('skuMapping.generateCompletedWithParts', { parts: generateSummaryParts.join(', ') })
+        : t('skuMapping.noMerchantSkusGenerated');
     const selectedRowSource = selectedProducts.length > 0 && selectedProducts
         .flatMap((product) => (product.children ?? product.skus ?? product.items ?? []).map((child) => child.id))
         .filter((id) => selectedIds.includes(id)).length === selectedIds.length
@@ -2751,7 +2768,7 @@ export default function ByProductSKUMappingPage() {
                     <div className="flex items-center gap-2 mb-3 flex-wrap">
                         {/* Auto Mapping */}
                         <button
-                            onClick={handleAutoMapClick}
+                            onClick={() => requireCompanyPlan(handleAutoMapClick)}
                             className="px-4 py-1.5 text-sm font-semibold border border-surface-border rounded-lg text-slate-700 bg-white hover:bg-surface-card transition-colors"
                         >
                             Auto Mapping
@@ -2759,7 +2776,7 @@ export default function ByProductSKUMappingPage() {
 
                         {/* Generate Merchant SKU — single button, no dropdown */}
                         <button
-                            onClick={handleGenerateBtnClick}
+                            onClick={() => requireCompanyPlan(handleGenerateBtnClick)}
                             className="px-4 py-1.5 text-sm font-semibold border border-surface-border rounded-lg text-slate-700 bg-white hover:bg-surface-card transition-colors"
                         >
                             Generate Merchant SKU
@@ -2767,7 +2784,7 @@ export default function ByProductSKUMappingPage() {
 
                         {/* Sync Product — opens platform/store modal */}
                         <button
-                            onClick={openSyncModal}
+                            onClick={() => requireCompanyPlan(openSyncModal)}
                             disabled={syncing}
                             className="flex items-center gap-2 px-4 py-1.5 text-sm font-semibold border border-surface-border rounded-lg text-slate-700 bg-white hover:bg-surface-card transition-colors disabled:opacity-60"
                         >
@@ -2941,7 +2958,7 @@ export default function ByProductSKUMappingPage() {
                                                             <td className="py-3 pr-5">
                                                                 <div className="flex items-center gap-1.5">
                                                                     <button
-                                                                        onClick={() => addFromProduct.openModal(child)}
+                                                                        onClick={() => requireCompanyPlan(() => addFromProduct.openModal(child))}
                                                                         title={isMapped ? 'Change mapped Merchant SKU' : 'Map with Merchant SKU'}
                                                                         className={`p-1.5 rounded-lg transition-colors ${isMapped ? 'text-primary hover:bg-blue-50' : 'text-slate-300 hover:text-primary hover:bg-blue-50'}`}
                                                                     >
@@ -3074,6 +3091,100 @@ export default function ByProductSKUMappingPage() {
                                 {generating ? 'Generating...' : 'Generate SKU'}
                             </button>
                         </div>
+                    </div>
+                </Modal>
+            )}
+
+            {showGenerateResultModal && generateResult && (
+                <Modal
+                    onClose={() => {
+                        setShowGenerateResultModal(false);
+                        setGenerateResult(null);
+                    }}
+                    maxWidth="560px"
+                >
+                    <div className="px-8 py-8">
+                        <div className="flex items-start justify-between gap-4 mb-5">
+                            <div>
+                                <h2 className="text-lg font-bold text-slate-800 font-display">{t('skuMapping.generateResults')}</h2>
+                                <p className="text-sm text-slate-500 mt-1">{generateResultMessage}</p>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    setShowGenerateResultModal(false);
+                                    setGenerateResult(null);
+                                }}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-surface-card"
+                                title={t('topbar.close', { defaultValue: 'Close' })}
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-5">
+                            {[
+                                { label: t('skuMapping.created'), value: generateResult.created ?? 0, tone: 'text-emerald-600' },
+                                { label: t('skuMapping.reused'),  value: generateResult.reused ?? 0,  tone: 'text-blue-600' },
+                                { label: t('skuMapping.mapped'),  value: generateResult.mapped ?? generateResult.skus?.length ?? 0, tone: 'text-primary' },
+                                { label: t('skuMapping.skipped'), value: generateResult.skipped ?? generateResult.skippedItems?.length ?? 0, tone: 'text-amber-600' },
+                                { label: t('skuMapping.failed'),  value: generateResult.failed ?? generateResult.failedItems?.length ?? 0, tone: 'text-red-500' },
+                            ].map((item) => (
+                                <div key={item.label} className="rounded-xl border border-surface-border bg-surface-card px-3 py-3">
+                                    <p className="text-xs font-semibold text-slate-500">{item.label}</p>
+                                    <p className={`text-xl font-bold ${item.tone}`}>{item.value}</p>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="rounded-xl border border-surface-border overflow-hidden">
+                            <div className="bg-surface-card px-4 py-2 border-b border-surface-border">
+                                <p className="text-xs font-bold text-slate-700">{t('skuMapping.skuDetails')}</p>
+                            </div>
+                            <div className="max-h-72 overflow-y-auto divide-y divide-surface-border">
+                                {generateResult.skus?.length > 0 && generateResult.skus.map((item) => (
+                                    <div key={`ok-${item.platformProductId}`} className="flex items-start gap-2 px-4 py-2.5">
+                                        <CheckCircle2 size={14} className="text-emerald-500 flex-shrink-0 mt-0.5" />
+                                        <div className="min-w-0">
+                                            <p className="text-xs font-semibold text-slate-700 truncate">{item.skuName}</p>
+                                            <p className="text-xs text-slate-400 truncate">{item.productName ?? item.sellerSku ?? `Product ID ${item.platformProductId}`}</p>
+                                        </div>
+                                        <span className="ml-auto text-xs text-emerald-600 font-semibold whitespace-nowrap">
+                                            {item.wasCreated ? t('skuMapping.created') : t('skuMapping.reused')}
+                                        </span>
+                                    </div>
+                                ))}
+                                {generateResult.skippedItems?.length > 0 && generateResult.skippedItems.map((item) => (
+                                    <div key={`skip-${item.platformProductId}`} className="flex items-start gap-2 px-4 py-2.5">
+                                        <AlertTriangle size={14} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                                        <div className="min-w-0">
+                                            <p className="text-xs font-semibold text-slate-700 truncate">{item.productName || `Product ID ${item.platformProductId}`}</p>
+                                            <p className="text-xs text-amber-600">{item.reason === 'Seller SKU is empty' ? t('skuMapping.sellerSkuEmpty') : item.reason}</p>
+                                        </div>
+                                        <span className="ml-auto text-xs text-amber-600 font-semibold whitespace-nowrap">{t('skuMapping.skipped')}</span>
+                                    </div>
+                                ))}
+                                {generateResult.failedItems?.length > 0 && generateResult.failedItems.map((item) => (
+                                    <div key={`fail-${item.platformProductId}`} className="flex items-start gap-2 px-4 py-2.5">
+                                        <XCircle size={14} className="text-red-400 flex-shrink-0 mt-0.5" />
+                                        <div className="min-w-0">
+                                            <p className="text-xs font-semibold text-slate-700 truncate">{item.sellerSku || item.productName || `Product ID ${item.platformProductId}`}</p>
+                                            <p className="text-xs text-red-500">{item.reason}</p>
+                                        </div>
+                                        <span className="ml-auto text-xs text-red-500 font-semibold whitespace-nowrap">{t('skuMapping.failed')}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={() => {
+                                setShowGenerateResultModal(false);
+                                setGenerateResult(null);
+                            }}
+                            className="w-full mt-5 py-2.5 rounded-xl text-sm font-semibold bg-primary hover:bg-primary-dark text-white"
+                        >
+                            {t('topbar.close', { defaultValue: 'Close' })}
+                        </button>
                     </div>
                 </Modal>
             )}
@@ -3239,6 +3350,8 @@ export default function ByProductSKUMappingPage() {
                     onConfirm={confirmUnlink}
                 />
             )}
+
+            <CompanyPlanAccessModal {...companyPlanModalProps} />
 
             <style>{`@keyframes popIn { from { opacity:0; transform:scale(0.96) translateY(8px); } to { opacity:1; transform:scale(1) translateY(0); } }`}</style>
         </div>
