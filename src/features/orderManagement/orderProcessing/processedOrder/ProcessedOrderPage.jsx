@@ -62,7 +62,16 @@ export default function ProcessedOrderPage() {
   const rowActions = isPushingTab
     ? [
         { label: rowActionLabel, onClick: (order) => list.runAction("push", [order]) },
-        { label: "Withdraw", onClick: (order) => setWithdrawOrder(order) },
+        {
+          label: "Withdraw",
+          onClick: (order) => {
+            if (list.hasExpiredActionStore?.([order])) {
+              list.showExpiredSubscriptionModal?.([order]);
+              return;
+            }
+            setWithdrawOrder(order);
+          },
+        },
       ]
     : undefined;
   const tabCountQueryKey = useMemo(
@@ -138,6 +147,10 @@ export default function ProcessedOrderPage() {
       toast.error("Please select at least one order to print waybill");
       return;
     }
+    if (list.hasExpiredActionStore?.(list.selectedRows)) {
+      list.showExpiredSubscriptionModal?.(list.selectedRows);
+      return;
+    }
 
     setWaybillOpen(true);
   };
@@ -155,6 +168,11 @@ export default function ProcessedOrderPage() {
   };
 
   const handlePackClick = (rows = list.selectedRows) => {
+    if (list.hasExpiredActionStore?.(rows)) {
+      list.showExpiredSubscriptionModal?.(rows);
+      return;
+    }
+
     if (!isWithdrawTab) {
       list.runAction(rowActionName, rows);
       return;

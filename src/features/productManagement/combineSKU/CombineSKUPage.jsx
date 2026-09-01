@@ -14,6 +14,8 @@ import { useCombineSKUList } from "../hooks/useCombineSKUList";
 import Topbar from "../../../components/layout/Topbar";
 import { exportRowsToCsv, exportRowsToXlsx, printRows } from "../../../utils/tableOutput";
 import ExportMenu from "../../../components/shared/ExportMenu";
+import useCompanyPlanAccessGuard from "../../../hooks/useCompanyPlanAccessGuard";
+import CompanyPlanAccessModal from "../../../components/shared/CompanyPlanAccessModal";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CombineSKUPage
@@ -22,6 +24,7 @@ import ExportMenu from "../../../components/shared/ExportMenu";
 export default function CombineSKUPage() {
   const navigate = useNavigate();
   const [detailBundle, setDetailBundle] = useState(null);
+  const { requireCompanyPlan, companyPlanModalProps } = useCompanyPlanAccessGuard();
 
   const {
     search,
@@ -147,9 +150,9 @@ export default function CombineSKUPage() {
             )}
           </div>
           <button
-            onClick={() =>
+            onClick={() => requireCompanyPlan(() =>
               navigate("/warehouse_management/products/combine_sku/add")
-            }
+            )}
             className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors"
           >
             <Plus size={14} /> Add Combine SKU
@@ -538,6 +541,7 @@ export default function CombineSKUPage() {
           onConfirm={confirmBulkDelete}
         />
       )}
+      <CompanyPlanAccessModal {...companyPlanModalProps} />
     </div>
   );
 }

@@ -56,7 +56,16 @@ export default function NewOrder() {
   const rowActions = isPackedSuccessfullyTab
     ? [
         { label: "Push", onClick: (order) => list.runAction("push", [order]) },
-        { label: "Withdraw", onClick: (order) => setWithdrawOrder(order) },
+        {
+          label: "Withdraw",
+          onClick: (order) => {
+            if (list.hasExpiredActionStore?.([order])) {
+              list.showExpiredSubscriptionModal?.([order]);
+              return;
+            }
+            setWithdrawOrder(order);
+          },
+        },
       ]
     : undefined;
   const tabCountQueryKey = useMemo(

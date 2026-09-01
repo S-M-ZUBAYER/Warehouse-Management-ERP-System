@@ -406,7 +406,7 @@ const PAGE_LIMIT_ROLES = 10;
 export const ROLES_QUERY_KEY = ["roles-all"];
 export const PAGES_QUERY_KEY = ["pages-hierarchy"];
 
-const EMPTY_FORM = Object.freeze({ role: "", description: "", permissions: { dashboard: true } });
+const EMPTY_FORM = Object.freeze({ role: "", description: "", permissions: { dashboard: true, contact: true } });
 
 
 // Full permission tree must match the real sidebar navItems. The backend /pages
@@ -415,6 +415,7 @@ const EMPTY_FORM = Object.freeze({ role: "", description: "", permissions: { das
 // modal uses this complete tree and the backend stores the same JSON keys.
 const SIDEBAR_PERMISSION_TREE = [
   { key: "dashboard", display: "Dashboard", level: 1, sub: [] },
+  { key: "contact", display: "Contact", level: 1, sub: [] },
   {
     key: "product_management", display: "Product Management", level: 1, sub: [
       { key: "product_list", display: "Product List", level: 2, sub: [] },
@@ -452,6 +453,7 @@ const SIDEBAR_PERMISSION_TREE = [
         { key: "canceled_order", display: "Canceled Order", level: 3, sub: [] },
       ]},
       { key: "manual_order", display: "Manual Order", level: 2, sub: [] },
+      { key: "platform_manual_order", display: "Platform Manual Order", level: 2, sub: [] },
     ],
   },
   { key: "warehouse_management", display: "Warehouse Management", level: 1, sub: [] },
@@ -488,6 +490,7 @@ const ALL_PERMISSION_KEYS = collectPermissionKeys(SIDEBAR_PERMISSION_TREE);
 const normalizePermissionsForSave = (permissions = {}) => ({
   ...permissions,
   dashboard: true, // Dashboard is always available for every role.
+  contact: true, // Contact is always available for every role.
 });
 
 const buildPayloadFromTree = (nodes, permissions, depth = 0) => {
@@ -610,6 +613,27 @@ const flattenPermissions = (nested, acc = {}) => {
     return acc;
 };
 
+const parseRolePermissions = (permissions) => {
+    if (!permissions) return {};
+    if (typeof permissions === "string") {
+        try {
+            const parsed = JSON.parse(permissions);
+            return typeof parsed === "string" ? JSON.parse(parsed) : parsed;
+        } catch (_) {
+            return {};
+        }
+    }
+    return permissions;
+};
+
+export const getRolePermissionMap = (roleOrPermissions) => {
+    const rawPermissions = roleOrPermissions?.rawPermissions
+        ?? roleOrPermissions?.permissions
+        ?? roleOrPermissions
+        ?? {};
+    return normalizePermissionsForSave(flattenPermissions(parseRolePermissions(rawPermissions)));
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Fetchers — outside hook for stable references
 // ─────────────────────────────────────────────────────────────────────────────
@@ -644,9 +668,9 @@ const fetchPages = async () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const applyPermissionToggle = (prevForm, pageKey, parentKey, nestedPages) => {
-    // Dashboard is required for every role and cannot be turned off.
-    if (pageKey === "dashboard") {
-        return { ...prevForm, permissions: { ...prevForm.permissions, dashboard: true } };
+    // Dashboard and Contact are required for every role and cannot be turned off.
+    if (pageKey === "dashboard" || pageKey === "contact") {
+        return { ...prevForm, permissions: normalizePermissionsForSave(prevForm.permissions) };
     }
 
     const isCurrentlyChecked = !!prevForm.permissions[pageKey];
@@ -662,6 +686,7 @@ const applyPermissionToggle = (prevForm, pageKey, parentKey, nestedPages) => {
         // Unchecking a parent unchecks all nested children recursively.
         setDescendants(node, newPermissions, false);
         newPermissions.dashboard = true;
+        newPermissions.contact = true;
     }
 
     return { ...prevForm, permissions: newPermissions };
@@ -810,6 +835,7 @@ export function useRoleManagement() {
             permissions[key] = !!checked;
         }
         permissions.dashboard = true;
+        permissions.contact = true;
         return permissions;
     }, []);
 
@@ -822,12 +848,12 @@ export function useRoleManagement() {
     }, [buildAllPermissions]);
 
     const isAllSelected = useMemo(
-        () => ALL_PERMISSION_KEYS.every((key) => key === "dashboard" || !!form.permissions[key]),
+        () => ALL_PERMISSION_KEYS.every((key) => key === "dashboard" || key === "contact" || !!form.permissions[key]),
         [form.permissions]
     );
 
     const isEditAllSelected = useMemo(
-        () => ALL_PERMISSION_KEYS.every((key) => key === "dashboard" || !!editForm.permissions[key]),
+        () => ALL_PERMISSION_KEYS.every((key) => key === "dashboard" || key === "contact" || !!editForm.permissions[key]),
         [editForm.permissions]
     );
 
@@ -860,9 +886,7 @@ export function useRoleManagement() {
         // Pre-populate permissions from rawPermissions stored during normalizeRole.
         // This means the edit modal actually reflects the server state — the
         // original code always opened with empty permissions ({}).
-        const prePopulatedPermissions = role.rawPermissions
-            ? normalizePermissionsForSave(flattenPermissions(role.rawPermissions))
-            : { dashboard: true };
+        const prePopulatedPermissions = getRolePermissionMap(role);
 
         setEditForm({
             role: role.name,

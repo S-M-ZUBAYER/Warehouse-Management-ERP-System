@@ -1,10 +1,11 @@
 import { AlertCircle, RefreshCw, Search, Plus, Eye, Pencil, Trash2 } from "lucide-react";
 import { useMemo, useRef, useEffect, useState } from "react";
 import Topbar from "../../../components/layout/Topbar";
-import { useRoleManagement } from "./hooks/useRoleManagement";
+import { getRolePermissionMap, useRoleManagement } from "./hooks/useRoleManagement";
 import AddRoleModal from "./component/AddRoleModal";
 import EditRoleModal from "./component/EditRoleModal";
 import DeleteRoleModal from "./component/DeleteRoleModal";
+import { NestedPageRow } from "./component/NestedPageRow";
 import PortalActionMenu from "../../../components/shared/PortalActionMenu";
 import RecordDetailModal from "../../../components/shared/RecordDetailModal";
 import ListPageSizePagination from "../../../components/shared/ListPageSizePagination";
@@ -63,6 +64,10 @@ export default function RoleManagementPage() {
     const start = (currentPage - 1) * pageSize;
     return roles.slice(start, start + pageSize);
   }, [roles, currentPage, pageSize]);
+  const detailPermissionForm = useMemo(
+    () => ({ permissions: detailRole ? getRolePermissionMap(detailRole) : { dashboard: true } }),
+    [detailRole]
+  );
   const applyPageSize = () => {
     const nextPageSize = Math.max(1, Number.parseInt(pageSizeInput, 10) || 10);
     setPageSize(nextPageSize);
@@ -294,7 +299,9 @@ export default function RoleManagementPage() {
           { label: "Create Time", key: "createdAt" },
           { label: "Updated Time", key: "updatedAt" },
         ]}
-      />
+      >
+        <RolePermissionDetails pages={pages} form={detailPermissionForm} />
+      </RecordDetailModal>
       <AddRoleModal
         open={showModal}
         onClose={closeModal}
@@ -328,6 +335,45 @@ export default function RoleManagementPage() {
         onConfirm={handleDelete}
         deleting={deleting}
       />
+    </div>
+  );
+}
+
+function RolePermissionDetails({ pages = [], form }) {
+  if (!pages.length) return null;
+
+  return (
+    <div>
+      <p className="text-sm font-bold text-slate-800 mb-3">Permissions</p>
+      <div className="border border-surface-border rounded-xl overflow-hidden bg-white">
+        <div className="max-h-[430px] overflow-y-auto">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 z-10 bg-white [&_th]:text-sm [&_th]:font-bold [&_th]:text-slate-800">
+              <tr className="border-b border-surface-border">
+                <th className="py-2.5 text-center text-xs font-semibold text-slate-600 w-24">
+                  Access
+                </th>
+                <th className="py-2.5 text-center text-xs font-semibold text-slate-600">
+                  Webpage name
+                </th>
+                <th className="py-2.5 pr-5 text-center text-xs font-semibold text-slate-600 w-16">
+                  Details
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-surface-border">
+              {pages.map((page) => (
+                <NestedPageRow
+                  key={page.id}
+                  page={page}
+                  form={form}
+                  readOnly
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

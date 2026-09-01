@@ -12,7 +12,8 @@ const DEFAULT_IMAGE = "https://placehold.co/36x36/E6ECF0/004368?text=?";
 const resolveBackendAssetUrl = (value = "") => {
   const raw = String(value || "").trim();
   if (!raw) return "";
-  if (/^(https?:|blob:|data:)/i.test(raw)) return raw;
+  if (/^(blob:|data:)/i.test(raw)) return raw;
+  if (/^https?:/i.test(raw)) return resolveHostedUrl(raw);
   if (/^[A-Za-z0-9+/=]+$/.test(raw) && raw.length > 200) return `data:application/pdf;base64,${raw}`;
   const baseUrl = resolveBackendOrigin();
   const path = stripApiPrefix(raw.startsWith("/") ? raw : `/${raw}`);
@@ -22,10 +23,26 @@ const resolveBackendAssetUrl = (value = "") => {
 const resolveBackendOrigin = () => {
   const configured = String(import.meta.env.VITE_AUTH_BASE_URL || window.location.origin || "").trim();
   try {
-    const url = new URL(configured, window.location.origin);
+    const url = new URL(resolveHostedUrl(configured), window.location.origin);
     return url.origin;
   } catch {
     return configured.replace(/\/api\/v\d+\/?$/i, "").replace(/\/+$/, "");
+  }
+};
+
+const resolveHostedUrl = (value = "") => {
+  const raw = String(value || "").trim();
+  if (!raw || typeof window === "undefined") return raw;
+  try {
+    const url = new URL(raw, window.location.origin);
+    const isLocal = ["localhost", "127.0.0.1", "::1"].includes(url.hostname.toLowerCase());
+    const currentIsLocal = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname.toLowerCase());
+    if (isLocal && !currentIsLocal) {
+      return `${window.location.origin}${url.pathname}${url.search}${url.hash}`;
+    }
+    return url.href;
+  } catch {
+    return raw;
   }
 };
 
@@ -316,6 +333,10 @@ export const getOrderStoreContext = (store = {}, platform) => {
     store?.name ||
     store?.label ||
     (getPlatformStoreValue(store) ? `Store #${getPlatformStoreValue(store)}` : "");
+  const subscription = store?.subscription || {};
+  const subscriptionStatus = String(subscription.status || "").toLowerCase();
+  const remainingDays = Math.max(0, Number(subscription.remainingDays || 0));
+  const isSubscriptionExpired = subscriptionStatus === "expired" || remainingDays === 0;
 
   return {
     platform: normalizePlatform(platform || store?.platform),
@@ -327,6 +348,8 @@ export const getOrderStoreContext = (store = {}, platform) => {
     external_store_id: store?.external_store_id ?? "",
     external_store_name: store?.external_store_name ?? store?.store_name ?? storeName,
     region: store?.region ?? store?.country ?? "",
+    subscription,
+    isSubscriptionExpired,
   };
 };
 
@@ -364,6 +387,20 @@ export const isAllOrderStoreContext = (context = {}) => {
     storeId === ALL_STORE_VALUE ||
     (!context?.platform && !context?.platform_store_id)
   );
+};
+
+export const isOrderStoreSubscriptionExpired = (context = {}) => {
+  if (context?.isSubscriptionExpired === true) return true;
+  const subscription = context?.subscription || {};
+  const hasSubscriptionInfo =
+    subscription.status !== undefined ||
+    subscription.remainingDays !== undefined ||
+    subscription.expiresAt !== undefined ||
+    subscription.expires_at !== undefined;
+  if (!hasSubscriptionInfo) return false;
+  const status = String(subscription.status || "").toLowerCase();
+  const remainingDays = Math.max(0, Number(subscription.remainingDays || 0));
+  return status === "expired" || remainingDays === 0;
 };
 
 const getScopedStoreContexts = async (context = {}) => {
@@ -881,6 +918,81 @@ const getCurrentCompanyId = () => {
 
 const getStoreScopeId = (context) =>
   getContextValue(context, ["platform_store_id", "store_id", "shop_id", "external_store_id", "store_shop_id"]) || "";
+
+const getPlatformStoreId = (context = {}) => {
+  const value = getContextValue(context, ["platform_store_id", "store_id"]);
+  const numeric = Number(value);
+  return Number.isInteger(numeric) && numeric > 0 ? numeric : undefined;
+};
+
+const buildActivityLogPayload = ({ order, context = {}, eventType, title, message, oldStatus, newStatus, metadata = {} }) => {
+  const platform = normalizePlatform(order?.platform || context?.platform);
+  const platformOrderId = getOrderIdentity(order);
+  const storeContext = order?.storeContext || context;
+  const platformRegion = resolvePlatformRegion(
+    order?.platformRegion,
+    storeContext?.region,
+    storeContext?.country,
+    order?.customer?.country,
+    order?.raw?.region,
+    order?.raw?.country
+  );
+
+  return {
+    platform,
+    platformStoreId: getPlatformStoreId(storeContext),
+    storeId: getStoreScopeId(storeContext) || undefined,
+    storeName: order?.storeName || context?.store || context?.store_name || undefined,
+    platformRegion: platformRegion || undefined,
+    platformOrderId,
+    packageNumber: order?.pkgNo && order.pkgNo !== "-" ? order.pkgNo : undefined,
+    trackingNumber: order?.trackingNo && order.trackingNo !== "--" ? order.trackingNo : undefined,
+    eventType,
+    title,
+    message,
+    oldStatus,
+    newStatus,
+    actorType: "USER",
+    source: "ERP_FRONTEND",
+    metadata: {
+      orderNo: order?.orderNo,
+      rawStatus: order?.rawStatus,
+      pageStatus: order?.status,
+      ...metadata,
+    },
+  };
+};
+
+export const fetchOrderActivityLogs = async ({ platform, orderId } = {}) => {
+  const normalizedPlatform = normalizePlatform(platform);
+  if (!normalizedPlatform || !orderId) return [];
+
+  const res = await api.get(`/order-management/platform-orders/${normalizedPlatform}/${encodeURIComponent(orderId)}/activity-logs`);
+  const payload = res?.data ?? res;
+  return Array.isArray(payload) ? payload : payload?.data || [];
+};
+
+export const createOrderActivityLog = async (payload = {}) => {
+  if (!payload.platform || !payload.platformOrderId) return null;
+  return api.post("/order-management/platform-orders/activity-logs", payload).then((res) => res?.data ?? res);
+};
+
+export const createOrderActivityLogs = async (logs = []) => {
+  const rows = logs.filter((log) => log?.platform && log?.platformOrderId);
+  if (!rows.length) return null;
+  return api.post("/order-management/platform-orders/activity-logs/bulk", { logs: rows }).then((res) => res?.data ?? res);
+};
+
+export const logOrderActivities = ({ orders = [], context = {}, eventType, title, message, oldStatus, newStatus, metadata = {} } = {}) => {
+  const logs = orders
+    .map((order) => buildActivityLogPayload({ order, context, eventType, title, message, oldStatus, newStatus, metadata }))
+    .filter((log) => log.platform && log.platformOrderId);
+
+  return createOrderActivityLogs(logs).catch((error) => {
+    console.warn("Order activity logs could not be saved.", error);
+    return null;
+  });
+};
 
 const PACKED_SUCCESSFUL_STORAGE_KEY = "order-packed-successful-orders";
 
@@ -1659,7 +1771,7 @@ const partitionOrdersByStockStatus = async (orders) => {
   };
 };
 
-const filterInStockOrders = async (orders) => {
+export const filterInStockOrders = async (orders) => {
   const { inStockRows } = await partitionOrdersByStockStatus(orders);
   return inStockRows;
 };
@@ -1948,9 +2060,12 @@ export const fetchOrders = async ({ context, pageType = "all", tab, search, sear
   }
 
   const platform = normalizePlatform(context?.platform);
+  const shouldShowExpiredStoreOrders = pageType === "new" || pageType === "processed";
 
   if (isAllOrderStoreContext(context)) {
-    const storeContexts = await getScopedStoreContexts(context);
+    const storeContexts = (await getScopedStoreContexts(context)).filter(
+      (storeContext) => shouldShowExpiredStoreOrders || !isOrderStoreSubscriptionExpired(storeContext)
+    );
     if (storeContexts.length === 0) return [];
 
     const results = await Promise.allSettled(
@@ -1990,6 +2105,10 @@ export const fetchOrders = async ({ context, pageType = "all", tab, search, sear
   const isWithdrawTab = pageType === "processed" && tab === "Withdraw";
   const shouldAttachListSkuAdjustments = pageType === "new";
   let rows = [];
+
+  if (!shouldShowExpiredStoreOrders && !isAllOrderStoreContext(context) && isOrderStoreSubscriptionExpired(context)) {
+    return [];
+  }
 
   if (!platform && isPushingTab) {
     return [];
@@ -2559,10 +2678,12 @@ const buildSkuOverridePayload = ({ order, item, merchantSku, context, adjustment
 export const saveOrderSkuAdjustment = async ({ order, item, merchantSku, context, adjustmentType = "exchange", sourceTab = "", sourceItem = null }) => {
   const storeContext = context || order?.storeContext || getStoredOrderContext();
 
-  return fetchBackendJsonNoAuth("/api/v1/platform-order-deductions/sku-override", {
-    method: "POST",
-    body: buildSkuOverridePayload({ order, item, merchantSku, context: storeContext, adjustmentType, sourceTab, sourceItem }),
-  });
+  return api
+    .post(
+      "/platform-order-deductions/sku-override",
+      buildSkuOverridePayload({ order, item, merchantSku, context: storeContext, adjustmentType, sourceTab, sourceItem })
+    )
+    .then((res) => res?.data ?? res);
 };
 
 export const overrideOutOfStockSkuAndPackStock = saveOrderSkuAdjustment;
@@ -2574,25 +2695,27 @@ export const deleteOrderSkuOverride = async ({ order, context }) => {
 
   if (!platform || !platformOrderId) return null;
 
-  return fetchBackendJsonNoAuth("/api/v1/platform-order-deductions/sku-override", {
-    method: "DELETE",
-    body: {
-      platform,
-      platformOrderId,
-      orderNo: order?.orderNo,
-      shopId:
-        platform === "shopee"
-          ? getShopeeShopId(storeContext)
-          : getContextValue(storeContext, ["shop_id", "store_shop_id", "external_store_id", "platform_store_id"]),
-      openId: platform === "tiktok" ? getTikTokOpenId(storeContext) : undefined,
-      cipherId: platform === "tiktok" ? getTikTokCipher(storeContext) : undefined,
-    },
-  }).catch((error) => {
-    if (![404, 405].includes(error?.response?.status)) {
-      console.warn("Order SKU override could not be deleted.", error);
-    }
-    return null;
-  });
+  return api
+    .delete("/platform-order-deductions/sku-override", {
+      data: {
+        platform,
+        platformOrderId,
+        orderNo: order?.orderNo,
+        shopId:
+          platform === "shopee"
+            ? getShopeeShopId(storeContext)
+            : getContextValue(storeContext, ["shop_id", "store_shop_id", "external_store_id", "platform_store_id"]),
+        openId: platform === "tiktok" ? getTikTokOpenId(storeContext) : undefined,
+        cipherId: platform === "tiktok" ? getTikTokCipher(storeContext) : undefined,
+      },
+    })
+    .then((res) => res?.data ?? res)
+    .catch((error) => {
+      if (![404, 405].includes(error?.response?.status)) {
+        console.warn("Order SKU override could not be deleted.", error);
+      }
+      return null;
+    });
 };
 
 export const deleteOrderSkuAdjustment = async ({ order, adjustment, context }) => {
@@ -2602,22 +2725,23 @@ export const deleteOrderSkuAdjustment = async ({ order, adjustment, context }) =
 
   if (!platform || !platformOrderId || !adjustment?.id) return null;
 
-  return fetchBackendJsonNoAuth("/api/v1/platform-order-deductions/sku-override", {
-    method: "DELETE",
-    body: {
-      platform,
-      platformOrderId,
-      adjustmentId: adjustment.id,
-      platformOrderItemId: adjustment.platformOrderItemId,
-      adjustmentType: adjustment.adjustmentType,
-      shopId:
-        platform === "shopee"
-          ? getShopeeShopId(storeContext)
-          : getContextValue(storeContext, ["shop_id", "store_shop_id", "external_store_id", "platform_store_id"]),
-      openId: platform === "tiktok" ? getTikTokOpenId(storeContext) : undefined,
-      cipherId: platform === "tiktok" ? getTikTokCipher(storeContext) : undefined,
-    },
-  });
+  return api
+    .delete("/platform-order-deductions/sku-override", {
+      data: {
+        platform,
+        platformOrderId,
+        adjustmentId: adjustment.id,
+        platformOrderItemId: adjustment.platformOrderItemId,
+        adjustmentType: adjustment.adjustmentType,
+        shopId:
+          platform === "shopee"
+            ? getShopeeShopId(storeContext)
+            : getContextValue(storeContext, ["shop_id", "store_shop_id", "external_store_id", "platform_store_id"]),
+        openId: platform === "tiktok" ? getTikTokOpenId(storeContext) : undefined,
+        cipherId: platform === "tiktok" ? getTikTokCipher(storeContext) : undefined,
+      },
+    })
+    .then((res) => res?.data ?? res);
 };
 
 export const runOrderAction = ({ action, orders }) =>
@@ -2907,13 +3031,47 @@ export const packTikTokOrders = async ({ context, orders = [] }) => {
   };
 };
 
-export const runAutoOrderAcceptNow = async ({ context } = {}) => {
+export const runAutoOrderAcceptNow = async ({ context, orders } = {}) => {
   const platform = normalizePlatform(context?.platform);
   const storeId = getPlatformStoreValue(context);
-  const payload = {};
+  const payload = {
+    skipOutOfStock: true,
+    requireStockCheck: true,
+    stockPolicy: "in_stock_only",
+  };
 
   if (platform && platform !== ALL_PLATFORM_VALUE) payload.platform = platform;
   if (storeId && String(storeId).toLowerCase() !== ALL_STORE_VALUE) payload.storeId = storeId;
+
+  if (Array.isArray(orders)) {
+    const inStockOrders = await filterInStockOrders(orders);
+    const inStockOrderIds = [...new Set(inStockOrders.map(getOrderIdentity).filter(Boolean))];
+    const inStockOrderIdSet = new Set(inStockOrderIds.map(String));
+    const outOfStockOrderIds = [
+      ...new Set(
+        orders
+          .map(getOrderIdentity)
+          .filter(Boolean)
+          .filter((orderId) => !inStockOrderIdSet.has(String(orderId)))
+      ),
+    ];
+
+    if (inStockOrderIds.length === 0) {
+      return {
+        results: [],
+        totals: {
+          packed: 0,
+          failed: 0,
+          skippedOutOfStock: outOfStockOrderIds.length,
+        },
+      };
+    }
+
+    payload.orderIds = inStockOrderIds;
+    payload.eligibleOrderIds = inStockOrderIds;
+    payload.excludeOrderIds = outOfStockOrderIds;
+    payload.stockChecked = true;
+  }
 
   const res = await api.post("/auto-order-accept/run-now", payload);
   const data = res?.data ?? res;
@@ -3277,6 +3435,17 @@ export const fetchManualOrderDropdowns = async () => {
   const res = await api.get("/order-management/manual-orders/dropdowns");
   return res?.data?.data || res?.data || {};
 };
+
+export const fetchManualOrderShippingWallet = async () => {
+  const res = await api.get("/order-management/manual-orders/shipping-wallet");
+  return res?.data?.data || res?.data || {};
+};
+
+export const createManualOrderShippingWalletCheckout = (payload = {}) =>
+  api.post("/order-management/manual-orders/shipping-wallet/checkout", payload).then((res) => res?.data?.data ?? res?.data ?? res);
+
+export const completeManualOrderShippingWalletCheckout = (sessionId) =>
+  api.post("/order-management/manual-orders/shipping-wallet/checkout/complete", { sessionId }).then((res) => res?.data?.data ?? res?.data ?? res);
 
 export const createManualOrder = (payload) =>
   api.post("/order-management/manual-orders", payload).then((res) => res.data?.data ?? res.data ?? res);

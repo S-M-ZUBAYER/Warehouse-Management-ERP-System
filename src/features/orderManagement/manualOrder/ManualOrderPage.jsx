@@ -1,14 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Gift, Loader2, Plus, Search, UploadCloud } from "lucide-react";
 import Topbar from "../../../components/layout/Topbar";
 import OrderFooter from "../shared/components/OrderFooter";
+import ManualOrderSubscriptionGate from "../shared/components/ManualOrderSubscriptionGate";
 import PageSizePagination from "../shared/components/PageSizePagination";
 import WaybillPdfModal from "../shared/components/WaybillPdfModal";
 import {
   cancelManualOrderShipment,
+  completeManualOrderShippingWalletCheckout,
   createManualOrderWaybill,
   fetchManualOrderDetail,
   fetchManualOrders,
@@ -53,6 +56,7 @@ const MANUAL_ORDER_OUTPUT_COLUMNS = [
   { label: "Created", key: "createdAt" },
 ];
 const DEFAULT_MANUAL_ORDER_PAGE_SIZE = 10;
+const SHIPPING_WALLET_SESSION_PREFIX = "manual-order-shipping-wallet-confirmed:";
 
 const fileToDataUrl = (file) =>
   new Promise((resolve, reject) => {
@@ -63,9 +67,12 @@ const fileToDataUrl = (file) =>
   });
 
 export default function ManualOrderPage() {
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
+  const location = useLocation();
+  const navigate = useNavigate();
   const language = i18n.resolvedLanguage || i18n.language || "en";
   const tr = (text) => translateStaticText(text, language);
+  const tw = (key, defaultValue, options = {}) => t(key, { defaultValue, ...options });
   const queryClient = useQueryClient();
   const [activeStatus, setActiveStatus] = useState("CREATED");
   const [paymentType, setPaymentType] = useState("ALL");
@@ -84,7 +91,8 @@ export default function ManualOrderPage() {
   const [detailOrder, setDetailOrder] = useState(null);
   const [deliveryEditOrder, setDeliveryEditOrder] = useState(null);
   const [deliveryForm, setDeliveryForm] = useState({ logisticCompany: "", trackingNumber: "", waybillUrl: "", waybillFile: null, note: "" });
-  const [waybillPdf, setWaybillPdf] = useState({ open: false, url: "", filename: "easyparcel-waybill.pdf" });
+  const [waybillPdf, setWaybillPdf] = useState({ open: false, url: "", previewUrl: "", filename: "easyparcel-waybill.pdf" });
+  const confirmingShippingWalletSessionsRef = useRef(new Set());
 
   const queryParams = useMemo(() => ({
     status: activeStatus,
@@ -132,9 +140,61 @@ export default function ManualOrderPage() {
     setPage((current) => Math.min(current, totalPages));
   }, [totalPages]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const sessionId = params.get("shipping_wallet_session_id");
+    const cancelled = params.get("shipping_wallet_cancelled");
+    if (!sessionId && !cancelled) return;
+
+    const nextParams = new URLSearchParams(location.search);
+    nextParams.delete("shipping_wallet_session_id");
+    nextParams.delete("shipping_wallet_cancelled");
+    navigate(
+      {
+        pathname: location.pathname,
+        search: nextParams.toString() ? `?${nextParams.toString()}` : "",
+      },
+      { replace: true },
+    );
+
+    if (cancelled) {
+      toast.info(tw("manualOrderShipping.topUpCancelled", "Shipping wallet top-up was cancelled."));
+      return;
+    }
+
+    const sessionKey = `${SHIPPING_WALLET_SESSION_PREFIX}${sessionId}`;
+    if (confirmingShippingWalletSessionsRef.current.has(sessionId) || sessionStorage.getItem(sessionKey) === "1") {
+      return;
+    }
+    confirmingShippingWalletSessionsRef.current.add(sessionId);
+    sessionStorage.setItem(sessionKey, "1");
+
+    completeManualOrderShippingWalletCheckout(sessionId)
+      .then((result) => {
+        queryClient.invalidateQueries({ queryKey: ["manual-order-shipping-wallet"] });
+        if (result?.alreadyCompleted) return;
+        const balance = result?.wallet?.balanceMyr;
+        toast.success(
+          balance !== undefined
+            ? `${tw("manualOrderShipping.topUpSuccess", "Shipping wallet topped up successfully.")} ${tw("manualOrderShipping.currentBalance", "Current balance")}: MYR ${Number(balance).toFixed(2)}`
+            : tw("manualOrderShipping.topUpSuccess", "Shipping wallet topped up successfully."),
+        );
+      })
+      .catch((err) => {
+        sessionStorage.removeItem(sessionKey);
+        confirmingShippingWalletSessionsRef.current.delete(sessionId);
+        toast.error(err?.response?.data?.message || err?.message || tw("manualOrderShipping.confirmTopUpFailed", "Failed to confirm shipping wallet top-up."));
+      });
+  }, [location.pathname, location.search, navigate, queryClient, tw]);
+
   const openWaybill = (order, response = {}) => {
     const pdf = getManualWaybillPdf(order, response);
-    setWaybillPdf({ open: true, url: pdf.url, filename: pdf.filename });
+    setWaybillPdf({
+      open: true,
+      url: pdf.url,
+      previewUrl: pdf.url,
+      filename: pdf.filename,
+    });
   };
 
   const waybillMutation = useMutation({
@@ -194,15 +254,18 @@ export default function ManualOrderPage() {
 
   if (showAddPage) {
     return (
-      <AddManualOrderPage
-        mode={addMode}
-        onBack={() => setShowAddPage(false)}
-        onCreated={(order) => {
-          setShowAddPage(false);
-          queryClient.invalidateQueries({ queryKey: ["manual-orders"] });
-          if (hasManualWaybill(order)) openWaybill(order);
-        }}
-      />
+      <ManualOrderSubscriptionGate>
+        <AddManualOrderPage
+          mode={addMode}
+          onBack={() => setShowAddPage(false)}
+          onCreated={(order) => {
+            setShowAddPage(false);
+            queryClient.invalidateQueries({ queryKey: ["manual-orders"] });
+            const pdf = getManualWaybillPdf(order);
+            if (hasManualWaybill(order) || pdf.url) openWaybill(order);
+          }}
+        />
+      </ManualOrderSubscriptionGate>
     );
   }
 
@@ -307,8 +370,9 @@ export default function ManualOrderPage() {
   };
 
   return (
-    <div className="space-y-4 font-body">
-      <Topbar PageTitle="Manual Order" />
+    <ManualOrderSubscriptionGate>
+      <div className="space-y-4 font-body">
+        <Topbar PageTitle="Manual Order" />
 
       <div className="rounded-xl border border-surface-border bg-white p-4">
         <div className="grid grid-cols-12 items-end gap-3">
@@ -451,6 +515,7 @@ export default function ManualOrderPage() {
         open={waybillPdf.open}
         title="EasyParcel Waybill PDF"
         pdfUrl={waybillPdf.url}
+        previewUrl={waybillPdf.previewUrl}
         filename={waybillPdf.filename}
         loading={waybillMutation.isPending}
         onClose={() => setWaybillPdf((current) => ({ ...current, open: false }))}
@@ -557,7 +622,8 @@ export default function ManualOrderPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </ManualOrderSubscriptionGate>
   );
 }
 
@@ -613,7 +679,8 @@ function getManualWaybillPdf(order = {}, response = {}) {
 function resolvePdfUrl(value) {
   const trimmed = String(value || "").trim();
   if (!trimmed) return "";
-  if (/^(https?:|blob:|data:)/i.test(trimmed)) return trimmed;
+  if (/^(blob:|data:)/i.test(trimmed)) return trimmed;
+  if (/^https?:/i.test(trimmed)) return resolveHostedUrl(trimmed);
   if (/^[A-Za-z0-9+/=]+$/.test(trimmed) && trimmed.length > 200) return `data:application/pdf;base64,${trimmed}`;
 
   const baseUrl = resolveBackendOrigin();
@@ -621,13 +688,41 @@ function resolvePdfUrl(value) {
   return `${baseUrl}${path}`;
 }
 
+function getManualWaybillPreviewUrl(order = {}, response = {}) {
+  const sourceOrder = response?.order || response?.manualOrder || order;
+  const id = sourceOrder?.rawId || sourceOrder?.id || order?.rawId || order?.id || "";
+  const manualOrderId = String(id || "").replace(/^manual:/, "");
+  if (!manualOrderId) return "";
+  return `${resolveApiBaseUrl()}/order-management/manual-orders/${encodeURIComponent(manualOrderId)}/waybill-pdf`;
+}
+
+function resolveApiBaseUrl() {
+  return resolveHostedUrl(import.meta.env.VITE_AUTH_BASE_URL || window.location.origin || "").replace(/\/+$/, "");
+}
+
 function resolveBackendOrigin() {
   const configured = String(import.meta.env.VITE_AUTH_BASE_URL || window.location.origin || "").trim();
   try {
-    const url = new URL(configured, window.location.origin);
+    const url = new URL(resolveHostedUrl(configured), window.location.origin);
     return url.origin;
   } catch {
     return configured.replace(/\/api\/v\d+\/?$/i, "").replace(/\/+$/, "");
+  }
+}
+
+function resolveHostedUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw || typeof window === "undefined") return raw;
+  try {
+    const url = new URL(raw, window.location.origin);
+    const isLocal = ["localhost", "127.0.0.1", "::1"].includes(url.hostname.toLowerCase());
+    const currentIsLocal = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname.toLowerCase());
+    if (isLocal && !currentIsLocal) {
+      return `${window.location.origin}${url.pathname}${url.search}${url.hash}`;
+    }
+    return url.href;
+  } catch {
+    return raw;
   }
 }
 

@@ -1,5 +1,7 @@
 import { X } from "lucide-react";
 import { useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import i18n from "../../../../i18n";
 import ConfirmActionModal from "../../../../components/shared/ConfirmActionModal";
 
 const TIKTOK_PRINTING_LABEL_LIST = [
@@ -22,10 +24,13 @@ const getInitialCheckedLabelItems = () => {
 };
 
 export default function OrderActionModals({ list }) {
+  const navigate = useNavigate();
   const failedOrders = list.failedShopeePackOrders || [];
   const failedTikTokOrders = list.failedTikTokPackOrders || [];
   const failedPrintOrders = list.failedShopeePrintOrders || [];
   const failedTikTokPrintOrders = list.failedTikTokPrintOrders || [];
+  const expiredStores = list.expiredActionModal?.stores || [];
+  const primaryExpiredStore = expiredStores[0] || null;
   const iframeRef = useRef(null);
   const [checkedLabelItems, setCheckedLabelItems] = useState(getInitialCheckedLabelItems);
 
@@ -85,8 +90,57 @@ export default function OrderActionModals({ list }) {
     window.setTimeout(() => list.refreshMultiPlatformTikTokAwbPdf?.(resultId), 0);
   };
 
+  const handleUpgradeExpiredStore = () => {
+    list.closeExpiredSubscriptionModal?.();
+    navigate("/warehouse_management/pricing", {
+      state: {
+        preselectStore: primaryExpiredStore
+          ? {
+              id: primaryExpiredStore.storeId,
+              label: primaryExpiredStore.storeName,
+              platform: primaryExpiredStore.platform,
+            }
+          : undefined,
+      },
+    });
+  };
+
   return (
     <>
+      <ConfirmActionModal
+        open={expiredStores.length > 0}
+        title={i18n.t("subscription.marketplaceExpiredModalTitle", { defaultValue: "Store Subscription Expired" })}
+        message={
+          <div className="space-y-4">
+            <p>
+              {i18n.t("subscription.marketplaceExpiredModalMessage", {
+                defaultValue: "The selected store subscription has expired. Upgrade this store plan to continue marketplace operations.",
+              })}
+            </p>
+
+            <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3">
+              <p className="mb-2 text-xs font-semibold uppercase text-amber-700">
+                {i18n.t("subscription.affectedStores", { defaultValue: "Affected store" })}
+              </p>
+              <div className="space-y-2">
+                {expiredStores.map((store) => (
+                  <div key={`${store.platform}-${store.storeId || store.storeName}`} className="rounded-lg bg-white px-3 py-2 text-sm shadow-sm">
+                    <div className="font-semibold text-slate-800">{store.storeName || i18n.t("subscription.selectedStore", { defaultValue: "Selected store" })}</div>
+                    <div className="mt-0.5 text-xs text-slate-500">
+                      {i18n.t("subscription.platform", { defaultValue: "Platform" })}: {store.platform || "-"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        }
+        confirmLabel={i18n.t("subscription.upgradePlan", { defaultValue: "Upgrade Plan" })}
+        cancelLabel={i18n.t("subscription.cancel", { defaultValue: "Cancel" })}
+        onCancel={list.closeExpiredSubscriptionModal}
+        onConfirm={handleUpgradeExpiredStore}
+      />
+
       <ConfirmActionModal
         open={list.shopeeNoItemsModalOpen}
         title="No Items Selected"

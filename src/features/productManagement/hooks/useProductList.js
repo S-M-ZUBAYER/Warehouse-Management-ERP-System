@@ -42,6 +42,7 @@ const fetchMerchantSkus = async (params) => {
         qs.set("gtin", params.search.trim());
     }
     if (params.warehouseId) qs.set("warehouseId", params.warehouseId);
+    if (params.stockWarehouseId) qs.set("stockWarehouseId", params.stockWarehouseId);
     if (params.status && params.status !== "all") qs.set("status", params.status);
     if (params.country && params.country !== "all") qs.set("country", params.country);
     if (params.sku?.trim()) qs.set("search", params.sku.trim()); // server searches by sku_name
@@ -444,12 +445,12 @@ const EMPTY_FORM = {
 // ─────────────────────────────────────────────────────────────────────────────
 // Main hook
 // ─────────────────────────────────────────────────────────────────────────────
-export function useProductList() {
+export function useProductList({ warehouseFilterMode = "master", initialWarehouseFilter = "default" } = {}) {
     // ── Filter state ──────────────────────────────────────────────────────────
     const [search, setSearch] = useState("");
     const [searchField, setSearchField] = useState("sku_name");
-    const [warehouseFilter, setWarehouseFilter] = useState(() => getDefaultAllowedWarehouseId() || "all");
-    const [warehouseFilterName, setWarehouseFilterName] = useState(() => getDefaultAllowedWarehouseId() ? "Warehouse name" : "All Warehouses");
+    const [warehouseFilter, setWarehouseFilter] = useState(() => initialWarehouseFilter === "all" ? "all" : getDefaultAllowedWarehouseId() || "all");
+    const [warehouseFilterName, setWarehouseFilterName] = useState(() => initialWarehouseFilter === "all" ? "All Warehouses" : getDefaultAllowedWarehouseId() ? "Warehouse name" : "All Warehouses");
     const [productStatus, setProductStatus] = useState("all");
     const [country, setCountry] = useState("all");
     const [sku, setSku] = useState("");
@@ -588,18 +589,23 @@ export function useProductList() {
     // ─────────────────────────────────────────────────────────────────────────
     // Query: merchant SKU list
     // ─────────────────────────────────────────────────────────────────────────
-    const listFilters = useMemo(() => ({
-        page,
-        limit: pageSize,
-        search: debouncedSearch,
-        searchField,
-        sku: debouncedSku,
-        warehouseId: warehouseFilter !== "all" ? warehouseFilter : undefined,
-        status: productStatus,
-        country: country,
-        sortBy,
-        sortOrder,
-    }), [page, pageSize, debouncedSearch, searchField, debouncedSku, warehouseFilter, productStatus, country, sortBy, sortOrder]);
+    const listFilters = useMemo(() => {
+        const selectedWarehouseId = warehouseFilter !== "all" ? warehouseFilter : undefined;
+
+        return {
+            page,
+            limit: pageSize,
+            search: debouncedSearch,
+            searchField,
+            sku: debouncedSku,
+            warehouseId: warehouseFilterMode === "master" ? selectedWarehouseId : undefined,
+            stockWarehouseId: warehouseFilterMode === "stock" ? selectedWarehouseId : undefined,
+            status: productStatus,
+            country: country,
+            sortBy,
+            sortOrder,
+        };
+    }, [page, pageSize, debouncedSearch, searchField, debouncedSku, warehouseFilter, warehouseFilterMode, productStatus, country, sortBy, sortOrder]);
 
     const {
         data: listData,
@@ -988,15 +994,16 @@ export function useProductList() {
     // ─────────────────────────────────────────────────────────────────────────
     const resetFilters = useCallback(() => {
         const defaultWarehouseId = getDefaultAllowedWarehouseId();
+        const resetToAllWarehouses = initialWarehouseFilter === "all";
         setSearch("");
         setSearchField("sku_name");
         setSku("");
-        setWarehouseFilter(defaultWarehouseId || "all");
-        setWarehouseFilterName(defaultWarehouseId ? "Warehouse name" : "All Warehouses");
+        setWarehouseFilter(resetToAllWarehouses ? "all" : defaultWarehouseId || "all");
+        setWarehouseFilterName(resetToAllWarehouses ? "All Warehouses" : defaultWarehouseId ? "Warehouse name" : "All Warehouses");
         setProductStatus("all");
         setCountry("all");
         setPage(1);
-    }, []);
+    }, [initialWarehouseFilter]);
 
     const hasActiveFilters =
         search.trim() || sku.trim() ||

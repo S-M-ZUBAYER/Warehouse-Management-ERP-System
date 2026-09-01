@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigationType } from "react-router-dom";
 import { toast } from "sonner";
+import i18n from "../../../../i18n";
 import {
   ALL_ORDER_STORE_CONTEXT,
   ALL_PLATFORM_VALUE,
@@ -16,6 +17,8 @@ import {
   isOrderDetailReturnContext,
   getStoredOrderContext,
   getStoredSearchContext,
+  isOrderStoreSubscriptionExpired,
+  logOrderActivities,
   packShopeeOrders,
   packTikTokOrders,
   removeFailedPackOrders,
@@ -173,6 +176,7 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
   const [multiPlatformActionLoading, setMultiPlatformActionLoading] = useState(false);
   const [multiPlatformAwbResults, setMultiPlatformAwbResults] = useState([]);
   const [multiPlatformAwbRefreshId, setMultiPlatformAwbRefreshId] = useState("");
+  const [expiredActionModal, setExpiredActionModal] = useState(null);
   const [dataRefreshKey, setDataRefreshKey] = useState(0);
   const platformValue = String(storeContext?.platform || "").toLowerCase();
   const allStoreScope =
@@ -461,11 +465,14 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
 
   useEffect(() => {
     if (pageType !== "new" || activeTab !== "To Pack" || !hasStore || isOrderDetailReturnQuery) return;
+    if (!hasOrderResult || listLoading) return;
+    if (!queryStoreContext?.isAllStoreContext && isOrderStoreSubscriptionExpired(queryStoreContext)) return;
 
     const signature = JSON.stringify({
       platform: queryStoreContext?.platform || "",
       storeId: queryStoreContext?.platform_store_id || "",
       isAllStoreContext: queryStoreContext?.isAllStoreContext === true,
+      orderIds: allOrders.map(getOrderAdjustmentId).filter(Boolean).sort(),
       tabRefreshKey,
     });
 
@@ -475,7 +482,7 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
     autoOrderAcceptRunningRef.current = true;
     let cancelled = false;
 
-    runAutoOrderAcceptNow({ context: queryStoreContext })
+    runAutoOrderAcceptNow({ context: queryStoreContext, orders: allOrders })
       .then((result) => {
         if (cancelled) return;
         const packed = Number(result?.totals?.packed || 0);
@@ -495,7 +502,7 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
     return () => {
       cancelled = true;
     };
-  }, [activeTab, hasStore, invalidateOrderManagementData, isOrderDetailReturnQuery, pageType, queryStoreContext, refetch, tabRefreshKey]);
+  }, [activeTab, allOrders, hasOrderResult, hasStore, invalidateOrderManagementData, isOrderDetailReturnQuery, listLoading, pageType, queryStoreContext, refetch, tabRefreshKey]);
 
   const actionMutation = useMutation({
     mutationFn: runOrderAction,
@@ -531,14 +538,49 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
     });
   };
 
+  const getActivityOrderIdentity = (order) =>
+    String(order?.rawId || order?.order_sn || order?.orderId || order?.orderNo || order?.id || "");
+
+  const getSuccessfulActivityRows = (rows = [], successfulIds = [], failedOrders = []) => {
+    if (!rows.length) return [];
+
+    if (successfulIds.length) {
+      const successfulSet = new Set(successfulIds.map(String));
+      return rows.filter((order) => successfulSet.has(getActivityOrderIdentity(order)));
+    }
+
+    if (failedOrders.length) {
+      const failedSet = new Set(
+        failedOrders
+          .map((order) => order?.orderId || order?.orderNo || order?.rawId || order?.id)
+          .filter(Boolean)
+          .map(String)
+      );
+      return rows.filter((order) => !failedSet.has(getActivityOrderIdentity(order)));
+    }
+
+    return rows;
+  };
+
   const shopeePackMutation = useMutation({
     mutationFn: (orders) => packShopeeOrders({ context: getActionContext(orders), orders }),
     onSuccess: ({ successfulIds = [], failedOrders = [] }, orders = []) => {
       removeOrdersFromCurrentList(successfulIds);
       const actionContext = getActionContext(orders);
+      const successfulRows = getSuccessfulActivityRows(orders, successfulIds, failedOrders);
       removeFailedPackOrders({ context: actionContext, platform: "shopee", orderIds: successfulIds });
       removeWithdrawOrders({ context: actionContext, platform: "shopee", orderIds: successfulIds });
       saveFailedPackOrders({ context: actionContext, platform: "shopee", failedOrders });
+      logOrderActivities({
+        orders: successfulRows,
+        context: actionContext,
+        eventType: "ORDER_PACKED",
+        title: "Order packed",
+        message: "Shopee order was packed from ERP.",
+        oldStatus: "READY_TO_SHIP",
+        newStatus: "PROCESSED",
+        metadata: { action: "pack" },
+      });
       invalidateOrderManagementData();
       setSelectedIds([]);
       setSelectedOrderRows([]);
@@ -561,10 +603,22 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
       generateShopeeAwbPdf({ context: getActionContext(orders), orders, fromStatus }),
     onSuccess: ({ pdfUrl = "", failedOrders = [], printedOrderIds = [] }, variables) => {
       const actionContext = getActionContext(variables?.orders || []);
+      const fromStatus = String(variables?.fromStatus || "").toUpperCase();
+      const successfulRows = getSuccessfulActivityRows(variables?.orders || [], printedOrderIds, failedOrders);
       if (String(variables?.fromStatus || "").toUpperCase() === "PROCESSED") {
         savePushSuccessfulOrders({ context: actionContext, platform: "shopee", orderIds: printedOrderIds });
         invalidateOrderManagementData();
       }
+      logOrderActivities({
+        orders: successfulRows,
+        context: actionContext,
+        eventType: "ORDER_WAYBILL_PRINTED",
+        title: "Order waybill printed",
+        message: "Shopee AWB/waybill was generated from ERP.",
+        oldStatus: fromStatus || undefined,
+        newStatus: fromStatus === "PROCESSED" ? "PROCESSED_PRINTED" : undefined,
+        metadata: { action: "push", pdfReady: Boolean(pdfUrl) },
+      });
 
       setShopeeAwbPdfUrl(pdfUrl);
       setFailedShopeePrintOrders(failedOrders);
@@ -585,10 +639,22 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
       generateTikTokAwbPdf({ context: getActionContext(orders), orders, fromStatus }),
     onSuccess: ({ pdfUrl = "", failedOrders = [], printedOrderIds = [] }, variables) => {
       const actionContext = getActionContext(variables?.orders || []);
+      const fromStatus = String(variables?.fromStatus || "").toUpperCase();
+      const successfulRows = getSuccessfulActivityRows(variables?.orders || [], printedOrderIds, failedOrders);
       if (String(variables?.fromStatus || "").toUpperCase() === "AWAITING_COLLECTION") {
         savePushSuccessfulOrders({ context: actionContext, platform: "tiktok", orderIds: printedOrderIds });
         invalidateOrderManagementData();
       }
+      logOrderActivities({
+        orders: successfulRows,
+        context: actionContext,
+        eventType: "ORDER_WAYBILL_PRINTED",
+        title: "Order waybill printed",
+        message: "TikTok AWB/waybill was generated from ERP.",
+        oldStatus: fromStatus || undefined,
+        newStatus: fromStatus === "AWAITING_COLLECTION" ? "AWAITING_COLLECTION_PRINTED" : undefined,
+        metadata: { action: "push", pdfReady: Boolean(pdfUrl) },
+      });
 
       setTikTokAwbPdfUrl(pdfUrl);
       setFailedTikTokPrintOrders(failedOrders);
@@ -608,10 +674,21 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
     mutationFn: (orders) => packTikTokOrders({ context: getActionContext(orders), orders }),
     onSuccess: ({ successfulIds = [], failedOrders = [] }, orders = []) => {
       const actionContext = getActionContext(orders);
+      const successfulRows = getSuccessfulActivityRows(orders, successfulIds, failedOrders);
       removeOrdersFromCurrentList(successfulIds);
       removeFailedPackOrders({ context: actionContext, platform: "tiktok", orderIds: successfulIds });
       removeWithdrawOrders({ context: actionContext, platform: "tiktok", orderIds: successfulIds });
       saveFailedPackOrders({ context: actionContext, platform: "tiktok", failedOrders });
+      logOrderActivities({
+        orders: successfulRows,
+        context: actionContext,
+        eventType: "ORDER_PACKED",
+        title: "Order packed",
+        message: "TikTok order was packed from ERP.",
+        oldStatus: "AWAITING_SHIPMENT",
+        newStatus: "AWAITING_COLLECTION",
+        metadata: { action: "pack" },
+      });
       invalidateOrderManagementData();
       setSelectedIds([]);
       setSelectedOrderRows([]);
@@ -705,6 +782,54 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
 
   const getActionContext = (rows = []) => rows?.[0]?.storeContext || storeContext || {};
 
+  const hasExpiredActionStore = (rows = []) => {
+    const contexts = rows.length ? rows.map((order) => order?.storeContext || storeContext || {}) : [storeContext || {}];
+    return contexts.some((context) => !context?.isAllStoreContext && isOrderStoreSubscriptionExpired(context));
+  };
+
+  const getExpiredActionStores = (rows = []) => {
+    const sources = rows.length
+      ? rows.map((order) => ({ order, context: order?.storeContext || storeContext || {} }))
+      : [{ order: null, context: storeContext || {} }];
+    const stores = [];
+    const seen = new Set();
+
+    sources.forEach(({ order, context }) => {
+      if (context?.isAllStoreContext || !isOrderStoreSubscriptionExpired(context)) return;
+
+      const platform = String(context?.platform || order?.platform || "").trim();
+      const storeName = String(
+        context?.store ||
+          context?.store_name ||
+          context?.external_store_name ||
+          order?.storeName ||
+          order?.store ||
+          i18n.t("subscription.selectedStore", { defaultValue: "Selected store" })
+      ).trim();
+      const storeId = context?.platform_store_id || context?.store_id || context?.shop_id || context?.external_store_id || "";
+      const key = `${platform}|${storeId || storeName}`;
+
+      if (seen.has(key)) return;
+      seen.add(key);
+      stores.push({
+        platform,
+        storeName,
+        storeId,
+      });
+    });
+
+    return stores;
+  };
+
+  const showExpiredSubscriptionModal = (rows = []) => {
+    const stores = getExpiredActionStores(rows);
+    if (!stores.length) return false;
+    setExpiredActionModal({ stores });
+    return true;
+  };
+
+  const closeExpiredSubscriptionModal = () => setExpiredActionModal(null);
+
   const getActionPlatform = (order) =>
     String(order?.platform || order?.storeContext?.platform || storeContext?.platform || "").toLowerCase();
 
@@ -761,6 +886,16 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
     setWithdrawPackLoading(true);
     try {
       await removeWithdrawOrders({ context: actionContext, platform, orderIds });
+      logOrderActivities({
+        orders: rows,
+        context: actionContext,
+        eventType: "ORDER_WITHDRAW_PACKED",
+        title: "Withdraw order packed",
+        message: "Order was removed from Withdraw after packing.",
+        oldStatus: "WITHDRAW",
+        newStatus: "PACKED",
+        metadata: { action: "pack-withdraw" },
+      });
       removeOrdersFromCurrentList(orderIds);
       invalidateOrderManagementData();
       setSelectedIds([]);
@@ -858,6 +993,16 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
       removeFailedPackOrders({ context: batch.context, platform: batch.platform, orderIds: batchSuccessfulIds });
       removeWithdrawOrders({ context: batch.context, platform: batch.platform, orderIds: batchSuccessfulIds });
       saveFailedPackOrders({ context: batch.context, platform: batch.platform, failedOrders: batchFailedOrders });
+      logOrderActivities({
+        orders: getSuccessfulActivityRows(batch.rows, batchSuccessfulIds, batchFailedOrders),
+        context: batch.context,
+        eventType: "ORDER_PACKED",
+        title: "Order packed",
+        message: `${batch.platform === "shopee" ? "Shopee" : "TikTok"} order was packed from ERP.`,
+        oldStatus: batch.platform === "shopee" ? "READY_TO_SHIP" : "AWAITING_SHIPMENT",
+        newStatus: batch.platform === "shopee" ? "PROCESSED" : "AWAITING_COLLECTION",
+        metadata: { action: "pack", batchKey: batch.key },
+      });
 
       if (batch.platform === "shopee") {
         shopeeFailedOrders.push(...batchFailedOrders);
@@ -904,6 +1049,21 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
       ) {
         savePushSuccessfulOrders({ context: batch.context, platform: batch.platform, orderIds: printedOrderIds });
       }
+      logOrderActivities({
+        orders: getSuccessfulActivityRows(batch.rows, printedOrderIds, failedOrders),
+        context: batch.context,
+        eventType: "ORDER_WAYBILL_PRINTED",
+        title: "Order waybill printed",
+        message: `${batch.platform === "shopee" ? "Shopee" : "TikTok"} AWB/waybill was generated from ERP.`,
+        oldStatus: fromStatus || undefined,
+        newStatus:
+          batch.platform === "shopee" && fromStatus === "PROCESSED"
+            ? "PROCESSED_PRINTED"
+            : batch.platform === "tiktok" && fromStatus === "AWAITING_COLLECTION"
+              ? "AWAITING_COLLECTION_PRINTED"
+              : undefined,
+        metadata: { action: "push", batchKey: batch.key, pdfReady: Boolean(result?.pdfUrl) },
+      });
 
       if (batch.platform === "shopee") {
         shopeeFailedOrders.push(...failedOrders);
@@ -966,6 +1126,12 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
   };
 
   const runAction = (action, rows = selectedRows) => {
+    const restrictedActions = ["pack", "push", "move-to-shipped"];
+    if (restrictedActions.includes(action) && hasExpiredActionStore(rows)) {
+      showExpiredSubscriptionModal(rows);
+      return;
+    }
+
     if (!rows.length) {
       const isShopeeAction =
         ["pack", "push"].includes(action) &&
@@ -1102,6 +1268,10 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
 
   const confirmShopeePrint = () => {
     if (!pendingShopeePrintRows.length) return;
+    if (hasExpiredActionStore(pendingShopeePrintRows)) {
+      toast.error(i18n.t("subscription.printAwbExpired"));
+      return;
+    }
     setShopeeAwbModalOpen(true);
     const rows = pendingShopeePrintRows;
     const fromStatus = shopeePrintStatus;
@@ -1117,6 +1287,10 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
 
   const confirmTikTokPrint = () => {
     if (!pendingTikTokPrintRows.length) return;
+    if (hasExpiredActionStore(pendingTikTokPrintRows)) {
+      toast.error(i18n.t("subscription.printAwbExpired"));
+      return;
+    }
     setTikTokAwbModalOpen(true);
     const rows = pendingTikTokPrintRows;
     const fromStatus = tikTokPrintStatus;
@@ -1157,6 +1331,10 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
   const refreshMultiPlatformTikTokAwbPdf = async (resultId) => {
     const currentResult = multiPlatformAwbResults.find((result) => result.id === resultId);
     if (!currentResult || currentResult.platform !== "tiktok" || multiPlatformAwbRefreshId) return;
+    if (isOrderStoreSubscriptionExpired(currentResult.context)) {
+      toast.error(i18n.t("subscription.printAwbExpired"));
+      return;
+    }
 
     setMultiPlatformAwbRefreshId(resultId);
     try {
@@ -1213,6 +1391,10 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
 
   const refreshTikTokAwbPdf = () => {
     if (!tikTokAwbRows.length || tikTokPrintMutation.isPending) return;
+    if (hasExpiredActionStore(tikTokAwbRows)) {
+      toast.error(i18n.t("subscription.printAwbExpired"));
+      return;
+    }
     if (tikTokAwbPdfUrl) URL.revokeObjectURL(tikTokAwbPdfUrl);
     setTikTokAwbPdfUrl("");
     setFailedTikTokPrintOrders([]);
@@ -1222,6 +1404,10 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
   const markWithdraw = async (rows = selectedRows) => {
     if (!rows.length) {
       toast.error("Please select at least one order");
+      return;
+    }
+    if (hasExpiredActionStore(rows)) {
+      toast.error(i18n.t("subscription.withdrawExpired"));
       return;
     }
 
@@ -1237,6 +1423,16 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
 
     await Promise.all(rows.map((order) => deleteOrderSkuOverride({ order, context: actionContext })));
     await saveWithdrawOrders({ context: actionContext, platform, orderIds });
+    logOrderActivities({
+      orders: rows,
+      context: actionContext,
+      eventType: "ORDER_WITHDRAW_MARKED",
+      title: "Order moved to withdraw",
+      message: "Order was moved to the Withdraw section from ERP.",
+      oldStatus: rows[0]?.rawStatus || undefined,
+      newStatus: "WITHDRAW",
+      metadata: { action: "mark-withdraw" },
+    });
     invalidateOrderManagementData();
     setSelectedIds([]);
     setSelectedOrderRows([]);
@@ -1294,6 +1490,10 @@ export function useOrderList({ pageType = "all", activeTab = "", datePreset, dat
     // actions
     runAction,
     markWithdraw,
+    hasExpiredActionStore,
+    showExpiredSubscriptionModal,
+    expiredActionModal,
+    closeExpiredSubscriptionModal,
     actionLoading: actionMutation.isPending || shopeePackMutation.isPending || shopeePrintMutation.isPending || tikTokPackMutation.isPending || tikTokPrintMutation.isPending || withdrawPackLoading || multiPlatformActionLoading || Boolean(multiPlatformAwbRefreshId),
     cacheOrderForDetail,
     multiPlatformConfirmOpen: Boolean(multiPlatformAction),
