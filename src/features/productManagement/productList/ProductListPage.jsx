@@ -515,6 +515,8 @@ import { AddSkuModal, ConfirmModal } from "./component/ProductModals";
 import { FileSpreadsheet, Loader2, UploadCloud, X } from "lucide-react";
 import { useState } from "react";
 import { exportRowsToXlsx } from "../../../utils/tableOutput";
+import useCompanyPlanAccessGuard from "../../../hooks/useCompanyPlanAccessGuard";
+import CompanyPlanAccessModal from "../../../components/shared/CompanyPlanAccessModal";
 
 const productTemplateColumns = [
   { label: "skuName", key: "skuName" },
@@ -550,6 +552,7 @@ const productTemplateRows = [
 
 export default function ProductListPage() {
   const [confirmImportCancel, setConfirmImportCancel] = useState(false);
+  const { requireCompanyPlan, companyPlanModalProps } = useCompanyPlanAccessGuard();
 
   const {
     search,
@@ -634,7 +637,7 @@ export default function ProductListPage() {
     resetImportTemplateState,
     confirmImportTemplate,
     importingTemplate,
-  } = useProductList();
+  } = useProductList({ warehouseFilterMode: "stock", initialWarehouseFilter: "all" });
 
   const confirmCancelImport = () => {
     resetImportTemplateState();
@@ -699,8 +702,10 @@ export default function ProductListPage() {
         handleBulkAction={handleBulkAction}
         hasActiveFilters={hasActiveFilters}
         resetFilters={resetFilters}
-        setShowAddModal={setShowAddModal}
-        onOpenImportModal={() => setShowImportModal(true)}
+        setShowAddModal={(open) =>
+          open ? requireCompanyPlan(() => setShowAddModal(true)) : setShowAddModal(open)
+        }
+        onOpenImportModal={() => requireCompanyPlan(() => setShowImportModal(true))}
         onDownloadTemplate={handleDownloadTemplate}
         openDeleteModal={openDeleteModal}
         openEditModal={openEditModal}
@@ -954,6 +959,8 @@ export default function ProductListPage() {
           </div>
         </div>
       )}
+
+      <CompanyPlanAccessModal {...companyPlanModalProps} />
     </div>
   );
 }

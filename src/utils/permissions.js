@@ -1,5 +1,6 @@
 export const permissionPathMap = {
   dashboard: ['dashboard'],
+  contact: ['contact'],
   product_list: ['product_management', 'product_list'],
   combine_sku: ['product_management', 'combine_sku'],
   merchant_sku: ['inventory_management', 'merchant_sku'],
@@ -25,6 +26,7 @@ export const permissionPathMap = {
   return_order: ['order_management', 'order_processing', 'return_order'],
   canceled_order: ['order_management', 'order_processing', 'canceled_order'],
   manual_order: ['order_management', 'manual_order'],
+  platform_manual_order: ['order_management', 'platform_manual_order'],
   warehouse_management: ['warehouse_management'],
   store_authorization: ['system_configuration', 'store_authorization'],
   account_management: ['system_configuration', 'account_management'],
@@ -33,6 +35,7 @@ export const permissionPathMap = {
 };
 
 export const routePermissionMap = [
+  ['/warehouse_management/contact', 'contact'],
   ['/warehouse_management/products/list', 'product_list'],
   ['/warehouse_management/products/combine_sku', 'combine_sku'],
   ['/warehouse_management/inventory/merchant_SKU', 'merchant_sku'],
@@ -43,6 +46,9 @@ export const routePermissionMap = [
   ['/warehouse_management/inventory/inbound/draft', 'inbound_draft'],
   ['/warehouse_management/inventory/inbound/onTheWay', 'inbound_on_the_way'],
   ['/warehouse_management/inventory/inbound/completed', 'inbound_complete'],
+  ['/warehouse_management/inventory/outbound/draft', 'outbound_order'],
+  ['/warehouse_management/inventory/outbound/onTheWay', 'outbound_order'],
+  ['/warehouse_management/inventory/outbound/completed', 'outbound_order'],
   ['/warehouse_management/inventory/outbound_order', 'outbound_order'],
   ['/warehouse_management/inventory/log', 'inventory_log'],
   ['/warehouse_management/orders/processing/new_order', 'new_order'],
@@ -54,7 +60,7 @@ export const routePermissionMap = [
   ['/warehouse_management/orders/processing/return_order', 'return_order'],
   ['/warehouse_management/orders/processing/canceled', 'canceled_order'],
   ['/warehouse_management/orders/aftership_manual_order', 'manual_order'],
-  ['/warehouse_management/orders/platform_manual_order', 'manual_order'],
+  ['/warehouse_management/orders/platform_manual_order', 'platform_manual_order'],
   ['/warehouse_management/orders/manual_order', 'manual_order'],
   ['/warehouse_management/warehouse', 'warehouse_management'],
   ['/warehouse_management/config/store_authorization', 'store_authorization'],
@@ -161,9 +167,18 @@ export const getRoutePermissionKey = (pathname) => {
 const getNodeValue = (permissions = {}, key) => permissions?.[key];
 
 export const hasPermissionKey = (user, key) => {
-  if (!key || key === 'dashboard') return true;
+  if (!key || key === 'dashboard' || key === 'contact') return true;
   if (isOwnerUser(user)) return true;
   const permissions = user?.permissions || {};
+  if (key === 'platform_manual_order') {
+    const orderManagement = permissions?.order_management;
+    const orderSub = orderManagement?.sub;
+    const hasPlatformKey = orderSub && Object.prototype.hasOwnProperty.call(orderSub, 'platform_manual_order');
+    if (orderManagement?.access === true && orderSub && !hasPlatformKey) {
+      const legacyManualOrder = orderSub.manual_order;
+      if (legacyManualOrder === true || legacyManualOrder?.access === true) return true;
+    }
+  }
   const path = permissionPathMap[key] || [key];
   let node = getNodeValue(permissions, path[0]);
   if (node === true) return path.length === 1;

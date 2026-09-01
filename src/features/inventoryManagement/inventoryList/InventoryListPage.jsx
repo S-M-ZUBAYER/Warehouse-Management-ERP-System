@@ -9,6 +9,8 @@ import StockAlertBadge from './component/StockAlertBadge';
 import { exportRowsToCsv, exportRowsToXlsx, printRows } from '../../../utils/tableOutput';
 import ExportMenu from '../../../components/shared/ExportMenu';
 import ListPageSizePagination from '../../../components/shared/ListPageSizePagination';
+import useCompanyPlanAccessGuard from '../../../hooks/useCompanyPlanAccessGuard';
+import CompanyPlanAccessModal from '../../../components/shared/CompanyPlanAccessModal';
 import {
     useInventoryList,
     SKU_TYPE_OPTIONS,
@@ -29,6 +31,7 @@ export default function InventoryListPage() {
     const [editStep, setEditStep] = useState('form');
     const location = useLocation();
     const initialStockAlertStatus = location.state?.stockAlertStatus || '';
+    const { requireCompanyPlan, companyPlanModalProps } = useCompanyPlanAccessGuard();
 
     const bulkRef  = useRef(null);
     const skuRef   = useRef(null);
@@ -290,7 +293,7 @@ export default function InventoryListPage() {
 
                         {/* Sync Stock */}
                         <button
-                            onClick={handleSyncOpen}
+                            onClick={() => requireCompanyPlan(handleSyncOpen)}
                             className="px-4 py-1.5 text-sm font-semibold border border-surface-border rounded-lg text-slate-700 bg-white hover:bg-surface-card transition-colors"
                         >
                             Sync Stock
@@ -466,7 +469,7 @@ export default function InventoryListPage() {
                                                         <div className="absolute right-3 top-10 z-30 w-36 rounded-xl border border-surface-border bg-white shadow-lg py-1 text-left">
                                                             <button
                                                                 type="button"
-                                                                onClick={() => openEditModal(item)}
+                                                                onClick={() => requireCompanyPlan(() => openEditModal(item))}
                                                                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-surface-card transition-colors"
                                                             >
                                                                 <Pencil size={14} /> Edit
@@ -831,6 +834,8 @@ export default function InventoryListPage() {
                     </div>
                 </Modal>
             )}
+
+            <CompanyPlanAccessModal {...companyPlanModalProps} />
         </div>
     );
 }

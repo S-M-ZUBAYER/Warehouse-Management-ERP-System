@@ -18,6 +18,37 @@ const isEmpty = (value) =>
   value === null || value === undefined || value === "" ||
   (Array.isArray(value) && value.length === 0);
 
+const parseJsonLikeValue = (value) => {
+  if (typeof value !== "string") return value;
+
+  const trimmed = value.trim();
+  if (!trimmed || !["{", "["].includes(trimmed[0])) return value;
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return value;
+  }
+};
+
+const formatSimpleValue = (value) => {
+  if (isEmpty(value)) return "—";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "number") return Number.isFinite(value) ? value.toLocaleString() : String(value);
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) {
+    if (value.every((v) => ["string", "number", "boolean"].includes(typeof v))) {
+      return value.join(", ");
+    }
+    return `${value.length} item(s)`;
+  }
+  if (typeof value === "object") {
+    const name = value.name || value.store_name || value.sku_name || value.title || value.label;
+    return name || JSON.stringify(value, null, 2);
+  }
+  return String(value);
+};
+
 const renderValue = (value) => {
   if (isEmpty(value)) return "—";
   if (typeof value === "boolean") return value ? "Yes" : "No";
@@ -46,6 +77,28 @@ const renderValue = (value) => {
   return String(value);
 };
 
+const expandKeyValueRows = ({ label, value, language }) => {
+  const parsed = parseJsonLikeValue(value);
+
+  if (!parsed || typeof parsed !== "object") {
+    return [{ label, value, fullWidth: true }];
+  }
+
+  const entries = Array.isArray(parsed)
+    ? parsed.map((item, index) => [`Item ${index + 1}`, item])
+    : Object.entries(parsed);
+
+  if (!entries.length) {
+    return [{ label, value: "—", fullWidth: true }];
+  }
+
+  return entries.map(([key, item]) => ({
+    label: translateStaticText(formatLabel(key), language),
+    value: formatSimpleValue(parseJsonLikeValue(item)),
+    fullWidth: false,
+  }));
+};
+
 export default function RecordDetailModal({
   open,
   title = "Details",
@@ -54,6 +107,7 @@ export default function RecordDetailModal({
   fields,
   onClose,
   showRecordId = true,
+  children,
 }) {
   const { i18n } = useTranslation();
 
@@ -62,11 +116,17 @@ export default function RecordDetailModal({
   const language = i18n.resolvedLanguage || i18n.language;
 
   const rows = (fields && fields.length ? fields : Object.keys(record).slice(0, 24).map((key) => ({ key })))
-    .map((field) => {
+    .flatMap((field) => {
       const key = field.key || field;
       const value = field.render ? field.render(record) : record[key];
       const label = normalizeLabelAcronyms(field.label || formatLabel(key));
-      return { label: translateStaticText(label, language), value, fullWidth: field.fullWidth };
+      const translatedLabel = translateStaticText(label, language);
+
+      if (field.display === "keyValue") {
+        return expandKeyValueRows({ label: translatedLabel, value, language });
+      }
+
+      return [{ label: translatedLabel, value, fullWidth: field.fullWidth }];
     });
 
   return (
@@ -109,6 +169,8 @@ export default function RecordDetailModal({
               </div>
             ))}
           </div>
+
+          {children ? <div className="mt-5">{children}</div> : null}
         </div>
 
         <div className="flex justify-end px-6 py-4 border-t border-surface-border">

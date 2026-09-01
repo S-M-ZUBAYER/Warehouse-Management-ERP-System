@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, createContext, useContext } from "react";
 import { useTranslation } from "react-i18next";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -19,10 +19,12 @@ import {
   FileText,
   AlertCircle,
   Crown,
+  Mail,
   MessageCircle,
 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
 import { getStoredWarehouseUser, filterNavByPermission } from "@/utils/permissions";
+import api from "@/lib/api";
 import grozziielogo from "../../assets/GrozziieLogo.svg";
 
 // ── Nav config ────────────────────────────────────────────────────────────
@@ -137,27 +139,27 @@ const navItems = [
       {
         label: "Outbound",
         i18nKey: "nav.outbound",
-        permissionKey: "inbound",
+        permissionKey: "outbound_order",
         icon: RotateCcw,
         children: [
           {
             label: "Draft",
             i18nKey: "nav.draft",
-            permissionKey: "inbound_draft",
+            permissionKey: "outbound_order",
             to: "/warehouse_management/inventory/outbound/draft",
             icon: FileText,
           },
           {
             label: "On The Way",
             i18nKey: "nav.onTheWay",
-            permissionKey: "inbound_on_the_way",
+            permissionKey: "outbound_order",
             to: "/warehouse_management/inventory/outbound/onTheWay",
             icon: AlertCircle,
           },
           {
             label: "Complete",
             i18nKey: "nav.complete",
-            permissionKey: "inbound_complete",
+            permissionKey: "outbound_order",
             to: "/warehouse_management/inventory/outbound/completed",
             icon: AlertCircle,
           },
@@ -258,7 +260,7 @@ const navItems = [
       {
         label: "Platform Manual Order",
         i18nKey: "nav.platformManualOrder",
-        permissionKey: "manual_order",
+        permissionKey: "platform_manual_order",
         to: "/warehouse_management/orders/platform_manual_order",
         icon: FileText,
       },
@@ -313,6 +315,13 @@ const navItems = [
         ],
       },
     ],
+  },
+  {
+    label: "Contact",
+    i18nKey: "nav.contact",
+    permissionKey: "contact",
+    to: "/warehouse_management/contact",
+    icon: Mail,
   },
   //  {
   //   label: "Chat",
@@ -703,31 +712,157 @@ function NavItem({
 }
 
 // ── Upgrade Plan Banner ────────────────────────────────────────────────────
-const handleToUpgradePlan = () => {
-  console.log("Upgrade plan");
-};
+const STORE_AUTHORIZATION_PATH = "/warehouse_management/config/store_authorization";
+const PRICING_PATH = "/warehouse_management/pricing";
+
+function formatSidebarDuration(subscription = {}, t = (key, options) => options?.defaultValue || key) {
+  const status = String(subscription.status || "").toLowerCase();
+  const hasSubscriptionInfo =
+    subscription.status !== undefined ||
+    subscription.remainingDays !== undefined ||
+    subscription.expiresAt !== undefined ||
+    subscription.expires_at !== undefined;
+  if (!hasSubscriptionInfo) return "-";
+  const days = Math.max(0, Number(subscription.remainingDays || 0));
+  if (status === "expired" || days === 0) {
+    return t("subscription.expired", { defaultValue: "Expired" });
+  }
+  return t(days === 1 ? "subscription.oneDayLeft" : "subscription.daysLeft", {
+    count: days,
+    defaultValue: `${days} ${days === 1 ? "day" : "days"} left`,
+  });
+}
+
+function getSidebarDurationTone(subscription = {}) {
+  const status = String(subscription.status || "").toLowerCase();
+  const hasSubscriptionInfo =
+    subscription.status !== undefined ||
+    subscription.remainingDays !== undefined ||
+    subscription.expiresAt !== undefined ||
+    subscription.expires_at !== undefined;
+  if (!hasSubscriptionInfo) return "text-[#6B8299]";
+  const days = Math.max(0, Number(subscription.remainingDays || 0));
+  if (status === "expired" || days === 0) return "text-red-600";
+  if (days < 7) return "text-amber-600";
+  return "text-[#004368]";
+}
+
+function normalizeSidebarStore(store) {
+  const subscription = store?.subscription || {};
+  return {
+    id: store?.id,
+    name:
+      store?.store_name ||
+      store?.external_store_name ||
+      store?.storeName ||
+      store?.shopName ||
+      `Store #${store?.id || "-"}`,
+    subscription,
+    durationClassName: getSidebarDurationTone(subscription),
+  };
+}
 
 function UpgradePlan({ collapsed }) {
-  if (collapsed) return null;
+  const navigate = useNavigate();
+  const { t } = useTranslation();
+  const [stores, setStores] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (collapsed) return;
+    let alive = true;
+    setLoading(true);
+
+    api
+      .get("/platform-stores", { params: { page: 1, limit: 1000 } })
+      .then((response) => {
+        if (!alive) return;
+        const rows = Array.isArray(response?.data) ? response.data : [];
+        setStores(rows.map(normalizeSidebarStore));
+      })
+      .catch(() => {
+        if (alive) setStores([]);
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, [collapsed]);
+
+  const handleToUpgradePlan = () => {
+    navigate(PRICING_PATH);
+  };
+
+  const handleSeeAll = () => {
+    navigate(STORE_AUTHORIZATION_PATH);
+  };
+
+  if (collapsed) {
+    return (
+      <div className="flex-shrink-0 px-2 py-3">
+        <button
+          type="button"
+          onClick={handleToUpgradePlan}
+          title={t("subscription.upgradePlan", { defaultValue: "Upgrade Plan" })}
+          className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-[#004368] text-white transition-colors hover:bg-[#003255]"
+        >
+          <Crown size={17} />
+        </button>
+      </div>
+    );
+  }
+
+  const visibleStores = stores.slice(0, 3);
 
   return (
-    <div onClick={handleToUpgradePlan} className="flex-shrink-0 px-3 py-3 ">
+    <div className="flex-shrink-0 px-3 py-3">
       <div className="rounded-xl bg-[#FFFFFF] border border-surface-card p-3">
-        <div className="flex items-center justify-between mb-1.5">
+        <div className="mb-3 flex items-center justify-between">
           <span className="text-xs font-semibold text-primary-text">
-            Free Trial(v-1.1)
+            {t("subscription.storePlans", { defaultValue: "Store Plans" })}
           </span>
-          <span className="text-xs text-[#6B8299]">30 Days left</span>
+          <button
+            type="button"
+            onClick={handleSeeAll}
+            className="text-xs font-semibold text-[#004368] hover:underline"
+          >
+            {t("subscription.seeAll", { defaultValue: "See all" })}
+          </button>
         </div>
-        <div className="w-full h-1.5 bg-surface-card rounded-full mb-3">
-          <div
-            className="h-1.5 bg-[#004368] rounded-full"
-            style={{ width: "40%" }}
-          />
+
+        <div className="mb-3 space-y-2">
+          {loading ? (
+            <p className="text-xs text-[#6B8299]">
+              {t("subscription.loadingStores", { defaultValue: "Loading stores..." })}
+            </p>
+          ) : visibleStores.length ? (
+            visibleStores.map((store) => (
+              <div key={store.id || store.name} className="flex items-center justify-between gap-3 rounded-lg bg-[#F8FAFC] px-3 py-2">
+                <span className="min-w-0 truncate text-xs font-semibold text-primary-text" title={store.name}>
+                  {store.name}
+                </span>
+                <span className={`shrink-0 text-[11px] font-semibold ${store.durationClassName}`}>
+                  {formatSidebarDuration(store.subscription, t)}
+                </span>
+              </div>
+            ))
+          ) : (
+            <p className="text-xs text-[#6B8299]">
+              {t("subscription.noStoresFound", { defaultValue: "No stores found" })}
+            </p>
+          )}
         </div>
-        <button className="w-full flex items-center justify-center gap-2 bg-[#004368] hover:bg-[#003255] text-white text-xs font-semibold py-2.5 rounded-lg transition-colors duration-150">
+
+        <button
+          type="button"
+          onClick={handleToUpgradePlan}
+          className="w-full flex items-center justify-center gap-2 bg-[#004368] hover:bg-[#003255] text-white text-xs font-semibold py-2.5 rounded-lg transition-colors duration-150"
+        >
           <Crown size={13} />
-          Upgrade Plan
+          {t("subscription.upgradePlan", { defaultValue: "Upgrade Plan" })}
         </button>
       </div>
     </div>
@@ -813,7 +948,7 @@ export default function Sidebar() {
         </div>
       )}
 
-      {/* <UpgradePlan collapsed={sidebarCollapsed} /> */}
+      <UpgradePlan collapsed={sidebarCollapsed} />
     </aside>
   );
 }

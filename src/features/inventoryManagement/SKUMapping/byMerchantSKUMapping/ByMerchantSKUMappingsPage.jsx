@@ -23,6 +23,8 @@ import ConfirmModal from '../components/ConfirmModal';
 import { TableSkeleton, EmptyState } from '../components/TableHelpers';
 import ListPageSizePagination from '../../../../components/shared/ListPageSizePagination';
 import ExportMenu from '../../../../components/shared/ExportMenu';
+import useCompanyPlanAccessGuard from '../../../../hooks/useCompanyPlanAccessGuard';
+import CompanyPlanAccessModal from '../../../../components/shared/CompanyPlanAccessModal';
 import api from '../../../../lib/api';
 import { exportRowsToCsv, exportRowsToXlsx, printRows } from '../../../../utils/tableOutput';
 
@@ -77,6 +79,7 @@ const removeGroupMember = ({ groupId, memberSkuId }) =>
 export default function ByMerchantSKUMappingsPage() {
     const qc = useQueryClient();
     const { platforms, stores, getStoresForPlatform } = useSkuMappingDropdowns();
+    const { requireCompanyPlan, companyPlanModalProps } = useCompanyPlanAccessGuard();
 
     const {
         searchInput, setSearchInput, handleSearch,
@@ -297,7 +300,7 @@ export default function ByMerchantSKUMappingsPage() {
     };
 
     const handleMappingIconClick = (sku) => {
-        openMapModal(sku);
+        requireCompanyPlan(() => openMapModal(sku));
     };
 
     // Group sync modal: only parent/mapped SKUs can add same-warehouse child SKUs.
@@ -653,9 +656,9 @@ export default function ByMerchantSKUMappingsPage() {
             </div>
 
             {showMapModal && mapTarget && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(180,195,210,0.5)', backdropFilter: 'blur(3px)' }} onClick={(e) => e.target === e.currentTarget && !mapMutation.isPending && setShowMapModal(false)}>
-                    <div className="bg-white rounded-2xl shadow-xl w-full font-body overflow-hidden" style={{ maxWidth: '620px', animation: 'popIn 0.18s ease both' }}>
-                        <div className="px-8 py-5 border-b border-surface-border flex items-center justify-between">
+                <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4" style={{ background: 'rgba(180,195,210,0.5)', backdropFilter: 'blur(3px)' }} onClick={(e) => e.target === e.currentTarget && !mapMutation.isPending && setShowMapModal(false)}>
+                    <div className="bg-white rounded-2xl shadow-xl w-full font-body overflow-hidden flex flex-col" style={{ maxWidth: '620px', maxHeight: 'calc(100vh - 2rem)', animation: 'popIn 0.18s ease both' }}>
+                        <div className="px-8 py-5 border-b border-surface-border flex items-center justify-between shrink-0">
                             <div>
                                 <h2 className="text-base font-bold text-slate-800 font-display">{mapTarget.is_mapped ? 'View / Change Platform SKU Mapping' : 'Map Parent SKU to Store'}</h2>
                                 <p className="text-xs text-slate-500 mt-0.5">Parent SKU: <span className="font-semibold text-primary">{mapTarget.sku_name}</span></p>
@@ -663,7 +666,7 @@ export default function ByMerchantSKUMappingsPage() {
                             <button onClick={() => !mapMutation.isPending && setShowMapModal(false)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
                         </div>
 
-                        <div className="px-8 py-5 space-y-4">
+                        <div className="px-8 py-5 space-y-4 overflow-y-auto min-h-0 flex-1">
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
                                     <p className="text-xs font-semibold text-slate-500 mb-1.5">Shop Platform</p>
@@ -817,7 +820,7 @@ export default function ByMerchantSKUMappingsPage() {
                             </p>
                         </div>
 
-                        <div className="flex gap-3 px-8 py-5 border-t border-surface-border">
+                        <div className="flex gap-3 px-8 py-5 border-t border-surface-border shrink-0">
                             <button onClick={() => setShowMapModal(false)} disabled={mapMutation.isPending} className="flex-1 py-2.5 rounded-xl text-sm font-semibold border border-surface-border text-slate-700 bg-white hover:bg-surface-card disabled:opacity-50">Cancel</button>
                             <button onClick={confirmStoreMapping} disabled={mapMutation.isPending || selectedStoreIds.length === 0} className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-primary hover:bg-primary-dark text-white disabled:opacity-60 flex items-center justify-center gap-2">
                                 {mapMutation.isPending && <Loader2 size={14} className="animate-spin" />}
@@ -994,6 +997,8 @@ export default function ByMerchantSKUMappingsPage() {
                     </div>
                 </div>
             )}
+
+            <CompanyPlanAccessModal {...companyPlanModalProps} />
 
             <style>{`@keyframes popIn { from { opacity:0; transform:scale(0.97) translateY(8px); } to { opacity:1; transform:scale(1) translateY(0); } }`}</style>
         </div>

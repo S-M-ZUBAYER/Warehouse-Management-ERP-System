@@ -274,10 +274,12 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bell, ChevronRight, User, KeyRound, Lock, LogOut, X } from 'lucide-react';
+import { ArrowLeft, ChevronRight, User, KeyRound, Lock, LogOut, X, Gift as GiftIcon, Share2 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import LanguageSelector from '../shared/LanguageSelector';
+import GiftReferralModalController from './GiftReferralModalController';
 import { getPageTitleKey } from '../../i18n';
+import api from '../../lib/api';
 
 const parseJson = (value) => {
     try { return value ? JSON.parse(value) : null; } catch { return null; }
@@ -330,11 +332,12 @@ const summarizePermissions = (permissions) => {
         .join(', ');
 };
 
-export default function Topbar({ PageTitle, showBack = false, onBack }) {
+export default function Topbar({ PageTitle, showBack = false, onBack, giftReferralControllerProps = {} }) {
     const navigate = useNavigate();
     const { t } = useTranslation();
     const [showDropdown, setShowDropdown] = useState(false);
     const [showProfileModal, setShowProfileModal] = useState(false);
+    const [giftCount, setGiftCount] = useState(0);
     const dropdownRef = useRef(null);
 
     const authUser = useAuthStore((state) => state.user);
@@ -524,6 +527,40 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
         navigate('/warehouse_management/login', { replace: true });
     };
 
+    const refreshGiftCount = async () => {
+        if (!localStorage.getItem('whmAccessToken')) {
+            setGiftCount(0);
+            return;
+        }
+
+        try {
+            const response = await api.get('/subscription/gifts/count');
+            const count = response?.data?.count ?? response?.count ?? 0;
+            setGiftCount(Number(count) || 0);
+        } catch {
+            setGiftCount(0);
+        }
+    };
+
+    useEffect(() => {
+        refreshGiftCount();
+    }, []);
+
+    useEffect(() => {
+        window.addEventListener('refresh-gift-count', refreshGiftCount);
+        return () => window.removeEventListener('refresh-gift-count', refreshGiftCount);
+    }, []);
+
+    const openGiftNotifications = () => {
+        setShowDropdown(false);
+        window.dispatchEvent(new Event('open-gift-notifications'));
+    };
+
+    const shareReferralCode = () => {
+        setShowDropdown(false);
+        window.dispatchEvent(new CustomEvent('open-referral-code'));
+    };
+
     const initials = profile.fullName
         .split(/\s+/)
         .filter(Boolean)
@@ -537,23 +574,32 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
         [t('topbar.email'), profile.email],
         [t('topbar.role'), profile.role],
         [t('topbar.phone'), profile.phone],
-        ['Company / Shop', profile.companyName],
+        [t('topbar.companyShop'), profile.companyName],
         [t('topbar.department'), profile.department],
         [t('topbar.designation'), profile.designation],
         [t('topbar.warehouse'), profile.warehouse],
-        ['Assigned Warehouses', profile.assignedWarehouses],
-        ['Store Access', profile.storeAccess],
-        ['Permissions', profile.permissionSummary],
-        ['Timezone', profile.timezone],
-        ['Created Date', profile.createdDate],
-        ['Last Login', profile.lastLogin],
-        ['Email Verified', profile.emailVerified],
+        [t('topbar.assignedWarehouses'), profile.assignedWarehouses],
+        [t('topbar.storeAccess'), profile.storeAccess],
+        [t('topbar.permissions'), profile.permissionSummary],
+        [t('topbar.timezone'), profile.timezone],
+        [t('topbar.createdDate'), profile.createdDate],
+        [t('topbar.lastLogin'), profile.lastLogin],
+        [t('topbar.emailVerified'), profile.emailVerified],
     ];
 
     const dropdownItems = [
         {
             icon: User, label: t('topbar.profileInfo'),
             onClick: () => { setShowProfileModal(true); setShowDropdown(false); },
+        },
+        {
+            icon: GiftIcon, label: t('topbar.myGift'),
+            count: giftCount,
+            onClick: openGiftNotifications,
+        },
+        {
+            icon: Share2, label: t('topbar.shareReferralCode'),
+            onClick: shareReferralCode,
         },
         // {
         //     icon: KeyRound, label: 'Reset Password',
@@ -598,9 +644,6 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
 
             <div className="flex items-center gap-3 ml-auto">
                 <LanguageSelector />
-                {/* <button className="relative w-11 h-11 flex items-center justify-center rounded-full transition-colors bg-white cursor-pointer hover:bg-slate-200">
-                    <Bell size={18} className="text-primary" strokeWidth={1.8} />
-                </button> */}
 
                 <div className="relative bg-white rounded-3xl" ref={dropdownRef}>
                     <button
@@ -634,7 +677,7 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
                     {showDropdown && (
                         <div
                             className="absolute right-0 top-full mt-2 rounded-2xl py-2 z-50"
-                            style={{ width: '180px', background: '#FFFFFF', boxShadow: '0 8px 30px rgba(0,0,0,0.12)', border: '1px solid #F1F5F9' }}
+                            style={{ width: '220px', background: '#FFFFFF', boxShadow: '0 8px 30px rgba(0,0,0,0.12)', border: '1px solid #F1F5F9' }}
                         >
                             {dropdownItems.map((item) => (
                                 <button
@@ -646,13 +689,22 @@ export default function Topbar({ PageTitle, showBack = false, onBack }) {
                                     onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
                                 >
                                     <item.icon size={14} strokeWidth={1.8} />
-                                    {item.label}
+                                    <span className="flex-1 text-left">{item.label}</span>
+                                    {item.count > 0 ? (
+                                        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#EF4444] px-1.5 text-[10px] font-bold text-white">
+                                            {item.count > 99 ? '99+' : item.count}
+                                        </span>
+                                    ) : null}
                                 </button>
                             ))}
                         </div>
                     )}
                 </div>
             </div>
+            <GiftReferralModalController
+                {...giftReferralControllerProps}
+                onGiftCountChange={refreshGiftCount}
+            />
             {showProfileModal && (
                 <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
                     <div className="w-full max-w-3xl max-h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">

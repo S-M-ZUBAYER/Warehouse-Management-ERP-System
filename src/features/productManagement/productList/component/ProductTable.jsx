@@ -14,37 +14,48 @@ import RecordDetailModal from "../../../../components/shared/RecordDetailModal";
 import { exportRowsToCsv, exportRowsToXlsx, printRows } from "../../../../utils/tableOutput";
 import ExportMenu from "../../../../components/shared/ExportMenu";
 
-const parseProductDetails = (row) => {
-  const value = row?.product_details ?? row?.productDetails;
-  if (!value) return {};
-  if (typeof value === "object") return value;
-  if (typeof value !== "string") return {};
-
-  const trimmed = value.trim();
-  if (!trimmed || !["{", "["].includes(trimmed[0])) return {};
-
-  try {
-    const parsed = JSON.parse(trimmed);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? parsed
-      : {};
-  } catch {
-    return {};
-  }
-};
-
 const firstValue = (...values) =>
   values.find((value) => value !== null && value !== undefined && value !== "") ?? "-";
 
-const detailField = (key) => ({
-  label: key
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase()),
-  render: (row) => {
-    const details = parseProductDetails(row);
-    return firstValue(details[key], row?.[key]);
-  },
-});
+const formatDateTime = (value) => {
+  if (!value) return "-";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+};
+
+const getMasterWarehouseName = (row) =>
+  row?.warehouse?.name || row?.warehouse_name || row?.warehouseName || "";
+
+const formatStockWarehouseNames = (row) => {
+  const masterWarehouseName = String(getMasterWarehouseName(row)).trim().toLowerCase();
+  const uniqueNames = (names) =>
+    [...new Set(names.filter(Boolean))]
+      .filter((name) => String(name).trim().toLowerCase() !== masterWarehouseName);
+
+  if (Array.isArray(row?.stock_warehouse_names) && row.stock_warehouse_names.length) {
+    return uniqueNames(row.stock_warehouse_names).join(", ");
+  }
+
+  if (Array.isArray(row?.stock_warehouses) && row.stock_warehouses.length) {
+    const names = row.stock_warehouses
+      .map((warehouse) => warehouse?.warehouse_name || warehouse?.name || warehouse?.warehouse_id)
+      .filter(Boolean);
+    return uniqueNames(names).join(", ");
+  }
+
+  const singleName = row?.stock_warehouse_name || "";
+  return String(singleName).trim().toLowerCase() === masterWarehouseName ? "" : singleName;
+};
 
 // ── Row Actions Dropdown ──────────────────────────────────────────────────────
 function RowActions({ product, onEdit, onDelete }) {
@@ -213,7 +224,8 @@ export default function ProductTable({
   const exportColumns = [
     { label: "SKU", key: "sku_name" },
     { label: "Product Name", key: "sku_title" },
-    { label: "Warehouse", render: (row) => row.warehouse?.name || row.warehouse_name || "" },
+    { label: "Warehouse", render: getMasterWarehouseName },
+    { label: "Other Warehouses", render: formatStockWarehouseNames },
     { label: "Available", key: "available_in_inventory" },
     { label: "In Transit", key: "in_transit_inventory" },
     { label: "Status", key: "status" },
@@ -430,10 +442,22 @@ export default function ProductTable({
                         >
                           {product.sku_title}
                         </p>
-                        {product.warehouse && (
-                          <p className="text-xs text-slate-400 mt-0.5">
-                            {product.warehouse.name}
-                          </p>
+                        {(getMasterWarehouseName(product) || formatStockWarehouseNames(product)) && (
+                          <div className="mt-0.5 space-y-0.5">
+                            {getMasterWarehouseName(product) && (
+                              <p className="text-xs text-slate-400">
+                                {getMasterWarehouseName(product)}
+                              </p>
+                            )}
+                            {formatStockWarehouseNames(product) && (
+                              <p
+                                className="text-xs text-slate-500 truncate max-w-[260px]"
+                                title={formatStockWarehouseNames(product)}
+                              >
+                                {formatStockWarehouseNames(product)}
+                              </p>
+                            )}
+                          </div>
                         )}
                       </td>
                       <td className="py-3 pr-4">
@@ -564,7 +588,8 @@ export default function ProductTable({
         fields={[
           { label: "SKU", key: "sku_name" },
           { label: "Product Name", key: "sku_title" },
-          { label: "Warehouse", render: (row) => row.warehouse?.name || row.warehouse_name || "—" },
+          { label: "Warehouse", render: (row) => getMasterWarehouseName(row) || "—" },
+          { label: "Other Warehouses", render: (row) => formatStockWarehouseNames(row) || "—" },
           { label: "Available Inventory", key: "available_in_inventory" },
           { label: "In Transit Inventory", key: "in_transit_inventory" },
           { label: "GTIN", key: "gtin" },
@@ -572,23 +597,16 @@ export default function ProductTable({
           { label: "Weight", key: "weight" },
           { label: "Size", render: (row) => [row.length, row.width, row.height].filter(Boolean).join(" × ") || "—" },
           { label: "Status", key: "status" },
-          { label: "Created", key: "createdAt" },
+          { label: "Created", render: (row) => formatDateTime(firstValue(row.created_at, row.createdAt)) },
           { label: "Merchant SKU ID", render: (row) => firstValue(row.id) },
-          { label: "Product Details", render: (row) => firstValue(row.product_details, row.productDetails), fullWidth: true },
+          { label: "Product Details", render: (row) => firstValue(row.product_details, row.productDetails), fullWidth: true, display: "keyValue" },
           { label: "Warehouse ID", render: (row) => firstValue(row.warehouse_id, row.warehouseId) },
           { label: "Cost Price", render: (row) => firstValue(row.cost_price, row.costPrice) },
           { label: "Length", render: (row) => firstValue(row.length) },
           { label: "Width", render: (row) => firstValue(row.width) },
           { label: "Height", render: (row) => firstValue(row.height) },
           { label: "Country", render: (row) => firstValue(row.country) },
-          detailField("source"),
-          detailField("platform"),
-          detailField("platform_store_id"),
-          detailField("platform_product_id"),
-          detailField("platform_sku_id"),
-          detailField("seller_sku"),
-          detailField("variant_name"),
-          { label: "Updated", key: "updatedAt" },
+          { label: "Updated", render: (row) => formatDateTime(firstValue(row.updated_at, row.updatedAt)) },
         ]}
       />
     </div>

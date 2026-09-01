@@ -40,6 +40,10 @@ import OutboundCompletedPage from "../features/inventoryManagement/Outbound/comp
 import OutboundOnTheWayPage from "../features/inventoryManagement/Outbound/onTheWay/OutboundOnTheWayPage";
 import OutboundDraftPage from "../features/inventoryManagement/Outbound/draft/OutboundDraftPage";
 import ChatPage from "../features/chat/ChatPage";
+import PricingPage from "../features/pricing/PricingPage";
+import PricingCheckoutPage from "../features/pricing/PricingCheckoutPage";
+import PricingPaymentSuccessPage from "../features/pricing/PricingPaymentSuccessPage";
+import ContactPage from "../features/contact/ContactPage";
 
 export const routes = [
   {
@@ -53,6 +57,7 @@ export const routes = [
       // Dashboard Routes
       { index: true, element: <DashboardPage /> },
       { path: "/warehouse_management/chat", element: <ChatPage /> },
+      { path: "/warehouse_management/contact", element: <ContactPage /> },
 
       // Product Management Routes
       {
@@ -214,5 +219,19 @@ export const routes = [
     path: "warehouse_management/verifyemail",
     element: <VerifyEmail />,
   },
+
+  {
+    path: "warehouse_management/pricing",
+    element: <PricingPage />,
+  },
+  {
+    path: "warehouse_management/pricing/checkout",
+    element: <PricingCheckoutPage />,
+  },
+  {
+    path: "warehouse_management/pricing/success",
+    element: <PricingPaymentSuccessPage />,
+  },
+
   { path: "*", element: <NotFound /> },
 ];

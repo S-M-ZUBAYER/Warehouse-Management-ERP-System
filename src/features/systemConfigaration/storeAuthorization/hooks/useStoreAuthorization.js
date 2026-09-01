@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import api from "../../../../lib/api";
 import { toast } from "sonner";
+import i18n from "../../../../i18n";
 
 const PLATFORMS = ["All", "Shopee", "Lazada", "TikTok"];
 const STATUSES = ["All", "Authorized", "Disabled"];
@@ -98,11 +99,27 @@ const formatDateTime = (value) => {
     }).format(date);
 };
 
+const formatRemainingDays = (days, status) => {
+    const count = Math.max(0, Number(days || 0));
+    if (String(status || "").toLowerCase() === "expired" || count === 0) return "Expired";
+    return `${count} ${count === 1 ? "day" : "days"} left`;
+};
+
 const normalizeStore = (store) => {
     const marketplace = platformLabel(store.platform);
     const nickname = store.store_name || store.external_store_name || "-";
-    const autoOrderAccept = Boolean(store.auto_order_accept ?? store.autoOrderAccept);
     const autoOrderAcceptDays = normalizeAutoOrderAcceptDays(store.auto_order_accept_days ?? store.autoOrderAcceptDays);
+    const subscription = store.subscription || {};
+    const hasSubscriptionInfo =
+        subscription.status !== undefined ||
+        subscription.remainingDays !== undefined ||
+        subscription.expiresAt !== undefined ||
+        subscription.expires_at !== undefined;
+    const subscriptionStatus = String(subscription.status || "").toLowerCase();
+    const remainingDays = Math.max(0, Number(subscription.remainingDays || 0));
+    const isSubscriptionExpired = hasSubscriptionInfo && (subscriptionStatus === "expired" || remainingDays === 0);
+    const isSubscriptionExpiringSoon = !isSubscriptionExpired && hasSubscriptionInfo && remainingDays < 7;
+    const autoOrderAccept = isSubscriptionExpired ? false : Boolean(store.auto_order_accept ?? store.autoOrderAccept);
     return {
         id: store.id,
         raw: store,
@@ -118,6 +135,16 @@ const normalizeStore = (store) => {
         autoOrderAcceptLabel: autoOrderAccept ? "On" : "Off",
         autoOrderAcceptDays,
         autoOrderAcceptDaysLabel: formatAutoOrderAcceptDays(autoOrderAcceptDays),
+        currentPlan: subscription.planName || "-",
+        subscriptionStatus,
+        subscriptionStatusLabel: subscriptionStatus
+            ? subscriptionStatus.charAt(0).toUpperCase() + subscriptionStatus.slice(1)
+            : "-",
+        remainingDays,
+        remainingDaysLabel: formatRemainingDays(remainingDays, subscriptionStatus),
+        isSubscriptionExpiringSoon,
+        expiresAt: formatDateTime(subscription.expiresAt || subscription.expires_at),
+        isSubscriptionExpired,
         createdAt: formatDateTime(store.createdAt || store.created_at),
         defaultWarehouse: store.defaultWarehouse?.name || store.defaultWarehouse?.code || "-",
     };
@@ -353,6 +380,10 @@ export function useStoreAuthorization() {
 
     const requestAutoOrderAcceptToggle = (store) => {
         if (!store?.id) return;
+        if (store.isSubscriptionExpired) {
+            toast.error(i18n.t("subscription.autoAcceptExpired"));
+            return;
+        }
         setAutoOrderAcceptModal({
             open: true,
             mode: "toggle",
@@ -365,6 +396,10 @@ export function useStoreAuthorization() {
 
     const requestAutoOrderAcceptDays = (store) => {
         if (!store?.id) return;
+        if (store.isSubscriptionExpired) {
+            toast.error(i18n.t("subscription.autoProcessDaysExpired"));
+            return;
+        }
         setAutoOrderAcceptModal({
             open: true,
             mode: "days",

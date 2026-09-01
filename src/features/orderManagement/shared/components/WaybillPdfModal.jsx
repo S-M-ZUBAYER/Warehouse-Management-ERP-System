@@ -1,22 +1,42 @@
 import { Download, Printer, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-export default function WaybillPdfModal({ open, title = "Waybill PDF", pdfUrl = "", filename = "waybill.pdf", loading = false, onClose }) {
+const isLocalHostName = (hostname = "") =>
+  ["localhost", "127.0.0.1", "::1"].includes(String(hostname || "").toLowerCase());
+
+const resolveBrowserReachableUrl = (value = "") => {
+  const raw = String(value || "").trim();
+  if (!raw || typeof window === "undefined") return raw;
+
+  try {
+    const url = new URL(raw, window.location.origin);
+    if (isLocalHostName(url.hostname) && !isLocalHostName(window.location.hostname)) {
+      return `${window.location.origin}${url.pathname}${url.search}${url.hash}`;
+    }
+    return url.href;
+  } catch {
+    return raw;
+  }
+};
+
+export default function WaybillPdfModal({ open, title = "Waybill PDF", pdfUrl = "", previewUrl: previewFetchUrl = "", filename = "waybill.pdf", loading = false, onClose }) {
   const iframeRef = useRef(null);
-  const [previewUrl, setPreviewUrl] = useState("");
+  const [previewObjectUrl, setPreviewObjectUrl] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState("");
+  const pdfSourceUrl = resolveBrowserReachableUrl(pdfUrl);
+  const previewSourceUrl = resolveBrowserReachableUrl(previewFetchUrl || pdfSourceUrl);
 
   useEffect(() => {
-    if (!open || !pdfUrl || loading) {
-      setPreviewUrl("");
+    if (!open || !previewSourceUrl || loading) {
+      setPreviewObjectUrl("");
       setPreviewError("");
       setPreviewLoading(false);
       return undefined;
     }
 
-    if (/^(blob:|data:)/i.test(pdfUrl)) {
-      setPreviewUrl(pdfUrl);
+    if (/^(blob:|data:)/i.test(previewSourceUrl)) {
+      setPreviewObjectUrl(previewSourceUrl);
       setPreviewError("");
       setPreviewLoading(false);
       return undefined;
@@ -31,7 +51,7 @@ export default function WaybillPdfModal({ open, title = "Waybill PDF", pdfUrl = 
 
       try {
         const token = localStorage.getItem("whmAccessToken");
-        const response = await fetch(pdfUrl, {
+        const response = await fetch(previewSourceUrl, {
           signal: controller.signal,
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         });
@@ -40,10 +60,10 @@ export default function WaybillPdfModal({ open, title = "Waybill PDF", pdfUrl = 
 
         const blob = await response.blob();
         objectUrl = URL.createObjectURL(blob);
-        setPreviewUrl(objectUrl);
+        setPreviewObjectUrl(objectUrl);
       } catch (error) {
         if (error.name !== "AbortError") {
-          setPreviewUrl("");
+          setPreviewObjectUrl("");
           setPreviewError("Preview blocked by the PDF server. Print and download still use the original file.");
         }
       } finally {
@@ -57,12 +77,14 @@ export default function WaybillPdfModal({ open, title = "Waybill PDF", pdfUrl = 
       controller.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [loading, open, pdfUrl]);
+  }, [loading, open, previewSourceUrl]);
 
   if (!open) return null;
 
+  const displayPreviewUrl = previewObjectUrl || (!previewLoading && pdfSourceUrl ? pdfSourceUrl : "");
+
   const handlePrint = () => {
-    const printableUrl = previewUrl || pdfUrl;
+    const printableUrl = displayPreviewUrl || pdfSourceUrl;
     if (!printableUrl) return;
 
     try {
@@ -113,10 +135,10 @@ export default function WaybillPdfModal({ open, title = "Waybill PDF", pdfUrl = 
           <div className="flex h-[68vh] min-h-[520px] items-center justify-center overflow-hidden rounded-xl border border-surface-border bg-slate-50 shadow-sm">
             {loading || previewLoading ? (
               <div className="text-sm font-semibold text-slate-500">Loading waybill PDF...</div>
-            ) : previewUrl ? (
+            ) : displayPreviewUrl ? (
               <iframe
                 ref={iframeRef}
-                src={previewUrl}
+                src={displayPreviewUrl}
                 title="EasyParcel Waybill PDF Preview"
                 className="h-full w-full"
                 referrerPolicy="no-referrer"
@@ -146,12 +168,12 @@ export default function WaybillPdfModal({ open, title = "Waybill PDF", pdfUrl = 
                 Print
               </button>
               <a
-                href={pdfUrl || undefined}
+                href={pdfSourceUrl || undefined}
                 download={filename}
                 target="_blank"
                 rel="noreferrer"
                 className={`flex items-center justify-center gap-2 rounded-lg border border-surface-border px-4 py-2 text-sm font-semibold transition-colors ${
-                  pdfUrl && !loading
+                  pdfSourceUrl && !loading
                     ? "text-slate-700 hover:bg-surface-card"
                     : "pointer-events-none text-slate-300"
                 }`}

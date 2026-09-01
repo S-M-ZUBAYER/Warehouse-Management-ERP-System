@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   fetchOrderDetail,
+  fetchOrderActivityLogs,
   fetchOrderSkuAdjustments,
   fetchOrderWarehouses,
   getCachedOrderDetail,
@@ -17,6 +18,7 @@ import {
 
 export const ORDER_DETAIL_KEYS = {
   detail: (platform, orderId) => ["order-management", "detail", platform, orderId],
+  activityLogs: (platform, orderId) => ["order-management", "activity-logs", platform, orderId],
   merchantSkus: (params) => ["order-management", "merchant-skus", params],
 };
 
@@ -105,6 +107,13 @@ export function useOrderDetail({
   const adjustmentsQuery = useQuery({
     queryKey: ["order-management", "sku-adjustments", platform, orderIdentity],
     queryFn: () => fetchOrderSkuAdjustments({ platform: order?.platform || platform, orderIds: [orderIdentity] }),
+    enabled: Boolean(orderIdentity && (order?.platform || platform)),
+    staleTime: 1000 * 30,
+  });
+
+  const activityLogsQuery = useQuery({
+    queryKey: ORDER_DETAIL_KEYS.activityLogs(order?.platform || platform, orderIdentity),
+    queryFn: () => fetchOrderActivityLogs({ platform: order?.platform || platform, orderId: orderIdentity }),
     enabled: Boolean(orderIdentity && (order?.platform || platform)),
     staleTime: 1000 * 30,
   });
@@ -440,6 +449,8 @@ export function useOrderDetail({
     mappingSaving: updateMappingMutation.isPending,
     skuAdjustments: adjustmentsQuery.data || order?.skuAdjustments || [],
     skuAdjustmentsLoading: adjustmentsQuery.isLoading || adjustmentsQuery.isFetching,
+    activityLogs: activityLogsQuery.data || [],
+    activityLogsLoading: activityLogsQuery.isLoading || activityLogsQuery.isFetching,
     openAddSkuModal,
     deleteSkuAdjustment: (adjustment) => deleteAdjustmentMutation.mutate(adjustment),
     deletingSkuAdjustment: deleteAdjustmentMutation.isPending,

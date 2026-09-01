@@ -7,12 +7,13 @@ export const NestedPageRow = ({
   togglePermission,
   parentKey = null,
   depth = 0,
+  readOnly = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const hasSub = page.sub && page.sub.length > 0;
-  const isDashboard = page.key === "dashboard";
+  const isAlwaysAllowed = page.key === "dashboard" || page.key === "contact";
   const isParentChecked = parentKey ? !!form.permissions[parentKey] : true;
-  const isChecked = isDashboard ? true : !!form.permissions[page.key];
+  const isChecked = isAlwaysAllowed ? true : !!form.permissions[page.key];
   const visualDepth = Number.isFinite(page.level) ? Math.max(page.level - 1, depth) : depth;
 
   useEffect(() => {
@@ -26,6 +27,10 @@ export const NestedPageRow = ({
     if (hasSub) setIsOpen((prev) => !prev);
   };
 
+  const handlePermissionChange = () => {
+    if (!readOnly) togglePermission?.(page.key, parentKey);
+  };
+
   return (
     <>
       <tr className={`transition-colors border-b border-slate-100 ${visualDepth === 0 ? "bg-white hover:bg-slate-50" : "bg-slate-50/60 hover:bg-slate-100/70"}`}>
@@ -33,10 +38,10 @@ export const NestedPageRow = ({
           <input
             type="checkbox"
             checked={isChecked}
-            disabled={isDashboard || (parentKey && !isParentChecked)}
-            onChange={() => togglePermission(page.key, parentKey)}
+            disabled={readOnly || isAlwaysAllowed || (parentKey && !isParentChecked)}
+            onChange={handlePermissionChange}
             className={`w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer 
-              ${isDashboard || (parentKey && !isParentChecked) ? "opacity-60 cursor-not-allowed" : ""}`}
+              ${readOnly || isAlwaysAllowed || (parentKey && !isParentChecked) ? "opacity-60 cursor-not-allowed" : ""}`}
           />
         </td>
 
@@ -85,6 +90,7 @@ export const NestedPageRow = ({
             togglePermission={togglePermission}
             parentKey={page.key}
             depth={visualDepth + 1}
+            readOnly={readOnly}
           />
         ))}
     </>

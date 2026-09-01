@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { toast } from "sonner";
 import { Search, X } from "lucide-react";
 import Topbar from "../../../../../components/layout/Topbar";
 import ConfirmActionModal from "../../../../../components/shared/ConfirmActionModal";
@@ -9,6 +10,7 @@ import { translateStaticText } from "../../../../../i18nDomTranslator";
 import { useOrderDetail } from "../../../shared/hooks/useOrderDetail";
 import {
   clearOrderDetailReturnContext,
+  isOrderStoreSubscriptionExpired,
   removeWithdrawOrders,
   setOrderDetailReturnContext,
 } from "../../../shared/utils/orderApi";
@@ -81,7 +83,38 @@ const CAN_CHANGE_MAPPING_TABS = ["To Pack", "Pack Failed", "Out Of Stock", "Exch
 const adjustmentSkuLabel = (sku = {}) => sku.sku || sku.name || "-";
 const isValidQuantity = (value) => Number.isInteger(Number(value)) && Number(value) >= 1;
 
-function SkuAdjustmentList({ title, rows = [], onChange, onQuantity, onDelete, loading, tr }) {
+function formatActivityDate(logOrValue) {
+  const log = typeof logOrValue === "object" && logOrValue !== null ? logOrValue : null;
+  if (log?.platformLocalOccurredAt) {
+    const suffix = log.platformRegion || log.platformTimezone;
+    return suffix ? `${log.platformLocalOccurredAt} (${suffix})` : log.platformLocalOccurredAt;
+  }
+
+  const value = log ? log.occurredAt || log.createdAt : logOrValue;
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  const options = {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  };
+  if (log?.platformTimezone) options.timeZone = log.platformTimezone;
+
+  return date.toLocaleString(undefined, {
+    ...options,
+  });
+}
+
+function actorLabel(log = {}) {
+  return [log.actorName, log.actorType || log.source].filter(Boolean).join(" / ") || "-";
+}
+
+function SkuAdjustmentList({ title, rows = [], onChange, onQuantity, onDelete, loading, disabled = false, disabledTitle = "Subscription expired", tr }) {
+  const disabledClass = disabled ? "cursor-not-allowed text-slate-300 hover:no-underline" : "";
   return (
     <div>
       <h4 className="mb-2 text-xs font-bold text-slate-700">{tr(title)}</h4>
@@ -104,21 +137,34 @@ function SkuAdjustmentList({ title, rows = [], onChange, onQuantity, onDelete, l
               {(onChange || onQuantity || onDelete) && (
                 <div className="flex shrink-0 items-center gap-2">
                   {onChange && (
-                    <button type="button" onClick={() => onChange(adjustment)} className="text-xs font-semibold text-primary hover:underline">
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      title={disabled ? disabledTitle : tr("Change")}
+                      onClick={() => onChange(adjustment)}
+                      className={`text-xs font-semibold text-primary hover:underline disabled:opacity-60 ${disabledClass}`}
+                    >
                       {tr("Change")}
                     </button>
                   )}
                   {onQuantity && (
-                    <button type="button" onClick={() => onQuantity(adjustment)} className="text-xs font-semibold text-primary hover:underline">
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      title={disabled ? disabledTitle : tr("Quantity")}
+                      onClick={() => onQuantity(adjustment)}
+                      className={`text-xs font-semibold text-primary hover:underline disabled:opacity-60 ${disabledClass}`}
+                    >
                       {tr("Quantity")}
                     </button>
                   )}
                   {onDelete && (
                     <button
                       type="button"
-                      disabled={loading}
+                      disabled={loading || disabled}
+                      title={disabled ? disabledTitle : tr("Delete")}
                       onClick={() => onDelete(adjustment)}
-                      className="text-xs font-semibold text-red-500 hover:underline disabled:opacity-50"
+                      className="text-xs font-semibold text-red-500 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {tr("Delete")}
                     </button>
@@ -182,7 +228,7 @@ export default function OrderDetailPage() {
   const location = useLocation();
   const queryClient = useQueryClient();
   const params = useParams();
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const language = i18n.resolvedLanguage || i18n.language || "en";
   const tr = (text) => translateStaticText(text, language);
   const [pendingConfirm, setPendingConfirm] = useState(null);
@@ -235,6 +281,8 @@ export default function OrderDetailPage() {
     openAddSkuModal,
     skuAdjustments,
     skuAdjustmentsLoading,
+    activityLogs,
+    activityLogsLoading,
     deleteSkuAdjustment,
     deletingSkuAdjustment,
     updateSkuAdjustmentQuantity,
@@ -277,7 +325,17 @@ export default function OrderDetailPage() {
   const exchangeAdjustments = (skuAdjustments || []).filter((item) => item.adjustmentType === "exchange");
   const addAdjustments = (skuAdjustments || []).filter((item) => item.adjustmentType === "add");
   const showSkuAdjustmentSection = canChangeMapping || skuAdjustmentsLoading || (skuAdjustments || []).length > 0;
+  const isExpiredOrderStore = isOrderStoreSubscriptionExpired(order?.storeContext || location.state?.order?.storeContext || {});
+  const notifyExpiredMappingAction = () =>
+    toast.error(t("subscription.skuMappingExpired", { defaultValue: "Subscription expired for this store. Please upgrade to change SKU mapping." }));
   const askConfirm = (type, payload = null) => {
+    if (
+      isExpiredOrderStore &&
+      ["add", "change", "changeAdjustment", "delete", "quantity", "save"].includes(type)
+    ) {
+      notifyExpiredMappingAction();
+      return;
+    }
     if (type === "quantity") {
       setQuantityDraft(String(Math.max(1, Number(payload?.quantity || 1))));
     }
@@ -441,8 +499,11 @@ export default function OrderDetailPage() {
                     <span className="text-sm text-slate-700 text-center">{item.quantity || 1}</span>
                     {canChangeMapping && (
                       <button
+                        type="button"
+                        disabled={isExpiredOrderStore}
+                        title={isExpiredOrderStore ? t("subscription.tooltipExpired", { defaultValue: "Subscription expired" }) : tr("Change")}
                         onClick={() => askConfirm("change", item)}
-                        className="text-xs font-semibold text-primary hover:underline"
+                        className="text-xs font-semibold text-primary hover:underline disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:no-underline"
                       >
                         {tr("Change")}
                       </button>
@@ -459,8 +520,10 @@ export default function OrderDetailPage() {
                   {canChangeMapping && (
                     <button
                       type="button"
+                      disabled={isExpiredOrderStore}
+                      title={isExpiredOrderStore ? t("subscription.tooltipExpired", { defaultValue: "Subscription expired" }) : tr("Add More SKU")}
                       onClick={() => askConfirm("add")}
-                      className="h-8 rounded-lg bg-primary px-3 text-xs font-semibold text-white transition-colors hover:bg-primary/90"
+                      className="h-8 rounded-lg bg-primary px-3 text-xs font-semibold text-white transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
                     >
                       + {tr("Add More SKU")}
                     </button>
@@ -477,6 +540,8 @@ export default function OrderDetailPage() {
                       onQuantity={canChangeMapping ? (adjustment) => askConfirm("quantity", adjustment) : undefined}
                       onDelete={canChangeMapping ? (adjustment) => askConfirm("delete", adjustment) : undefined}
                       loading={deletingSkuAdjustment}
+                      disabled={isExpiredOrderStore}
+                      disabledTitle={t("subscription.tooltipExpired", { defaultValue: "Subscription expired" })}
                       tr={tr}
                     />
                     <SkuAdjustmentList
@@ -486,6 +551,8 @@ export default function OrderDetailPage() {
                       onQuantity={canChangeMapping ? (adjustment) => askConfirm("quantity", adjustment) : undefined}
                       onDelete={canChangeMapping ? (adjustment) => askConfirm("delete", adjustment) : undefined}
                       loading={deletingSkuAdjustment}
+                      disabled={isExpiredOrderStore}
+                      disabledTitle={t("subscription.tooltipExpired", { defaultValue: "Subscription expired" })}
                       tr={tr}
                     />
                   </div>
@@ -495,27 +562,56 @@ export default function OrderDetailPage() {
           </div>
 
           <div className="bg-white rounded-lg p-5">
-            <h3 className="text-sm font-bold text-slate-800 font-display mb-5">Order Log</h3>
-            <div className="flex items-center gap-0">
-              <div className="flex flex-col items-center">
-                <div className="w-3 h-3 rounded-full bg-primary" />
-                <div className="text-xs text-slate-500 mt-2">Unpaid</div>
+            <h3 className="text-sm font-bold text-slate-800 font-display mb-5">{tr("Order Activity Log")}</h3>
+            {activityLogsLoading ? (
+              <p className="text-xs text-slate-400">{tr("Loading activity logs...")}</p>
+            ) : activityLogs.length > 0 ? (
+              <div className="space-y-4">
+                {activityLogs.map((log) => (
+                  <div key={log.id} className="relative border-l border-surface-border pl-4">
+                    <span className="absolute -left-[5px] top-1 h-2.5 w-2.5 rounded-full bg-primary" />
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-bold text-slate-800">{tr(log.title || log.eventType || "Order activity")}</p>
+                        <p className="mt-1 text-[11px] text-slate-400">{formatActivityDate(log)}</p>
+                      </div>
+                      <span className="rounded-full bg-slate-50 px-2.5 py-1 text-[10px] font-semibold uppercase text-slate-500">
+                        {actorLabel(log)}
+                      </span>
+                    </div>
+                    {(log.oldStatus || log.newStatus) && (
+                      <p className="mt-2 text-xs font-semibold text-slate-600">
+                        {[log.oldStatus, log.newStatus].filter(Boolean).join(" -> ")}
+                      </p>
+                    )}
+                    {log.message && <p className="mt-1 text-xs leading-relaxed text-slate-500">{tr(log.message)}</p>}
+                  </div>
+                ))}
               </div>
-              <div className="w-16 h-px bg-primary mx-1" />
-              <div className="flex flex-col items-center">
-                <div className="w-3 h-3 rounded-full bg-primary" />
-                <div className="text-xs text-slate-500 mt-2">{order.status}</div>
+            ) : (
+              <div>
+                <div className="flex items-center gap-0">
+                  <div className="flex flex-col items-center">
+                    <div className="w-3 h-3 rounded-full bg-primary" />
+                    <div className="text-xs text-slate-500 mt-2">Unpaid</div>
+                  </div>
+                  <div className="w-16 h-px bg-primary mx-1" />
+                  <div className="flex flex-col items-center">
+                    <div className="w-3 h-3 rounded-full bg-primary" />
+                    <div className="text-xs text-slate-500 mt-2">{order.status}</div>
+                  </div>
+                  <div className="w-16 h-px bg-surface-border mx-1" />
+                  <div className="flex flex-col items-center">
+                    <div className="w-3 h-3 rounded-full border-2 border-surface-border bg-white" />
+                  </div>
+                </div>
+                <div className="mt-2 ml-4">
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    {`The platform status is - ${order.platformLabel} - ${order.rawStatus || order.status}. Total item quantity: ${totalQty || 0}`}
+                  </p>
+                </div>
               </div>
-              <div className="w-16 h-px bg-surface-border mx-1" />
-              <div className="flex flex-col items-center">
-                <div className="w-3 h-3 rounded-full border-2 border-surface-border bg-white" />
-              </div>
-            </div>
-            <div className="mt-2 ml-4">
-              <p className="text-xs text-slate-400 leading-relaxed">
-                {`The platform status is - ${order.platformLabel} - ${order.rawStatus || order.status}. Total item quantity: ${totalQty || 0}`}
-              </p>
-            </div>
+            )}
           </div>
         </div>
 
@@ -687,8 +783,9 @@ export default function OrderDetailPage() {
               </button>
               <button
                 onClick={() => askConfirm("save")}
-                disabled={mappingSaving}
-                className="h-10 min-w-32 rounded-lg bg-primary px-7 text-sm font-semibold text-white transition-colors hover:bg-primary-dark disabled:opacity-60"
+                disabled={mappingSaving || isExpiredOrderStore}
+                title={isExpiredOrderStore ? t("subscription.tooltipExpired", { defaultValue: "Subscription expired" }) : undefined}
+                className="h-10 min-w-32 rounded-lg bg-primary px-7 text-sm font-semibold text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {mappingSaving ? tr("Saving...") : (packAfterMapping || canChangeWithdrawMapping) ? tr("Save") : tr("Confirm")}
               </button>

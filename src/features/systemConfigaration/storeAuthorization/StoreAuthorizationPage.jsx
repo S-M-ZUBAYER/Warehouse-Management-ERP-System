@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import {
   Search,
   AlertCircle,
@@ -10,6 +12,7 @@ import {
   ShieldCheck,
   Plus,
   CalendarDays,
+  Crown,
 } from "lucide-react";
 import Topbar from "../../../components/layout/Topbar";
 import { useStoreAuthorization } from "./hooks/useStoreAuthorization";
@@ -23,6 +26,7 @@ import ConfirmActionModal from "../../../components/shared/ConfirmActionModal";
 import { exportRowsToCsv, exportRowsToXlsx, printRows } from "../../../utils/tableOutput";
 import ExportMenu from "../../../components/shared/ExportMenu";
 import ListPageSizePagination from "../../../components/shared/ListPageSizePagination";
+import { translateStaticText } from "../../../i18nDomTranslator";
 import shopeeLogo from "../../../assets/ShopPlatform/shopee.svg";
 import tiktokLogo from "../../../assets/ShopPlatform/tiktok.svg";
 import allCategoryLogo from "../../../assets/ShopPlatform/allCategories.svg";
@@ -33,6 +37,10 @@ import allCategoryLogo from "../../../assets/ShopPlatform/allCategories.svg";
 
 
 export default function StoreAuthorizationPage() {
+  const navigate = useNavigate();
+  const { t, i18n } = useTranslation();
+  const language = i18n.resolvedLanguage || i18n.language || "en";
+  const tr = (text) => translateStaticText(text, language);
   const {
     platform,
     setPlatform,
@@ -117,18 +125,67 @@ export default function StoreAuthorizationPage() {
     selectedIds.every((id) => selectedStores.some((store) => store.id === id))
       ? selectedStores
       : stores.filter((store) => selectedIds.includes(store.id));
+  const formatRemainingDaysLabel = (store) => {
+    const count = Math.max(0, Number(store?.remainingDays || 0));
+    if (store?.isSubscriptionExpired || String(store?.subscriptionStatus || "").toLowerCase() === "expired") {
+      return t("subscription.expired", { defaultValue: "Expired" });
+    }
+    return t(count === 1 ? "subscription.oneDayLeft" : "subscription.daysLeft", {
+      count,
+      defaultValue: `${count} ${count === 1 ? "day" : "days"} left`,
+    });
+  };
+  const formatSubscriptionStatusLabel = (store) => {
+    const status = String(store?.subscriptionStatus || "").toLowerCase();
+    if (!status) return "-";
+    return t(`subscription.status.${status}`, { defaultValue: store?.subscriptionStatusLabel || status });
+  };
+  const formatAutoOrderAcceptDaysLabel = (store) => {
+    const days = Array.isArray(store?.autoOrderAcceptDays) ? store.autoOrderAcceptDays : [];
+    if (days.length === 7) return tr("Every day");
+    const labels = new Map(autoOrderAcceptDayOptions.map((day) => [day.value, tr(day.label)]));
+    return days.map((day) => labels.get(day) || String(day)).join(", ");
+  };
+  const makeTranslatedStoreRow = (store) => ({
+    ...store,
+    authStatus: tr(store.authStatus),
+    autoOrderAcceptLabel: tr(store.autoOrderAcceptLabel),
+    autoOrderAcceptDaysLabel: formatAutoOrderAcceptDaysLabel(store),
+    remainingDaysLabel: formatRemainingDaysLabel(store),
+    subscriptionStatusLabel: formatSubscriptionStatusLabel(store),
+  });
+  const translatedSelectedRows = useMemo(
+    () => selectedRows.map(makeTranslatedStoreRow),
+    [selectedRows, language]
+  );
+  const detailStoreRecord = useMemo(
+    () => (detailStore ? makeTranslatedStoreRow(detailStore) : null),
+    [detailStore, language]
+  );
   const outputColumns = [
-    { label: "Marketplace", key: "marketplace" },
-    { label: "Store Nickname", key: "nickname" },
-    { label: "Store ID", key: "storeId" },
-    { label: "Shop ID", key: "shopId" },
-    { label: "Open ID", key: "openId" },
-    { label: "Country", key: "country" },
-    { label: "Status", key: "authStatus" },
-    { label: "Auto Order Accept", key: "autoOrderAcceptLabel" },
-    { label: "Auto Process Days", key: "autoOrderAcceptDaysLabel" },
-    { label: "Create Time", key: "createdAt" },
+    { label: tr("Marketplace"), key: "marketplace" },
+    { label: tr("Store Nickname"), key: "nickname" },
+    { label: tr("Country"), key: "country" },
+    { label: tr("Status"), key: "authStatus" },
+    { label: t("subscription.currentPlan", { defaultValue: "Current Plan" }), key: "currentPlan" },
+    { label: t("subscription.subscriptionLabel", { defaultValue: "Subscription" }), key: "subscriptionStatusLabel" },
+    { label: t("subscription.remainingDays", { defaultValue: "Remaining Days" }), key: "remainingDaysLabel" },
+    { label: tr("Auto Order Accept"), key: "autoOrderAcceptLabel" },
+    { label: tr("Auto Process Days"), key: "autoOrderAcceptDaysLabel" },
+    { label: tr("Create Time"), key: "createdAt" },
   ];
+
+  const openPricingForStore = (store) => {
+    navigate("/warehouse_management/pricing", {
+      state: {
+        preselectStore: {
+          id: store.id,
+          platform: store.marketplace,
+          label: store.nickname,
+        },
+      },
+    });
+  };
 
   return (
     <div className="space-y-4 font-body">
@@ -140,7 +197,7 @@ export default function StoreAuthorizationPage() {
           {/* Select Platform dropdown */}
           <div className="w-52">
             <p className="text-xs font-semibold text-primary-text mb-1.5">
-              Select Platform
+              {tr("Select Platform")}
             </p>
             <div className="relative">
               <select
@@ -150,7 +207,7 @@ export default function StoreAuthorizationPage() {
                            rounded-lg text-sm text-slate-500 outline-none focus:border-primary
                            cursor-pointer pr-8"
               >
-                <option value="All">All Platforms</option>
+                <option value="All">{tr("All Platforms")}</option>
                 {["Shopee",  "TikTok"].map((p) => (
                   <option key={p} value={p}>{p}</option>
                 ))}
@@ -165,7 +222,7 @@ export default function StoreAuthorizationPage() {
           {/* Authorized Platforms radio */}
           <div>
             <p className="text-xs font-semibold text-primary-text mb-4">
-              Authorized Platforms
+              {tr("Authorized Platforms")}
             </p>
             <div className="flex items-center gap-7">
               {platforms.filter((p) => p !== "Lazada").map((p) => (
@@ -204,7 +261,7 @@ export default function StoreAuthorizationPage() {
       <div className="bg-white rounded-xl border border-surface-border overflow-hidden">
         <div className="px-5 pt-5 pb-4">
           <h2 className="text-xl font-bold text-slate-800 font-display mb-4">
-            Authorized Store List
+            {tr("Authorized Store List")}
           </h2>
 
           {/* Toolbar */}
@@ -212,7 +269,7 @@ export default function StoreAuthorizationPage() {
             {/* Auth Status filter */}
             <div>
               <p className="text-xs font-semibold text-primary-text mb-1">
-                Authorization Status
+                {tr("Authorization Status")}
               </p>
               <div className="relative">
                 <select
@@ -222,7 +279,7 @@ export default function StoreAuthorizationPage() {
                              text-primary-text bg-white outline-none focus:border-primary cursor-pointer w-52"
                 >
                   {statuses.map((s) => (
-                    <option key={s}>{s}</option>
+                    <option key={s} value={s}>{tr(s)}</option>
                   ))}
                 </select>
                 <ChevronDown
@@ -240,7 +297,7 @@ export default function StoreAuthorizationPage() {
               />
               <input
                 type="text"
-                placeholder="Search"
+                placeholder={tr("Search")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-8 pr-3 py-2 text-sm border border-surface-border rounded-lg w-64
@@ -255,7 +312,7 @@ export default function StoreAuthorizationPage() {
               onClick={reloadStores}
               className="mt-4 px-5 py-2 text-sm font-semibold bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors"
             >
-              Search
+              {tr("Search")}
             </button>
 
             {/* Add Store button */}
@@ -266,7 +323,7 @@ export default function StoreAuthorizationPage() {
                          bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors"
             >
               <Plus size={14} />
-              Add Store
+              {tr("Add Store")}
             </button>
           </div>
         </div>
@@ -280,9 +337,11 @@ export default function StoreAuthorizationPage() {
                   "Select All",
                   "Marketplace Name",
                   "Store Nickname",
-                  "Store ID",
                   "Country",
                   "Authorization Status",
+                  t("subscription.currentPlan", { defaultValue: "Current Plan" }),
+                  t("subscription.subscriptionLabel", { defaultValue: "Subscription" }),
+                  t("subscription.daysLeftHeader", { defaultValue: "Days Left" }),
                   "Auto Order Accept",
                   "Auto Process Days",
                   "Create Time",
@@ -291,7 +350,7 @@ export default function StoreAuthorizationPage() {
                   <th
                     key={h}
                     className={`py-3 text-left text-lg font-semibold text-primary-text
-                    ${i === 0 ? "pl-5 w-14 pr-4" : "pr-4"} ${i === 9 ? "pr-5" : ""}`}
+                    ${i === 0 ? "pl-5 w-14 pr-4" : "pr-4"} ${i === 11 ? "pr-5" : ""}`}
                   >
                     {h === "Select All" ? (
                       <div className="flex justify-start items-center w-32">
@@ -310,10 +369,10 @@ export default function StoreAuthorizationPage() {
                             className="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer"
                           />
                         )}
-                        <span className="pl-2">{h}</span>
-                      </div>
-                    ) : (
-                      h
+                      <span className="pl-2">{tr(h)}</span>
+                    </div>
+                  ) : (
+                      tr(h)
                     )}
                   </th>
                 ))}
@@ -323,16 +382,16 @@ export default function StoreAuthorizationPage() {
               {loading && <StoreAuthorizationTableSkeleton />}
               {!loading && error && (
                 <tr>
-                  <td colSpan={10} className="py-20 text-center">
+                  <td colSpan={12} className="py-20 text-center">
                     <div className="flex flex-col items-center justify-center gap-3">
                       <AlertCircle size={36} className="text-red-400 opacity-70" />
-                      <p className="text-sm font-medium text-slate-700">{error}</p>
+                      <p className="text-sm font-medium text-slate-700">{tr(error)}</p>
                       <button
                         type="button"
                         onClick={reloadStores}
                         className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-primary border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors"
                       >
-                        <RefreshCw size={12} /> Retry
+                        <RefreshCw size={12} /> {tr("Retry")}
                       </button>
                     </div>
                   </td>
@@ -340,15 +399,21 @@ export default function StoreAuthorizationPage() {
               )}
               {!loading && !error && stores.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="py-10 text-center text-sm text-slate-500">
-                    No authorized stores found
+                  <td colSpan={12} className="py-10 text-center text-sm text-slate-500">
+                    {tr("No authorized stores found")}
                   </td>
                 </tr>
               )}
               {!loading && !error && paginatedStores.map((store) => (
                 <tr
                   key={store.id}
-                  className="hover:bg-surface/50 transition-colors"
+                  className={`transition-colors ${
+                    store.isSubscriptionExpired
+                      ? "bg-red-50/80 hover:bg-red-50"
+                      : store.isSubscriptionExpiringSoon
+                        ? "bg-amber-50/70 hover:bg-amber-50"
+                      : "hover:bg-surface/50"
+                  }`}
                 >
                   <td className="pl-5 py-3">
                     <input
@@ -362,22 +427,55 @@ export default function StoreAuthorizationPage() {
                     {store.marketplace}
                   </td>
                   <td className="py-3 pr-4 text-slate-700">{store.nickname}</td>
-                  <td className="py-3 pr-4 text-primary-text font-mono text-xs">
-                    {store.storeId}
-                  </td>
                   <td className="py-3 pr-4 text-slate-700">{store.country}</td>
                   <td className="py-3 pr-4">
-                    <AuthStatusBadge status={store.authStatus} />
+                    <AuthStatusBadge status={tr(store.authStatus)} />
+                  </td>
+                  <td className="py-3 pr-4 text-slate-700">
+                    {store.currentPlan}
+                  </td>
+                  <td className="py-3 pr-4">
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold capitalize ${
+                        store.isSubscriptionExpired
+                          ? "bg-red-100 text-red-700"
+                          : store.subscriptionStatus === "trial"
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-emerald-100 text-emerald-700"
+                      }`}
+                    >
+                      {formatSubscriptionStatusLabel(store)}
+                    </span>
+                  </td>
+                  <td className="py-3 pr-4">
+                    <span
+                      className={`text-xs font-bold ${
+                        store.isSubscriptionExpired
+                          ? "text-red-600"
+                          : store.isSubscriptionExpiringSoon
+                            ? "text-amber-600"
+                            : "text-primary"
+                      }`}
+                    >
+                      {formatRemainingDaysLabel(store)}
+                    </span>
                   </td>
                   <td className="py-3 pr-4">
                     <button
                       type="button"
                       role="switch"
                       aria-checked={store.autoOrderAccept}
-                      title={store.autoOrderAccept ? "On" : "Off"}
+                      disabled={store.isSubscriptionExpired}
+                      title={
+                        store.isSubscriptionExpired
+                          ? t("subscription.tooltipExpired", { defaultValue: "Subscription expired" })
+                          : tr(store.autoOrderAccept ? "On" : "Off")
+                      }
                       onClick={() => requestAutoOrderAcceptToggle(store)}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20 ${
                         store.autoOrderAccept ? "bg-primary" : "bg-slate-300"
+                      } ${
+                        store.isSubscriptionExpired ? "cursor-not-allowed opacity-60" : ""
                       }`}
                     >
                       <span
@@ -385,18 +483,27 @@ export default function StoreAuthorizationPage() {
                           store.autoOrderAccept ? "translate-x-5" : "translate-x-1"
                         }`}
                       />
-                      <span className="sr-only">Auto Order Accept</span>
+                      <span className="sr-only">{tr("Auto Order Accept")}</span>
                     </button>
                   </td>
                   <td className="py-3 pr-4">
                     <button
                       type="button"
+                      disabled={store.isSubscriptionExpired}
                       onClick={() => requestAutoOrderAcceptDays(store)}
-                      title="Auto Process Days"
-                      className="inline-flex items-center gap-2 rounded-lg border border-surface-border px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:border-primary/40 hover:text-primary transition-colors"
+                      title={
+                        store.isSubscriptionExpired
+                          ? t("subscription.tooltipExpired", { defaultValue: "Subscription expired" })
+                          : tr("Auto Process Days")
+                      }
+                      className={`inline-flex items-center gap-2 rounded-lg border border-surface-border px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                        store.isSubscriptionExpired
+                          ? "cursor-not-allowed bg-red-50 text-red-500"
+                          : "text-slate-600 hover:border-primary/40 hover:text-primary"
+                      }`}
                     >
                       <CalendarDays size={13} />
-                      <span>{store.autoOrderAcceptDaysLabel}</span>
+                      <span>{formatAutoOrderAcceptDaysLabel(store)}</span>
                     </button>
                   </td>
                   <td className="py-3 pr-4 text-primary-text text-xs">
@@ -437,6 +544,14 @@ export default function StoreAuthorizationPage() {
                         width={176}
                       >
                         {[
+                          {
+                            label: t("subscription.upgradePlan", { defaultValue: "Upgrade Plan" }),
+                            icon: Crown,
+                            action: () => {
+                              openPricingForStore(store);
+                              setOpenActionId(null);
+                            },
+                          },
                           {
                             label: "Details",
                             icon: Search,
@@ -496,7 +611,7 @@ export default function StoreAuthorizationPage() {
                                 className={danger ? "text-red-400" : "text-slate-400"}
                                 strokeWidth={1.8}
                               />
-                              {label}
+                              {tr(label)}
                             </button>
                           );
                         })}
@@ -521,43 +636,44 @@ export default function StoreAuthorizationPage() {
         />
         <div className="flex justify-end gap-3 px-5 py-4 border-t border-surface-border">
           <ExportMenu
-            onExportCsv={() => exportRowsToCsv(selectedRows, outputColumns, "authorized-stores.csv", "store")}
-            onExportXlsx={() => exportRowsToXlsx(selectedRows, outputColumns, "authorized-stores.xlsx", "store")}
+            onExportCsv={() => exportRowsToCsv(translatedSelectedRows, outputColumns, "authorized-stores.csv", "store")}
+            onExportXlsx={() => exportRowsToXlsx(translatedSelectedRows, outputColumns, "authorized-stores.xlsx", "store")}
           />
-          <button onClick={() => printRows(selectedRows, outputColumns, "Selected Authorized Stores", "store")} className="px-16 py-2.5 text-base font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors">
-            Print
+          <button onClick={() => printRows(translatedSelectedRows, outputColumns, tr("Selected Authorized Stores"), "store")} className="px-16 py-2.5 text-base font-semibold rounded-lg bg-primary hover:bg-primary-dark text-white transition-colors">
+            {tr("Print")}
           </button>
         </div>
       </div>
 
       <RecordDetailModal
         open={!!detailStore}
-        title="Store Details"
+        title={tr("Store Details")}
         subtitle={detailStore?.nickname}
-        record={detailStore}
+        record={detailStoreRecord}
         onClose={() => setDetailStore(null)}
         fields={[
-          { label: "Marketplace", key: "marketplace" },
-          { label: "Store Nickname", key: "nickname" },
-          { label: "Store ID", key: "storeId" },
-          { label: "Shop ID", key: "shopId" },
-          { label: "Open ID", key: "openId" },
-          { label: "Country", key: "country" },
-          { label: "Authorization Status", key: "authStatus" },
-          { label: "Auto Order Accept", key: "autoOrderAcceptLabel" },
-          { label: "Auto Process Days", key: "autoOrderAcceptDaysLabel" },
-          { label: "Default Warehouse", key: "defaultWarehouse" },
-          { label: "Create Time", key: "createdAt" },
+          { label: tr("Marketplace"), key: "marketplace" },
+          { label: tr("Store Nickname"), key: "nickname" },
+          { label: tr("Country"), key: "country" },
+          { label: tr("Authorization Status"), key: "authStatus" },
+          { label: t("subscription.currentPlan", { defaultValue: "Current Plan" }), key: "currentPlan" },
+          { label: t("subscription.subscriptionStatus", { defaultValue: "Subscription Status" }), key: "subscriptionStatusLabel" },
+          { label: t("subscription.remainingDays", { defaultValue: "Remaining Days" }), key: "remainingDaysLabel" },
+          { label: t("subscription.expiryDate", { defaultValue: "Expiry Date" }), key: "expiresAt" },
+          { label: tr("Auto Order Accept"), key: "autoOrderAcceptLabel" },
+          { label: tr("Auto Process Days"), key: "autoOrderAcceptDaysLabel" },
+          { label: tr("Default Warehouse"), key: "defaultWarehouse" },
+          { label: tr("Create Time"), key: "createdAt" },
         ]}
       />
 
       <ConfirmActionModal
         open={unlinkModal?.open}
-        title="Unlink Store"
+        title={tr("Unlink Store")}
         danger
         loading={unlinkModal?.loading}
-        message={<>Are you sure you want to unlink <span className="font-semibold text-slate-800">{unlinkModal?.store?.nickname}</span>? This action cannot be undone.</>}
-        confirmLabel="Unlink"
+        message={<>{tr("Are you sure you want to unlink")} <span className="font-semibold text-slate-800">{unlinkModal?.store?.nickname}</span>? {tr("This action cannot be undone.")}</>}
+        confirmLabel={tr("Unlink")}
         onCancel={closeUnlinkModal}
         onConfirm={confirmUnlinkStore}
       />
@@ -566,29 +682,29 @@ export default function StoreAuthorizationPage() {
         open={autoOrderAcceptModal?.open}
         title={
           autoOrderAcceptModal?.mode === "days"
-            ? "Auto Process Days"
+            ? tr("Auto Process Days")
             : autoOrderAcceptModal?.nextValue
-              ? "Enable Auto Order Accept"
-              : "Disable Auto Order Accept"
+              ? tr("Enable Auto Order Accept")
+              : tr("Disable Auto Order Accept")
         }
         loading={autoOrderAcceptModal?.loading}
-        loadingLabel="Saving..."
+        loadingLabel={tr("Saving...")}
         message={
           <>
             {autoOrderAcceptModal?.mode === "days" ? (
               <>
-                Configure the weekdays when Auto Order Accept can run for{" "}
+                {tr("Configure the weekdays when Auto Order Accept can run for")}{" "}
                 <span className="font-semibold text-slate-800">{autoOrderAcceptModal?.store?.nickname}</span>.
               </>
             ) : (
               <>
-                Are you sure you want to {autoOrderAcceptModal?.nextValue ? "turn on" : "turn off"} Auto Order Accept for{" "}
+                {tr("Are you sure you want to")} {autoOrderAcceptModal?.nextValue ? tr("turn on") : tr("turn off")} {tr("Auto Order Accept")} {tr("for")}{" "}
                 <span className="font-semibold text-slate-800">{autoOrderAcceptModal?.store?.nickname}</span>?
               </>
             )}
             {(autoOrderAcceptModal?.mode === "days" || autoOrderAcceptModal?.nextValue) && (
               <div className="mt-4">
-                <p className="mb-2 text-xs font-semibold text-slate-700">Select auto process days</p>
+                <p className="mb-2 text-xs font-semibold text-slate-700">{tr("Select auto process days")}</p>
                 <div className="grid grid-cols-2 gap-2">
                   {autoOrderAcceptDayOptions.map((day) => {
                     const checked = (autoOrderAcceptModal?.selectedDays || []).includes(day.value);
@@ -605,27 +721,27 @@ export default function StoreAuthorizationPage() {
                           onChange={() => toggleAutoOrderAcceptDay(day.value)}
                           className="w-3.5 h-3.5 accent-primary"
                         />
-                        {day.label}
+                        {tr(day.label)}
                       </label>
                     );
                   })}
                 </div>
                 {(autoOrderAcceptModal?.selectedDays || []).length === 0 && (
-                  <p className="mt-2 text-xs font-semibold text-red-500">Select at least one auto process day</p>
+                  <p className="mt-2 text-xs font-semibold text-red-500">{tr("Select at least one auto process day")}</p>
                 )}
               </div>
             )}
             {autoOrderAcceptModal?.mode !== "days" && autoOrderAcceptModal?.nextValue && (
-              <span className="block mt-3">Auto Order Accept will run on selected days from To Pack and every hour.</span>
+              <span className="block mt-3">{tr("Auto Order Accept will run on selected days from To Pack and every hour.")}</span>
             )}
           </>
         }
         confirmLabel={
           autoOrderAcceptModal?.mode === "days"
-            ? "Save Days"
+            ? tr("Save Days")
             : autoOrderAcceptModal?.nextValue
-              ? "Turn On"
-              : "Turn Off"
+              ? tr("Turn On")
+              : tr("Turn Off")
         }
         confirmDisabled={
           (autoOrderAcceptModal?.mode === "days" || autoOrderAcceptModal?.nextValue) &&
@@ -693,6 +809,15 @@ function StoreAuthorizationTableSkeleton() {
       </td>
       <td className="py-3 pr-4">
         <div className="h-5 w-24 rounded-full bg-slate-200" />
+      </td>
+      <td className="py-3 pr-4">
+        <div className="h-4 w-20 rounded bg-slate-200" />
+      </td>
+      <td className="py-3 pr-4">
+        <div className="h-5 w-20 rounded-full bg-slate-200" />
+      </td>
+      <td className="py-3 pr-4">
+        <div className="h-4 w-20 rounded bg-slate-200" />
       </td>
       <td className="py-3 pr-4">
         <div className="h-6 w-11 rounded-full bg-slate-200" />

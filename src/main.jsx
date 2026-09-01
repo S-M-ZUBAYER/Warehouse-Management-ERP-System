@@ -13,7 +13,8 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { RouterProvider } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "sonner";
+import { Toaster as SonnerToaster } from "sonner";
+import { Toaster as HotToastToaster } from "react-hot-toast";
 import { router } from "./router";
 import { queryClient } from "./lib/queryClient";
 import "./i18n";
@@ -26,7 +27,8 @@ ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
-      <Toaster position="top-center" richColors />
+      <SonnerToaster position="top-center" richColors />
+      <HotToastToaster position="top-right" />
     </QueryClientProvider>
   </React.StrictMode>,
 );

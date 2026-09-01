@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import api from "../../../lib/api";
 import platformApi from "../../../lib/platformApi";
-import { useShopPlatformStore } from "../../../stores/shopPlatformStore";
 
 const now = new Date();
 const currentYear = now.getFullYear();
@@ -9,6 +8,8 @@ const currentMonth = now.getMonth() + 1;
 
 const formatNumber = (value) => Number(value || 0).toLocaleString();
 const PAGE_LIMIT = 100;
+const SECONDS_IN_DAY = 24 * 60 * 60;
+const SHOPEE_MAX_RANGE_SECONDS = 15 * SECONDS_IN_DAY - 60;
 
 const emptyDailyRows = (year = currentYear, month = currentMonth, defaults = {}) => {
   const days = new Date(year, month, 0).getDate();
@@ -57,12 +58,31 @@ const toUnixSeconds = (dateText, endOfDay = false) => {
   return Number.isFinite(time) ? Math.floor(time / 1000) : Math.floor(Date.now() / 1000);
 };
 
+const normalizePlatform = (platform) => {
+  const value = String(platform || "").toLowerCase();
+  if (value.includes("shopee")) return "shopee";
+  if (value.includes("tik")) return "tiktok";
+  return value;
+};
+
 const buildStoreContext = (store) => ({
-  platform: String(store?.platform || "").toLowerCase(),
+  platform: normalizePlatform(store?.platform),
   shopId: store?.store_shop_id ?? store?.shop_id ?? store?.external_store_id ?? "",
   openId: store?.store_open_id ?? store?.open_id ?? store?.platform_open_id ?? "",
   cipher: store?.store_cipher ?? store?.cipher ?? store?.platform_cipher ?? "",
 });
+
+const isOrderCountStore = (store) => {
+  if (store.platform === "shopee") return Boolean(store.shopId);
+  if (store.platform === "tiktok") return Boolean(store.openId && store.cipher);
+  return false;
+};
+
+const getOrderCountStores = (stores = []) =>
+  (Array.isArray(stores) ? stores : [])
+    .map(buildStoreContext)
+    .filter((store) => ["shopee", "tiktok"].includes(store.platform))
+    .filter(isOrderCountStore);
 
 const unwrapPlatformStores = (res) => {
   if (Array.isArray(res?.data)) return res.data;
@@ -98,13 +118,28 @@ const unwrapCountPayload = (response) =>
   response ??
   {};
 
+const splitDateRange = (start, end, maxRangeSeconds) => {
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end) return [];
+
+  const windows = [];
+  let cursor = start;
+
+  while (cursor <= end) {
+    const windowEnd = Math.min(cursor + maxRangeSeconds, end);
+    windows.push({ start: cursor, end: windowEnd });
+    cursor = windowEnd + 1;
+  }
+
+  return windows;
+};
+
 const statusGroupsByPlatform = {
   shopee: {
     pending: ["READY_TO_SHIP"],
     processing: ["PROCESSED"],
     shipped: ["SHIPPED"],
     completed: ["COMPLETED"],
-    cancelled: ["CANCELLED"],
+    cancelled: ["IN_CANCEL", "CANCELLED"],
   },
   tiktok: {
     pending: ["AWAITING_SHIPMENT"],
@@ -136,18 +171,21 @@ const getCountValue = (item) =>
 
 const addCountItem = (totals, status, count, platform) => {
   const key = normalizeStatusKey(status, platform);
-  if (key) totals[key] += Number(count || 0);
+  if (!key) return false;
+  totals[key] += Number(count || 0);
+  return true;
 };
 
 const collectOrderCounts = (payload, totals, platform) => {
   const counts = payload?.order_counts ?? payload?.orderCounts ?? payload?.counts ?? payload;
   if (!counts || typeof counts !== "object" || Array.isArray(counts)) return false;
 
+  let collected = false;
   Object.entries(counts).forEach(([status, count]) => {
-    addCountItem(totals, status, count, platform);
+    collected = addCountItem(totals, status, count, platform) || collected;
   });
 
-  return true;
+  return collected;
 };
 
 const collectStatusCounts = (payload, totals, platform) => {
@@ -196,8 +234,9 @@ const collectStatusCounts = (payload, totals, platform) => {
 };
 
 export function useDashboardData() {
-  const stores = useShopPlatformStore((state) => state.stores);
-  const [platformStores, setPlatformStores] = useState([]);
+  const orderStatusStoresRef = useRef([]);
+  const orderStatusStoresPromiseRef = useRef(null);
+  const orderStatusRequestIdRef = useRef(0);
   const [summary, setSummary] = useState(defaultSummary);
   const [inventoryData, setInventoryData] = useState(
     emptyDailyRows(currentYear, currentMonth, { stockIn: 0, stockOut: 0 })
@@ -274,79 +313,102 @@ export function useDashboardData() {
     }
   }, [salesYear, salesMonth, salesPlatform]);
 
-  const fetchPlatformStores = useCallback(async () => {
-    try {
-      const rows = await fetchAllPlatformStores();
-      setPlatformStores(rows);
-    } catch (err) {
-      console.error("Dashboard platform stores failed", err);
-      setPlatformStores([]);
+  const loadOrderStatusStores = useCallback(async () => {
+    if (orderStatusStoresRef.current.length > 0) return orderStatusStoresRef.current;
+
+    if (!orderStatusStoresPromiseRef.current) {
+      orderStatusStoresPromiseRef.current = fetchAllPlatformStores()
+        .then((rows) => {
+          orderStatusStoresRef.current = rows;
+          return rows;
+        })
+        .finally(() => {
+          orderStatusStoresPromiseRef.current = null;
+        });
     }
+
+    return orderStatusStoresPromiseRef.current;
   }, []);
 
   const fetchOrderStatus = useCallback(async () => {
-    const sourceStores = platformStores.length ? platformStores : stores;
-    const countStores = sourceStores
-      .map(buildStoreContext)
-      .filter((store) => ["shopee", "tiktok"].includes(store.platform));
-
-    if (countStores.length === 0) {
-      setOrderStatusData(emptyOrderStatus());
-      setOrderStatusLoading(false);
-      return;
-    }
-
+    const requestId = orderStatusRequestIdRef.current + 1;
+    orderStatusRequestIdRef.current = requestId;
     setOrderStatusLoading(true);
 
-    const timeFrom = toUnixSeconds(orderStatusDateRange.startDate);
-    const timeTo = toUnixSeconds(orderStatusDateRange.endDate, true);
-    const totals = emptyOrderStatus().reduce((acc, item) => ({ ...acc, [item.key]: 0 }), {});
+    try {
+      let countStores = getOrderCountStores(orderStatusStoresRef.current);
 
-    await Promise.all(
-      countStores.map(async (store) => {
-        try {
-          if (store.platform === "shopee" && store.shopId) {
-            const response = await platformApi.get("/new-shopee-open-shop/api/dev/order/get-order-count", {
-              params: {
-                shopId: store.shopId,
-                timeFrom,
-                timeTo,
-              },
-            });
-            collectStatusCounts(unwrapCountPayload(response), totals, store.platform);
-          }
+      if (countStores.length === 0) {
+        const fullStores = await loadOrderStatusStores();
+        countStores = getOrderCountStores(fullStores);
+      }
 
-          if (store.platform === "tiktok" && store.openId && store.cipher) {
-            const response = await platformApi.get("/tiktokshop-partner-country/api/dev/order/get-order-count", {
-              params: {
-                openId: store.openId,
-                cipher: store.cipher,
-                createTimeGe: timeFrom,
-                createTimeLt: timeTo,
-              },
-            });
-            collectStatusCounts(unwrapCountPayload(response), totals, store.platform);
-          }
-
-          return null;
-        } catch (err) {
-          console.error(`Dashboard ${store.platform} order count failed`, err);
-          return null;
+      if (countStores.length === 0) {
+        if (orderStatusRequestIdRef.current === requestId) {
+          setOrderStatusData(emptyOrderStatus());
         }
-      })
-    );
+        return;
+      }
 
-    setOrderStatusData(orderStatusTemplate.map((item) => ({ ...item, value: totals[item.key] || 0 })));
-    setOrderStatusLoading(false);
-  }, [orderStatusDateRange.endDate, orderStatusDateRange.startDate, platformStores, stores]);
+      const timeFrom = toUnixSeconds(orderStatusDateRange.startDate);
+      const timeTo = toUnixSeconds(orderStatusDateRange.endDate, true);
+      const shopeeWindows = splitDateRange(timeFrom, timeTo, SHOPEE_MAX_RANGE_SECONDS);
+      const totals = emptyOrderStatus().reduce((acc, item) => ({ ...acc, [item.key]: 0 }), {});
+
+      await Promise.all(
+        countStores.map(async (store) => {
+          try {
+            if (store.platform === "shopee") {
+              for (const windowRange of shopeeWindows) {
+                const response = await platformApi.get("/new-shopee-open-shop/api/dev/order/get-order-count", {
+                  params: {
+                    shopId: store.shopId,
+                    timeFrom: windowRange.start,
+                    timeTo: windowRange.end,
+                  },
+                });
+                collectStatusCounts(unwrapCountPayload(response), totals, store.platform);
+              }
+            }
+
+            if (store.platform === "tiktok") {
+              const response = await platformApi.get("/tiktokshop-partner-country/api/dev/order/get-order-count", {
+                params: {
+                  openId: store.openId,
+                  cipher: store.cipher,
+                  createTimeGe: timeFrom,
+                  createTimeLt: timeTo,
+                },
+              });
+              collectStatusCounts(unwrapCountPayload(response), totals, store.platform);
+            }
+
+            return null;
+          } catch (err) {
+            console.error(`Dashboard ${store.platform} order count failed`, err);
+            return null;
+          }
+        })
+      );
+
+      if (orderStatusRequestIdRef.current === requestId) {
+        setOrderStatusData(orderStatusTemplate.map((item) => ({ ...item, value: totals[item.key] || 0 })));
+      }
+    } catch (err) {
+      if (orderStatusRequestIdRef.current === requestId) {
+        console.error("Dashboard order status failed", err);
+        setOrderStatusData(emptyOrderStatus());
+      }
+    } finally {
+      if (orderStatusRequestIdRef.current === requestId) {
+        setOrderStatusLoading(false);
+      }
+    }
+  }, [loadOrderStatusStores, orderStatusDateRange.endDate, orderStatusDateRange.startDate]);
 
   useEffect(() => {
     fetchSummary();
   }, [fetchSummary]);
-
-  useEffect(() => {
-    fetchPlatformStores();
-  }, [fetchPlatformStores]);
 
   useEffect(() => {
     fetchInventoryStatus();

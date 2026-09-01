@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { AlertTriangle, Search, Calendar, ChevronDown, Trash2, UploadCloud } from "lucide-react";
+import { AlertTriangle, CreditCard, Search, Calendar, ChevronDown, Trash2, UploadCloud, X } from "lucide-react";
 import Topbar from "../../../../components/layout/Topbar";
 import {
+  createManualOrderShippingWalletCheckout,
   createManualOrder,
   fetchEasyParcelRates,
   fetchManualOrderDropdowns,
+  fetchManualOrderShippingWallet,
   normalizeManualOrder,
   searchWarehouseProducts,
 } from "../../shared/utils/orderApi";
@@ -192,7 +195,9 @@ const formatRateMoney = (rate) => {
 
 export default function AddManualOrderPage({ mode = "order", onBack, onCreated }) {
   const isGift = mode === "gift";
+  const { t } = useTranslation();
   const tr = (text) => translateStaticText(text);
+  const tw = (key, defaultValue, options = {}) => t(key, { defaultValue, ...options });
 
   const [buyerForm, setBuyerForm] = useState({
     buyerName: "",
@@ -242,6 +247,11 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
   const [shippingFee, setShippingFee] = useState("$0");
   const [paymentCertificate, setPaymentCertificate] = useState(null);
   const [showNoCourierModal, setShowNoCourierModal] = useState(false);
+  const [showCreateWithoutCourierModal, setShowCreateWithoutCourierModal] = useState(false);
+  const [showSubmitOrderConfirmModal, setShowSubmitOrderConfirmModal] = useState(false);
+  const [showInsufficientBalanceModal, setShowInsufficientBalanceModal] = useState(false);
+  const [walletTopUpAmount, setWalletTopUpAmount] = useState("50");
+  const [walletTopUpCurrency, setWalletTopUpCurrency] = useState("MYR");
 
   const dropdownsQuery = useQuery({
     queryKey: ["manual-order-dropdowns"],
@@ -251,6 +261,12 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
 
   const warehouses = filterWarehousesByPermission(dropdownsQuery.data?.warehouses || []);
   const currencies = dropdownsQuery.data?.currencies || [];
+
+  const shippingWalletQuery = useQuery({
+    queryKey: ["manual-order-shipping-wallet"],
+    queryFn: fetchManualOrderShippingWallet,
+    staleTime: 1000 * 30,
+  });
 
   const warehouseOptions = useMemo(
     () =>
@@ -378,6 +394,38 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
     (service) => String(service.serviceId || service.id) === String(orderForm.logistic)
   );
 
+  const shippingWallet = shippingWalletQuery.data?.wallet || {};
+  const walletBalanceMyr = Number(shippingWallet.balanceMyr || 0);
+  const walletFxRates = shippingWalletQuery.data?.fxRatesToMyr || {};
+  const supportedTopUpCurrencies = (shippingWalletQuery.data?.supportedTopUpCurrencies || ["MYR", "USD", "SGD", "THB", "IDR", "CNY", "PHP", "VND"])
+    .filter((currency) => String(currency).toUpperCase() !== "BDT");
+  const topUpCurrencyOptions = supportedTopUpCurrencies.length ? supportedTopUpCurrencies : ["MYR"];
+  const selectedCourierCharge = Number(selectedLogistic?.price || selectedLogistic?.shipmentPrice || 0);
+  const selectedCourierCurrency = selectedLogistic?.currency || orderForm.currency || "MYR";
+  const selectedCourierFxRate = Number(walletFxRates[selectedCourierCurrency] || (selectedCourierCurrency === "MYR" ? 1 : 0));
+  const selectedCourierChargeMyr = selectedCourierCharge > 0 && selectedCourierFxRate > 0
+    ? Number((selectedCourierCharge * selectedCourierFxRate).toFixed(2))
+    : 0;
+  const shippingWalletShortfall = selectedCourierChargeMyr > walletBalanceMyr
+    ? Number((selectedCourierChargeMyr - walletBalanceMyr).toFixed(2))
+    : 0;
+  const hasInsufficientShippingBalance = Boolean(selectedLogistic && selectedCourierChargeMyr > 0 && shippingWalletShortfall > 0);
+
+  const walletTopUpMutation = useMutation({
+    mutationFn: createManualOrderShippingWalletCheckout,
+    onSuccess: (data) => {
+      const checkoutUrl = data?.checkoutUrl || data?.url;
+      if (checkoutUrl) {
+        window.location.href = checkoutUrl;
+        return;
+      }
+      toast.error(tw("manualOrderShipping.checkoutUrlMissing", "Stripe checkout URL was not returned."));
+    },
+    onError: (err) => {
+      toast.error(err?.response?.data?.message || err?.message || tw("manualOrderShipping.topUpFailed", "Failed to start shipping wallet top-up."));
+    },
+  });
+
   useEffect(() => {
     if (!selectedLogistic) return;
     const ratePrice = Number(selectedLogistic.price || selectedLogistic.shipmentPrice || 0);
@@ -450,6 +498,15 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
     } catch (err) {
       toast.error(err?.message || "Failed to read payment certificate file");
     }
+  };
+
+  const handleShippingWalletTopUp = () => {
+    const amount = Number(walletTopUpAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error(tw("manualOrderShipping.enterTopUpAmount", "Enter a valid top-up amount."));
+      return;
+    }
+    walletTopUpMutation.mutate({ amount, currency: walletTopUpCurrency });
   };
 
   const saveMutation = useMutation({
@@ -644,28 +701,94 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
     saveMutation.mutate(buildManualOrderPayload({ bookNow, manualDelivery }));
   };
 
-  const rateMessage = easyParcelQuery.data?.message || "";
+  const rateMessage =
+    easyParcelQuery.error?.response?.data?.message ||
+    easyParcelQuery.error?.message ||
+    easyParcelQuery.data?.message ||
+    "";
+  const senderCountry = normalizeCountryCode(senderForm.country);
+  const receiverCountry = normalizeCountryCode(buyerForm.country);
+  const easyParcelTokenMissingText = "EasyParcel token response did not include an access token.";
+  const canShowEasyParcelTokenMessage = senderCountry === receiverCountry && ["MY", "SG"].includes(senderCountry);
+  const isEasyParcelTokenMessage = canShowEasyParcelTokenMessage && String(rateMessage || "").trim() === easyParcelTokenMissingText;
   const isEasyParcelUnavailableMessage =
-    /no .*courier|no .*service|not found|route|missing|client id|client secret|credential|api client/i.test(rateMessage || "");
-  const rateDisplayMessage = isEasyParcelUnavailableMessage
-    ? tr("No courier service found for this route.")
-    : rateMessage;
+    /no .*courier|no .*service|not found|route|missing|client id|client secret|credential|api client|access token|token response/i.test(rateMessage || "");
+  const easyParcelTokenMissingMessage = tw(
+    "manualOrderShipping.easyParcelTokenMissing",
+    easyParcelTokenMissingText
+  );
+  const noCourierFoundMessage = tw(
+    "manualOrderShipping.noCourierFound",
+    "No courier service found for this route."
+  );
+  const rateGuidanceMessage = tw(
+    "manualOrderShipping.noCourierFallbackGuidance",
+    "You can create without carrier without any charge or deduct money from shipping wallet."
+  );
+  const rateProblemMessage = rateMessage
+    ? isEasyParcelTokenMessage
+      ? easyParcelTokenMissingMessage
+      : noCourierFoundMessage
+    : "";
+  const rateDisplayMessage = rateProblemMessage
+    ? `${rateProblemMessage} ${rateGuidanceMessage}`
+    : "";
   const noCourierRoute = Boolean(
     easyParcelQuery.data &&
       easyParcelServices.length === 0 &&
       isEasyParcelUnavailableMessage
   );
+  const hasSenderInformation = Boolean(
+    senderForm.senderName.trim() &&
+      senderForm.phone.trim() &&
+      senderForm.address.trim() &&
+      senderForm.country.trim() &&
+      senderForm.postcode.trim() &&
+      (senderCountry !== "MY" || senderForm.state.trim())
+  );
+  const hasReceiverInformation = Boolean(
+    buyerForm.buyerName.trim() &&
+      buyerForm.phone.trim() &&
+      buyerForm.address.trim() &&
+      buyerForm.country.trim() &&
+      buyerForm.zipCode.trim() &&
+      (receiverCountry !== "MY" || buyerForm.state.trim())
+  );
+  const hasPackageInformation = [packageForm.weight, packageForm.length, packageForm.width, packageForm.height]
+    .every((value) => Number(value) > 0);
+  const hasSelectedSkus = addedProducts.length > 0 &&
+    addedProducts.every((product) => normalizeQuantityForSave(product.qty, product.availableForPlatform ?? product.available) > 0);
+  const isOrderActionDisabled = saveMutation.isPending ||
+    !hasSenderInformation ||
+    !hasReceiverInformation ||
+    !hasPackageInformation ||
+    !hasSelectedSkus;
+  const isSubmitOrderDisabled = isOrderActionDisabled || !selectedLogistic;
 
   const handleSubmitOrder = () => {
     if (!selectedLogistic && noCourierRoute) {
       setShowNoCourierModal(true);
       return;
     }
+    if (hasInsufficientShippingBalance) {
+      setShowInsufficientBalanceModal(true);
+      return;
+    }
+    setShowSubmitOrderConfirmModal(true);
+  };
+
+  const handleConfirmSubmitOrder = () => {
+    setShowSubmitOrderConfirmModal(false);
     handleSave({ bookNow: true });
   };
 
   const handleProcessManually = () => {
     setShowNoCourierModal(false);
+    handleSave({ manualDelivery: true });
+  };
+
+  const handleConfirmCreateWithoutCourier = () => {
+    setShowCreateWithoutCourierModal(false);
     handleSave({ manualDelivery: true });
   };
 
@@ -722,9 +845,6 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
             onChange={handleOrderChange}
           />
         </div>
-        {rateDisplayMessage && (
-          <p className="mt-2 text-xs text-amber-600">{rateDisplayMessage}</p>
-        )}
       </div>
 
       <div className="grid grid-cols-3 gap-4">
@@ -920,7 +1040,13 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
             </div>
 
             {easyParcelServices.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-surface-border p-4 text-xs text-slate-400">
+              <div
+                className={`rounded-lg border border-dashed p-4 text-xs leading-5 ${
+                  rateDisplayMessage
+                    ? "border-amber-300 bg-amber-50 text-amber-700"
+                    : "border-surface-border text-slate-500"
+                }`}
+              >
                 {rateDisplayMessage || tr("No courier rates loaded yet.")}
               </div>
             ) : (
@@ -958,6 +1084,80 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
         <div className="bg-white rounded-xl border border-surface-border p-5 self-start">
           <h3 className="text-sm font-bold text-slate-800 font-display mb-4">Payment Information</h3>
           <div className="space-y-3">
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold text-slate-800">
+                    {tw("manualOrderShipping.walletTitle", "Shipping Wallet")}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    {tw("manualOrderShipping.walletHelp", "Courier booking uses this company wallet. Manual order without courier stays free.")}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    {tw("manualOrderShipping.balance", "Balance")}
+                  </p>
+                  <p className="text-base font-bold text-primary">
+                    MYR {walletBalanceMyr.toFixed(2)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3 space-y-2 rounded-lg bg-white/75 p-3 text-xs">
+                <div className="flex justify-between gap-3">
+                  <span className="text-slate-500">{tw("manualOrderShipping.selectedCourierCharge", "Selected courier charge")}</span>
+                  <span className="font-semibold text-slate-800">
+                    {selectedLogistic
+                      ? `${selectedCourierCurrency} ${selectedCourierCharge.toFixed(2)}${selectedCourierChargeMyr ? ` / MYR ${selectedCourierChargeMyr.toFixed(2)}` : ""}`
+                      : tw("manualOrderShipping.noCourierSelected", "No courier selected")}
+                  </span>
+                </div>
+                {hasInsufficientShippingBalance && (
+                  <div className="rounded-lg bg-red-50 px-3 py-2 font-medium text-red-600">
+                    {tw("manualOrderShipping.shortfall", "Need MYR {{amount}} more before courier booking.", {
+                      amount: shippingWalletShortfall.toFixed(2),
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-3 grid grid-cols-5 gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  step="0.01"
+                  value={walletTopUpAmount}
+                  onChange={(event) => setWalletTopUpAmount(event.target.value)}
+                  className="col-span-2 rounded-lg border border-surface-border bg-white px-3 py-2 text-xs text-slate-700 outline-none focus:border-primary"
+                  placeholder="50"
+                />
+                <select
+                  value={walletTopUpCurrency}
+                  onChange={(event) => setWalletTopUpCurrency(event.target.value)}
+                  className="col-span-1 rounded-lg border border-surface-border bg-white px-2 py-2 text-xs text-slate-700 outline-none focus:border-primary"
+                >
+                  {topUpCurrencyOptions.map((currency) => (
+                    <option key={currency} value={currency}>{currency}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={handleShippingWalletTopUp}
+                  disabled={walletTopUpMutation.isPending}
+                  className="col-span-2 inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white hover:bg-primary-dark disabled:opacity-60"
+                >
+                  <CreditCard size={14} />
+                  {walletTopUpMutation.isPending
+                    ? tw("manualOrderShipping.redirecting", "Redirecting...")
+                    : tw("manualOrderShipping.topUp", "Top Up")}
+                </button>
+              </div>
+              <p className="mt-2 text-[11px] leading-4 text-slate-500">
+                {tw("manualOrderShipping.topUpNetNotice", "Wallet credit is added after payment processing and currency conversion reserve.")}
+              </p>
+            </div>
+
             {[
               ["Order Income", `$ ${orderIncome}`],
               ["Subtotal", `$ ${subtotal}`],
@@ -1053,10 +1253,19 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
           Cancel
         </button>
         <button
+          onClick={() => setShowCreateWithoutCourierModal(true)}
+          disabled={isOrderActionDisabled}
+          className="px-7 py-2.5 text-sm font-semibold border border-surface-border rounded-xl whitespace-nowrap text-slate-700 bg-white hover:bg-surface-card transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {saveMutation.isPending
+            ? tr("Processing...")
+            : tw("manualOrderShipping.createWithoutCourier", "Create Without Courier")}
+        </button>
+        <button
           onClick={handleSubmitOrder}
-          disabled={saveMutation.isPending}
+          disabled={isSubmitOrderDisabled}
           className="px-7 py-2.5 text-sm font-semibold bg-primary hover:bg-primary-dark whitespace-nowrap
-                           text-white rounded-xl transition-colors disabled:opacity-60"
+                           text-white rounded-xl transition-colors disabled:cursor-not-allowed disabled:opacity-60"
         >
           {saveMutation.isPending ? tr("Processing...") : tr("Submit Order")}
         </button>
@@ -1099,6 +1308,239 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
                 className="rounded-xl bg-primary px-5 py-2 text-sm font-semibold text-white hover:bg-primary-dark disabled:opacity-60"
               >
                 {saveMutation.isPending ? tr("Processing...") : tr("Process Manually")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCreateWithoutCourierModal && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/50 px-4 py-6">
+          <div className="relative w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <button
+              type="button"
+              onClick={() => setShowCreateWithoutCourierModal(false)}
+              className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="px-6 pb-5 pt-6">
+              <div className="flex items-start gap-4 pr-10">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+                  <AlertTriangle size={22} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">
+                    {tw("manualOrderShipping.createWithoutCourierConfirmTitle", "Create order without courier?")}
+                  </h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    {tw("manualOrderShipping.createWithoutCourierConfirmMessage", "No courier charge or shipping wallet balance will be deducted for this order.")}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 space-y-3 rounded-xl border border-amber-100 bg-amber-50/70 p-4 text-sm leading-6 text-slate-700">
+                <p className="font-semibold text-amber-800">
+                  {tw("manualOrderShipping.createWithoutCourierStockWarning", "After confirmation, the selected SKU quantity will be reduced from inventory.")}
+                </p>
+                <p>
+                  {tw("manualOrderShipping.createWithoutCourierPlatformWarning", "If this SKU has platform mappings, mapped platform stock will also be reduced automatically.")}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col-reverse gap-3 border-t border-surface-border bg-slate-50 px-6 py-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setShowCreateWithoutCourierModal(false)}
+                className="rounded-xl border border-surface-border bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-surface-card"
+              >
+                {tr("Cancel")}
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCreateWithoutCourier}
+                disabled={saveMutation.isPending}
+                className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark disabled:opacity-60"
+              >
+                {saveMutation.isPending
+                  ? tr("Processing...")
+                  : tw("manualOrderShipping.confirmCreateWithoutCourier", "Confirm Create Without Courier")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSubmitOrderConfirmModal && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/50 px-4 py-6">
+          <div className="relative w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <button
+              type="button"
+              onClick={() => setShowSubmitOrderConfirmModal(false)}
+              className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="px-6 pb-5 pt-6">
+              <div className="flex items-start gap-4 pr-10">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-50 text-primary">
+                  <CreditCard size={22} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">
+                    {tw("manualOrderShipping.submitOrderConfirmTitle", "Confirm courier booking?")}
+                  </h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    {tw("manualOrderShipping.submitOrderConfirmMessage", "After confirmation, the order process will start and the selected courier booking will be submitted.")}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-xl border border-blue-100 bg-blue-50/60 p-4">
+                <div className="grid gap-3 text-sm sm:grid-cols-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-slate-400">
+                      {tw("manualOrderShipping.balance", "Balance")}
+                    </p>
+                    <p className="mt-1 font-bold text-slate-900">MYR {walletBalanceMyr.toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-slate-400">
+                      {tw("manualOrderShipping.selectedCourierCharge", "Selected courier charge")}
+                    </p>
+                    <p className="mt-1 font-bold text-slate-900">
+                      {selectedLogistic
+                        ? `${selectedCourierCurrency} ${selectedCourierCharge.toFixed(2)}${selectedCourierChargeMyr ? ` / MYR ${selectedCourierChargeMyr.toFixed(2)}` : ""}`
+                        : tw("manualOrderShipping.noCourierSelected", "No courier selected")}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-slate-400">
+                      {tw("manualOrderShipping.afterSubmit", "After Submit")}
+                    </p>
+                    <p className="mt-1 font-bold text-primary">
+                      {tw("manualOrderShipping.bookingStarts", "Booking starts")}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-3 rounded-xl border border-amber-100 bg-amber-50/70 p-4 text-sm leading-6 text-slate-700">
+                <p className="font-semibold text-amber-800">
+                  {tw("manualOrderShipping.submitOrderWalletWarning", "The courier charge will be deducted from this company's shipping wallet when booking starts.")}
+                </p>
+                <p>
+                  {tw("manualOrderShipping.submitOrderStockWarning", "Selected SKU stock and mapped platform stock can be reduced during order creation.")}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col-reverse gap-3 border-t border-surface-border bg-slate-50 px-6 py-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setShowSubmitOrderConfirmModal(false)}
+                className="rounded-xl border border-surface-border bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-surface-card"
+              >
+                {tr("Cancel")}
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSubmitOrder}
+                disabled={saveMutation.isPending}
+                className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark disabled:opacity-60"
+              >
+                {saveMutation.isPending
+                  ? tr("Processing...")
+                  : tw("manualOrderShipping.confirmSubmitOrder", "Confirm Submit Order")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showInsufficientBalanceModal && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/50 px-4 py-6">
+          <div className="relative w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <button
+              type="button"
+              onClick={() => setShowInsufficientBalanceModal(false)}
+              className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="px-6 pb-5 pt-6">
+              <div className="flex items-start gap-4 pr-10">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-600">
+                  <AlertTriangle size={22} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">
+                    {tw("manualOrderShipping.insufficientBalanceTitle", "Shipping wallet balance is not enough")}
+                  </h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    {tw("manualOrderShipping.insufficientBalanceToast", "Shipping wallet balance is not enough. Please top up before booking courier delivery.")}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-xl border border-red-100 bg-red-50/70 p-4">
+                <div className="grid gap-3 text-sm sm:grid-cols-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-slate-400">
+                      {tw("manualOrderShipping.balance", "Balance")}
+                    </p>
+                    <p className="mt-1 font-bold text-slate-900">MYR {walletBalanceMyr.toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-slate-400">
+                      {tw("manualOrderShipping.selectedCourierCharge", "Selected courier charge")}
+                    </p>
+                    <p className="mt-1 font-bold text-slate-900">
+                      MYR {selectedCourierChargeMyr.toFixed(2)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-slate-400">
+                      {tw("manualOrderShipping.shortfallLabel", "Need More")}
+                    </p>
+                    <p className="mt-1 font-bold text-red-600">MYR {shippingWalletShortfall.toFixed(2)}</p>
+                  </div>
+                </div>
+              </div>
+
+              <p className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm font-medium leading-6 text-slate-700">
+                {tw("manualOrderShipping.insufficientBalanceHelp", "You can close this message and top up the company shipping wallet below, then submit the courier booking again.")}
+              </p>
+            </div>
+
+            <div className="flex flex-col-reverse gap-3 border-t border-surface-border bg-slate-50 px-6 py-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setShowInsufficientBalanceModal(false)}
+                className="rounded-xl border border-surface-border bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-surface-card"
+              >
+                {tr("Close")}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowInsufficientBalanceModal(false);
+                  handleShippingWalletTopUp();
+                }}
+                disabled={walletTopUpMutation.isPending}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark disabled:opacity-60"
+              >
+                <CreditCard size={16} />
+                {walletTopUpMutation.isPending
+                  ? tw("manualOrderShipping.redirecting", "Redirecting...")
+                  : tw("manualOrderShipping.topUp", "Top Up")}
               </button>
             </div>
           </div>

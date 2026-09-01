@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 import Topbar from "../../../components/layout/Topbar";
 import ConfirmActionModal from "../../../components/shared/ConfirmActionModal";
+import ManualOrderSubscriptionGate from "../shared/components/ManualOrderSubscriptionGate";
 import OrderFooter from "../shared/components/OrderFooter";
 import PageSizePagination from "../shared/components/PageSizePagination";
 import api from "../../../lib/api";
@@ -1745,29 +1746,33 @@ export default function PlatformManualOrderPage() {
 
   if (showCreate) {
     return (
-      <CreatePlatformManualOrder
-        warehouses={warehouses}
-        companyId={companyId}
-        onBack={() => setShowCreate(false)}
-        onCreated={() => {
-          setShowCreate(false);
-          loadOrders();
-        }}
-      />
+      <ManualOrderSubscriptionGate>
+        <CreatePlatformManualOrder
+          warehouses={warehouses}
+          companyId={companyId}
+          onBack={() => setShowCreate(false)}
+          onCreated={() => {
+            setShowCreate(false);
+            loadOrders();
+          }}
+        />
+      </ManualOrderSubscriptionGate>
     );
   }
 
   return (
-    <PlatformManualOrderList
-      orders={orders}
-      loading={loading}
-      error={loadError}
-      warehouses={warehouses}
-      companyId={companyId}
-      onCreate={() => setShowCreate(true)}
-      onReload={() => loadOrders()}
-      onQueryChange={handleQueryChange}
-      onFetchAll={fetchAllOrders}
-    />
+    <ManualOrderSubscriptionGate>
+      <PlatformManualOrderList
+        orders={orders}
+        loading={loading}
+        error={loadError}
+        warehouses={warehouses}
+        companyId={companyId}
+        onCreate={() => setShowCreate(true)}
+        onReload={() => loadOrders()}
+        onQueryChange={handleQueryChange}
+        onFetchAll={fetchAllOrders}
+      />
+    </ManualOrderSubscriptionGate>
   );
 }
