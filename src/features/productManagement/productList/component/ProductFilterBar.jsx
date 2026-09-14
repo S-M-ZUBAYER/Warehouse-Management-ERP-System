@@ -8,9 +8,6 @@ export default function ProductFilterBar({
   statusOptions,
   productStatus,
   setProductStatus,
-  countryOptions,
-  country,
-  setCountry,
   sku,
   setSku,
   setPage,
@@ -20,7 +17,7 @@ export default function ProductFilterBar({
 }) {
   return (
     <div className="bg-white rounded-xl border border-surface-border p-4">
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <SelectDropdown
           label="Select Warehouse"
           placeholder="Warehouse name here"
@@ -45,21 +42,6 @@ export default function ProductFilterBar({
             setProductStatus(opt?.value ?? "all");
             setPage(1);
           }}
-        />
-        <SelectDropdown
-          label="Select Country"
-          placeholder="Country name here"
-          options={countryOptions.map((c) => c.label)}
-          value={
-            countryOptions.find((c) => c.value === country)?.label ??
-            "All Countries"
-          }
-          onChange={(label) => {
-            const opt = countryOptions.find((c) => c.label === label);
-            setCountry(opt?.value ?? "all");
-            setPage(1);
-          }}
-          loading={dropdownsLoading}
         />
         <div>
           <p className="text-xs font-semibold text-slate-600 mb-1.5">SKU</p>

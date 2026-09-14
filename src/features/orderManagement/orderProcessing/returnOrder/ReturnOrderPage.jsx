@@ -514,7 +514,7 @@ export default function ReturnOrderPage() {
 
   const loadStores = useCallback(async () => {
     try {
-      const response = await api.get("/platform-stores", { params: { page: 1, limit: 1000 } });
+      const response = await api.get("/order-management/platform-stores", { params: { page: 1, limit: 1000 } });
       const usableStores = getRows(response)
         .filter(hasUsableStoreSubscription)
         .map(normalizeStore);

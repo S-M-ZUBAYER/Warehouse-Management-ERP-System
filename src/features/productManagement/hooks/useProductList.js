@@ -446,11 +446,12 @@ const EMPTY_FORM = {
 // Main hook
 // ─────────────────────────────────────────────────────────────────────────────
 export function useProductList({ warehouseFilterMode = "master", initialWarehouseFilter = "default" } = {}) {
+    const allowAllWarehouseFilter = initialWarehouseFilter === "all";
     // ── Filter state ──────────────────────────────────────────────────────────
     const [search, setSearch] = useState("");
     const [searchField, setSearchField] = useState("sku_name");
-    const [warehouseFilter, setWarehouseFilter] = useState(() => initialWarehouseFilter === "all" ? "all" : getDefaultAllowedWarehouseId() || "all");
-    const [warehouseFilterName, setWarehouseFilterName] = useState(() => initialWarehouseFilter === "all" ? "All Warehouses" : getDefaultAllowedWarehouseId() ? "Warehouse name" : "All Warehouses");
+    const [warehouseFilter, setWarehouseFilter] = useState(() => allowAllWarehouseFilter ? "all" : getDefaultAllowedWarehouseId() || "all");
+    const [warehouseFilterName, setWarehouseFilterName] = useState(() => allowAllWarehouseFilter ? "All Warehouses" : getDefaultAllowedWarehouseId() ? "Warehouse name" : "All Warehouses");
     const [productStatus, setProductStatus] = useState("all");
     const [country, setCountry] = useState("all");
     const [sku, setSku] = useState("");
@@ -509,7 +510,7 @@ export function useProductList({ warehouseFilterMode = "master", initialWarehous
     // Build dropdown option arrays from API response
     const warehouseOptions = useMemo(() => {
         const restricted = hasWarehouseRestriction();
-        const base = restricted ? [] : [{ label: "All Warehouses", value: "all" }];
+        const base = restricted && !allowAllWarehouseFilter ? [] : [{ label: "All Warehouses", value: "all" }];
         if (!dropdowns?.warehouses) return base;
         const allowedWarehouses = filterWarehousesByPermission(dropdowns.warehouses);
         return [
@@ -519,10 +520,14 @@ export function useProductList({ warehouseFilterMode = "master", initialWarehous
                 value: String(w.id),
             })),
         ];
-    }, [dropdowns]);
+    }, [allowAllWarehouseFilter, dropdowns]);
 
     useEffect(() => {
         if (!hasWarehouseRestriction() || !warehouseOptions.length) return;
+        if (allowAllWarehouseFilter && warehouseFilter === "all") {
+            setWarehouseFilterName("All Warehouses");
+            return;
+        }
         const selected = warehouseOptions.find((option) => option.value === warehouseFilter);
         if (selected) {
             setWarehouseFilterName(selected.label);
@@ -532,7 +537,7 @@ export function useProductList({ warehouseFilterMode = "master", initialWarehous
         setWarehouseFilter(firstWarehouse.value);
         setWarehouseFilterName(firstWarehouse.label);
         setPage(1);
-    }, [warehouseOptions, warehouseFilter]);
+    }, [allowAllWarehouseFilter, warehouseOptions, warehouseFilter]);
 
     const countryOptions = useMemo(() => {
         const base = [{ label: "All Countries", value: "all" }];
@@ -994,7 +999,7 @@ export function useProductList({ warehouseFilterMode = "master", initialWarehous
     // ─────────────────────────────────────────────────────────────────────────
     const resetFilters = useCallback(() => {
         const defaultWarehouseId = getDefaultAllowedWarehouseId();
-        const resetToAllWarehouses = initialWarehouseFilter === "all";
+        const resetToAllWarehouses = allowAllWarehouseFilter;
         setSearch("");
         setSearchField("sku_name");
         setSku("");
@@ -1003,7 +1008,7 @@ export function useProductList({ warehouseFilterMode = "master", initialWarehous
         setProductStatus("all");
         setCountry("all");
         setPage(1);
-    }, [initialWarehouseFilter]);
+    }, [allowAllWarehouseFilter]);
 
     const hasActiveFilters =
         search.trim() || sku.trim() ||

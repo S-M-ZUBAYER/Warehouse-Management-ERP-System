@@ -3,10 +3,14 @@ import { persist } from "zustand/middleware";
 import { queryClient } from "@/lib/queryClient";
 
 export const DASHBOARD_TAB_ID = "/warehouse_management";
+export const DASHBOARD_TAB_PATH = "/warehouse_management";
+
+export const isDashboardTabPath = (path) =>
+  path === DASHBOARD_TAB_PATH || path === `${DASHBOARD_TAB_PATH}/`;
 
 const dashboardTab = {
   id: DASHBOARD_TAB_ID,
-  path: "/warehouse_management",
+  path: DASHBOARD_TAB_PATH,
   search: "",
   reloadKey: 0,
   pinned: true,
@@ -14,17 +18,21 @@ const dashboardTab = {
 };
 
 const normalizeTab = (tab) => {
-  const path = typeof tab?.path === "string" && tab.path.startsWith("/")
+  const rawPath = typeof tab?.path === "string" && tab.path.startsWith("/")
     ? tab.path
-    : "/warehouse_management";
-  const search = typeof tab?.search === "string" ? tab.search : "";
+    : DASHBOARD_TAB_PATH;
+  const path = isDashboardTabPath(rawPath) ? DASHBOARD_TAB_PATH : rawPath;
+  const search = isDashboardTabPath(path)
+    ? ""
+    : typeof tab?.search === "string" ? tab.search : "";
+  const id = isDashboardTabPath(path) ? DASHBOARD_TAB_ID : tab?.id || `${path}${search}`;
 
   return {
-    id: tab?.id || `${path}${search}`,
+    id,
     path,
     search,
     reloadKey: Number(tab?.reloadKey) || 0,
-    pinned: Boolean(tab?.pinned || path === "/warehouse_management"),
+    pinned: Boolean(tab?.pinned || isDashboardTabPath(path)),
     createdAt: Number(tab?.createdAt) || Date.now(),
   };
 };

@@ -9,8 +9,10 @@ import { NestedPageRow } from "./component/NestedPageRow";
 import PortalActionMenu from "../../../components/shared/PortalActionMenu";
 import RecordDetailModal from "../../../components/shared/RecordDetailModal";
 import ListPageSizePagination from "../../../components/shared/ListPageSizePagination";
+import { getStoredWarehouseUser, isOwnerUser } from "../../../utils/permissions";
 
 export default function RoleManagementPage() {
+  const canManageRoles = isOwnerUser(getStoredWarehouseUser());
   const {
     search,
     setSearch,
@@ -116,14 +118,16 @@ export default function RoleManagementPage() {
           <h2 className="text-base font-bold text-slate-800 font-display">
             Roles List
           </h2>
-          <button
-            onClick={openModal}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold
-                       bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors"
-          >
-            <Plus size={14} />
-            Add Role
-          </button>
+          {canManageRoles && (
+            <button
+              onClick={openModal}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold
+                         bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors"
+            >
+              <Plus size={14} />
+              Add Role
+            </button>
+          )}
         </div>
         <div className="overflow-x-auto">
           {/* ── Loading ── */}
@@ -239,28 +243,32 @@ export default function RoleManagementPage() {
                             <Eye size={13} className="text-slate-400" />
                             Details
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setOpenActionId(null);
-                              openEditModal(role);
-                            }}
-                            className="w-full flex items-center gap-2 px-4 py-2 text-xs transition-colors text-slate-700 hover:bg-surface-card"
-                          >
-                            <Pencil size={13} className="text-slate-400" />
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setOpenActionId(null);
-                              openDeleteModal(role);
-                            }}
-                            className="w-full flex items-center gap-2 px-4 py-2 text-xs transition-colors text-red-500 hover:bg-red-50"
-                          >
-                            <Trash2 size={13} />
-                            Delete
-                          </button>
+                          {canManageRoles && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenActionId(null);
+                                  openEditModal(role);
+                                }}
+                                className="w-full flex items-center gap-2 px-4 py-2 text-xs transition-colors text-slate-700 hover:bg-surface-card"
+                              >
+                                <Pencil size={13} className="text-slate-400" />
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenActionId(null);
+                                  openDeleteModal(role);
+                                }}
+                                className="w-full flex items-center gap-2 px-4 py-2 text-xs transition-colors text-red-500 hover:bg-red-50"
+                              >
+                                <Trash2 size={13} />
+                                Delete
+                              </button>
+                            </>
+                          )}
                         </PortalActionMenu>
                       </div>
                     </td>
@@ -303,7 +311,7 @@ export default function RoleManagementPage() {
         <RolePermissionDetails pages={pages} form={detailPermissionForm} />
       </RecordDetailModal>
       <AddRoleModal
-        open={showModal}
+        open={canManageRoles && showModal}
         onClose={closeModal}
         form={form}
         onChange={handleFormChange}
@@ -316,7 +324,7 @@ export default function RoleManagementPage() {
         pages={pages}
       />
       <EditRoleModal
-        open={editModal.open}
+        open={canManageRoles && editModal.open}
         onClose={closeEditModal}
         form={editForm}
         onChange={handleEditFormChange}
@@ -329,7 +337,7 @@ export default function RoleManagementPage() {
         pages={pages}
       />
       <DeleteRoleModal
-        open={deleteModal.open}
+        open={canManageRoles && deleteModal.open}
         role={deleteModal.role}
         onClose={closeDeleteModal}
         onConfirm={handleDelete}

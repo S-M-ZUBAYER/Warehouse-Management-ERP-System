@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, createContext, useContext } from "react";
+﻿import { useState, useRef, useEffect, createContext, useContext } from "react";
 import { useTranslation } from "react-i18next";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -20,6 +20,7 @@ import {
   AlertCircle,
   Crown,
   Mail,
+  HelpCircle,
   MessageCircle,
 } from "lucide-react";
 import { useUIStore } from "@/stores/uiStore";
@@ -27,7 +28,7 @@ import { getStoredWarehouseUser, filterNavByPermission } from "@/utils/permissio
 import api from "@/lib/api";
 import grozziielogo from "../../assets/GrozziieLogo.svg";
 
-// ── Nav config ────────────────────────────────────────────────────────────
+// â”€â”€ Nav config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const navItems = [
   {
     label: "Dashboard",
@@ -317,6 +318,13 @@ const navItems = [
     ],
   },
   {
+    label: "Help Center",
+    i18nKey: "nav.helpCenter",
+    permissionKey: "contact",
+    to: "/warehouse_management/help-center",
+    icon: HelpCircle,
+  },
+  {
     label: "Contact",
     i18nKey: "nav.contact",
     permissionKey: "contact",
@@ -332,7 +340,7 @@ const navItems = [
   // }
 ];
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function hasActiveDescendant(item, pathname) {
   if (item.to && pathname.startsWith(item.to)) return true;
   if (item.children) {
@@ -348,7 +356,7 @@ function getEffectiveNavPath(location) {
   return location.pathname;
 }
 
-// ── Accordion Context ──────────────────────────────────────────────────────
+// â”€â”€ Accordion Context â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Key = parentPath (unique per group of siblings), value = open child label.
 // This ensures siblings within the SAME parent group close each other,
 // while siblings in DIFFERENT parents are fully independent.
@@ -504,9 +512,9 @@ function AccordionProvider({ children }) {
   const [openMap, setOpenMap] = useState({});
 
   /**
-   * @param {string} parentPath  — unique key for this group of siblings, e.g. "root" or "root>Inventory Management"
-   * @param {string} label       — the child item being toggled
-   * @param {boolean} currentlyOpen — true when the item is already visually open, including active-route fallback
+   * @param {string} parentPath  â€” unique key for this group of siblings, e.g. "root" or "root>Inventory Management"
+   * @param {string} label       â€” the child item being toggled
+   * @param {boolean} currentlyOpen â€” true when the item is already visually open, including active-route fallback
    */
   const toggle = (parentPath, label, currentlyOpen = false) => {
     setOpenMap((prev) => {
@@ -549,7 +557,7 @@ function AccordionProvider({ children }) {
   );
 }
 
-// ── Recursive NavItem ──────────────────────────────────────────────────────
+// â”€â”€ Recursive NavItem â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // parentPath uniquely identifies the group this item belongs to.
 function NavItem({
   item,
@@ -586,7 +594,7 @@ function NavItem({
 
   const indentPx = 12 + depth * 12;
 
-  // ── Leaf item ─────────────────────────────────────────────────────────
+  // â”€â”€ Leaf item â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (!item.children) {
     return (
       <NavLink
@@ -633,7 +641,7 @@ function NavItem({
     );
   }
 
-  // ── Parent item (has children) ─────────────────────────────────────────
+  // â”€â”€ Parent item (has children) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleToggle = (event) => {
     if (collapsed && depth === 0) {
       const rect = event.currentTarget.getBoundingClientRect();
@@ -691,7 +699,7 @@ function NavItem({
         )}
       </button>
 
-      {/* Children — pass selfPath so each child group is uniquely scoped */}
+      {/* Children â€” pass selfPath so each child group is uniquely scoped */}
       {!collapsed && open && (
         <div className="mt-0.5 ml-5 border-l-2 border-[#D0DEE8] pl-2 space-y-0.5">
           {item.children.map((child) => (
@@ -711,7 +719,7 @@ function NavItem({
   );
 }
 
-// ── Upgrade Plan Banner ────────────────────────────────────────────────────
+// â”€â”€ Upgrade Plan Banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const STORE_AUTHORIZATION_PATH = "/warehouse_management/config/store_authorization";
 const PRICING_PATH = "/warehouse_management/pricing";
 
@@ -869,7 +877,7 @@ function UpgradePlan({ collapsed }) {
   );
 }
 
-// ── Sidebar ────────────────────────────────────────────────────────────────
+// â”€â”€ Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function Sidebar() {
   const { t } = useTranslation();
   const { sidebarCollapsed, toggleSidebar } = useUIStore();
@@ -917,7 +925,7 @@ export default function Sidebar() {
         </button>
       </div>
 
-      {/* Nav — scrollable */}
+      {/* Nav â€” scrollable */}
       <AccordionProvider>
         <nav className="flex-1 min-h-0 px-2 py-4 space-y-0.5 overflow-y-auto scrollbar-thin">
           {visibleNavItems.map((item) => (
@@ -934,7 +942,7 @@ export default function Sidebar() {
         </nav>
       </AccordionProvider>
 
-      {/* Upgrade Plan — pinned to bottom */}
+      {/* Upgrade Plan â€” pinned to bottom */}
       {sidebarCollapsed && collapsedFlyout?.item && (
         <div
           ref={flyoutRef}
@@ -952,3 +960,6 @@ export default function Sidebar() {
     </aside>
   );
 }
+
+
+

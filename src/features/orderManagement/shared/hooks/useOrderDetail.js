@@ -148,7 +148,8 @@ export function useOrderDetail({
         null;
       const matchedWarehouseId = getSkuMappedWarehouseId(targetMerchantSku);
       const fallbackWarehouse = warehouseOptions[0] || null;
-      const activeWarehouseId = selectedWarehouseId || matchedWarehouseId || fallbackWarehouse?.id || "";
+      const activeWarehouseId = [selectedWarehouseId, matchedWarehouseId, fallbackWarehouse?.id]
+        .find((id) => id && warehouseOptions.some((warehouse) => String(warehouse.id) === String(id))) || "";
       const mappingWarehouse = activeWarehouseId
         ? {
             id: activeWarehouseId,
