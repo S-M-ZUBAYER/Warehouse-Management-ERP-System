@@ -1,4 +1,4 @@
-import DashboardPage from "@/features/dashboard/DashboardPage";
+﻿import DashboardPage from "@/features/dashboard/DashboardPage";
 import WarehousePage from "@/features/warehouseManagement/WarehousePage";
 import AppShell from "@/components/layout/AppShell";
 import Login from "@/features/auth/pages/Login";
@@ -44,6 +44,7 @@ import PricingPage from "../features/pricing/PricingPage";
 import PricingCheckoutPage from "../features/pricing/PricingCheckoutPage";
 import PricingPaymentSuccessPage from "../features/pricing/PricingPaymentSuccessPage";
 import ContactPage from "../features/contact/ContactPage";
+import HelpCenterPage from "../features/helpCenter/HelpCenterPage";
 
 export const routes = [
   {
@@ -58,6 +59,7 @@ export const routes = [
       { index: true, element: <DashboardPage /> },
       { path: "/warehouse_management/chat", element: <ChatPage /> },
       { path: "/warehouse_management/contact", element: <ContactPage /> },
+      { path: "/warehouse_management/help-center", element: <HelpCenterPage /> },
 
       // Product Management Routes
       {
@@ -235,3 +237,5 @@ export const routes = [
 
   { path: "*", element: <NotFound /> },
 ];
+
+

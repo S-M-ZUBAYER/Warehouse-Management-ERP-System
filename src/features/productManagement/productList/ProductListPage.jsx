@@ -561,15 +561,12 @@ export default function ProductListPage() {
     handleWarehouseFilterChange,
     productStatus,
     setProductStatus,
-    country,
-    setCountry,
     sku,
     setSku,
     bulkAction,
     handleBulkAction,
     warehouseOptions,
     statusOptions,
-    countryOptions,
     products,
     pagination,
     page,
@@ -665,9 +662,6 @@ export default function ProductListPage() {
         statusOptions={statusOptions}
         productStatus={productStatus}
         setProductStatus={setProductStatus}
-        countryOptions={countryOptions}
-        country={country}
-        setCountry={setCountry}
         sku={sku}
         setSku={setSku}
         setPage={setPage}

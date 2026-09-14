@@ -1,0 +1,844 @@
+Q-001: What is the Dashboard?
+Q-002: Why should I use the Dashboard?
+Q-003: Does opening the Dashboard change any business data?
+Q-004: How do I return to the Dashboard?
+Q-005: Why does the Dashboard take time to load?
+Q-006: Why is some Dashboard information empty?
+Q-007: Does an empty Dashboard mean the ERP is broken?
+Q-008: Does the Dashboard update automatically?
+Q-009: What are the main ERP sections shown in the sidebar?
+Q-010: What is Product Management?
+Q-011: What is Inventory Management?
+Q-012: What is Order Management?
+Q-013: What is Warehouse Management?
+Q-014: What is System Configuration?
+Q-015: How do I open a submenu?
+Q-016: How do I hide the sidebar?
+Q-017: What is the Overview section?
+Q-018: What does Total Platform Products mean?
+Q-019: Why might Total Platform Products differ from Merchant SKUs?
+Q-020: What does Today’s Orders mean?
+Q-021: Why might Today’s Orders differ from the marketplace?
+Q-022: What timezone is used for Today’s Orders?
+Q-023: What does Low Stock mean?
+Q-024: How is the low-stock level decided?
+Q-025: Does Low Stock mean the product cannot be sold?
+Q-026: What does Out of Stock mean?
+Q-027: Why might a product appear out of stock when physical stock exists?
+Q-028: Can I click an Overview card?
+Q-029: Where should I investigate an incorrect product total?
+Q-030: Where should I investigate incorrect stock information?
+Q-031: What is the Inventory Status chart?
+Q-032: What does Stock-In mean?
+Q-033: What does Stock-Out mean?
+Q-034: How do I change the Inventory Status period?
+Q-035: Why does the chart show dates across the bottom?
+Q-036: Why does the Inventory Status chart show no activity?
+Q-037: Does Stock-In include inventory that is still On The Way?
+Q-038: Where can I see the reason for a stock movement?
+Q-039: Can I filter the Dashboard inventory chart by warehouse?
+Q-040: What is the Order Status section?
+Q-041: What does Total mean in Order Status?
+Q-042: What are Pending Orders?
+Q-043: What are Processing Orders?
+Q-044: What are Shipped Orders?
+Q-045: What are Completed Orders?
+Q-046: What are Cancelled Orders?
+Q-047: How do I change the Order Status period?
+Q-048: Does changing the date range modify orders?
+Q-049: Can I click an order-status category?
+Q-050: Why does the order total differ from the sum I expected?
+Q-051: Where can I find a specific order?
+Q-052: Why is an order missing from the expected status?
+Q-053: What is the Sales Trends chart?
+Q-054: What can the Sales Trends chart help me understand?
+Q-055: How do I change the sales period?
+Q-056: How do I compare marketplace performance?
+Q-057: What does All mean in the platform selector?
+Q-058: Why does the platform selector only show All?
+Q-059: Does Sales Trends show revenue or order quantity?
+Q-060: Why might Sales Trends differ from Today’s Orders?
+Q-061: Why might Sales Trends differ from a marketplace report?
+Q-062: Can I use Sales Trends as an accounting report?
+Q-063: What is Store Plans?
+Q-064: Why does Store Plans say that no stores were found?
+Q-065: How do I connect a marketplace store?
+Q-066: What does See all do?
+Q-067: What does Upgrade Plan do?
+Q-068: When should I buy a subscription?
+Q-069: What happens when a store subscription expires?
+Q-070: Does renewing a plan reconnect an unauthorized store?
+Q-071: How do I change the ERP language?
+Q-072: Which languages are available?
+Q-073: Will changing the language translate product and customer data?
+Q-074: What is the user button in the upper-right corner?
+Q-075: What is Profile Info?
+Q-076: What is My gift?
+Q-077: What does Share referral code do?
+Q-078: What does Log Out do?
+Q-079: How can the Dashboard help me run my business?
+Q-080: What should I check first every morning?
+Q-081: What should I review before purchasing new inventory?
+Q-082: How can the Dashboard help prevent missed orders?
+Q-083: How can it help prevent overselling?
+Q-084: Can the Dashboard replace detailed reports?
+Q-085: How can I know whether the ERP is helping my business?
+Q-086: What should I do before relying on the Dashboard?
+Q-087: What is Product Management?
+Q-088: How do I open Product Management?
+Q-089: What is the difference between Product List and Combine SKU?
+Q-090: Does opening Product Management change anything?
+Q-091: Which Product Management actions can change data?
+Q-092: Who should use Product Management?
+Q-093: What is the Product List?
+Q-094: What information appears in the Product List?
+Q-095: What does SKU mean?
+Q-096: Is a SKU the same as a product name?
+Q-097: Can different product variations have different SKUs?
+Q-098: Why is a unique SKU important?
+Q-099: Can two products use the same SKU?
+Q-100: What is the difference between a platform SKU and a Merchant SKU?
+Q-101: Why might the product name be in another language?
+Q-102: What does Select Warehouse do?
+Q-103: Why does the warehouse selector show a placeholder?
+Q-104: What does Product Status do?
+Q-105: What does Select Country do?
+Q-106: What is the dedicated SKU field?
+Q-107: What is the general Search field?
+Q-108: Can I use several filters together?
+Q-109: Why does no product appear after I apply filters?
+Q-110: Why is the Product List empty?
+Q-111: How do I get marketplace products into the ERP?
+Q-112: What does the Image column show?
+Q-113: Why is a product image missing?
+Q-114: Where can I add a product image?
+Q-115: Will changing an ERP image update the marketplace?
+Q-116: What kind of product image should I use?
+Q-117: What does Available in Inventory mean?
+Q-118: What does In-transit Inventory mean?
+Q-119: Is in-transit inventory available for immediate sale?
+Q-120: Why does a product show no available inventory?
+Q-121: Why might the physical stock and ERP stock differ?
+Q-122: Where should I investigate an incorrect quantity?
+Q-123: Does Product Management directly control warehouse stock?
+Q-124: What does the checkbox in each row do?
+Q-125: What does Select All do?
+Q-126: Why is Bulk Action disabled?
+Q-127: Which bulk actions are available?
+Q-128: What does Batch Print do?
+Q-129: What does Batch Export do?
+Q-130: What is Batch Stock Alert Setting?
+Q-131: What does Batch Delete do?
+Q-132: Does selecting a bulk action immediately execute it?
+Q-133: What does Add Products do?
+Q-134: Does clicking Add Products immediately create a product?
+Q-135: What should I check before adding a product?
+Q-136: Can Add Products create duplicate products?
+Q-137: What does Details do?
+Q-138: What does Actions do?
+Q-139: Why are Details and Actions separate?
+Q-140: Can I edit a product from the Product List?
+Q-141: Can I delete a product from Actions?
+Q-142: What does Export do?
+Q-143: What does Print do?
+Q-144: What does Products per page mean?
+Q-145: What do Previous and Next do?
+Q-146: Why is Previous disabled?
+Q-147: Why is Next disabled?
+Q-148: What is a Combine SKU?
+Q-149: What is the difference between a regular SKU and a Combine SKU?
+Q-150: When should I use a Combine SKU?
+Q-151: What information appears in the Combine SKU table?
+Q-152: What does Add Combine SKU do?
+Q-153: What information may be required for a bundle?
+Q-154: Does clicking Add Combine SKU immediately create a bundle?
+Q-155: How should I choose a Combine SKU code?
+Q-156: Can a Combine SKU contain several different products?
+Q-157: Can a Combine SKU contain several units of the same product?
+Q-158: Can another Combine SKU be used as a component?
+Q-159: Where can I add a bundle image?
+Q-160: What should the bundle image show?
+Q-161: What does Bundle SKU Name mean?
+Q-162: What does Warehouse mean for a Combine SKU?
+Q-163: How is Combine SKU stock calculated?
+Q-164: Why does a Combine SKU show no stock?
+Q-165: Does creating a Combine SKU physically combine products?
+Q-166: Does selling a bundle reduce component inventory?
+Q-167: What does Details do for a Combine SKU?
+Q-168: Can I edit a Combine SKU?
+Q-169: What does Delete do for a Combine SKU?
+Q-170: Does deleting a Combine SKU delete its component products?
+Q-171: How do I search for a Combine SKU?
+Q-172: What do Export and Print do on the Combine SKU page?
+Q-173: How can Product Management help my business?
+Q-174: How can it reduce product mistakes?
+Q-175: How can Product Management help prevent overselling?
+Q-176: How can Combine SKU increase sales?
+Q-177: What should I review before launching a bundle?
+Q-178: What should my staff check every day?
+Q-179: How do I know if Product Management is configured correctly?
+Q-180: Should every employee have permission to manage products?
+Q-181: What should a read-only product user be allowed to do?
+Q-182: What should I test before relying on Product Management?
+Q-183: What is the overall purpose of Inventory Management?
+Q-184: What is the recommended inventory workflow?
+Q-185: What is a Merchant SKU?
+Q-186: How is a Merchant SKU different from a platform SKU?
+Q-187: What information appears in the Merchant SKU table?
+Q-188: How many Merchant SKUs are currently shown?
+Q-189: How do I search for a Merchant SKU?
+Q-190: What is GTIN?
+Q-191: What does Add Merchant SKU do?
+Q-192: Where can I add an image for a Merchant SKU?
+Q-193: Why are weight and size important?
+Q-194: What does Details do?
+Q-195: What does Actions do?
+Q-196: What does Bulk Action do?
+Q-197: What do Export and Print do?
+Q-198: What is SKU Mapping by Product?
+Q-199: Why can the mapped and unmapped counts appear inconsistent with the total?
+Q-200: What information appears in the mapping table?
+Q-201: What does the platform filter do?
+Q-202: What does the shop filter do?
+Q-203: How can I search on this page?
+Q-204: What does All show?
+Q-205: What does Unmapped show?
+Q-206: What does Mapped show?
+Q-207: What does “Show child SKUs” mean?
+Q-208: What is Auto Mapping?
+Q-209: What does Generate Merchant SKU do?
+Q-210: What does Sync Product do?
+Q-211: What should I do with an unmapped product?
+Q-212: What is SKU Mapping by Merchant SKU?
+Q-213: What information appears in this table?
+Q-214: What does Mapped Stores mean?
+Q-215: What does Status mean?
+Q-216: What is a Sync Group?
+Q-217: What does “View/change mapped platform SKU list” do?
+Q-218: What does “Unlink mapped product SKU(s)” do?
+Q-219: What does “Group sync child SKUs” do?
+Q-220: Why is a Merchant SKU unmapped?
+Q-221: What is the Inventory List?
+Q-222: Why are there more inventory items than Merchant SKUs?
+Q-223: What information appears in the Inventory List?
+Q-224: What does Quantity mean?
+Q-225: What does Lock Quantity mean?
+Q-226: Why is stock locked?
+Q-227: What does Stock Alert mean?
+Q-228: What does Synced mean?
+Q-229: What does Out of Sync mean?
+Q-230: What does Last Sync mean?
+Q-231: What do All, Unmapped, and Mapped mean?
+Q-232: What does Sync Stock do?
+Q-233: What does Bulk Action do on the Inventory List?
+Q-234: Why does a SKU show zero quantity but still appear in the Inventory List?
+Q-235: What should I check if an inventory quantity appears incorrect?
+Q-236: What is Manual Inbound?
+Q-237: What information appears in the Manual Inbound table?
+Q-238: How many Manual Inbound records currently exist?
+Q-239: What does Create Manual Inbound do?
+Q-240: What is an Inbound ID?
+Q-241: Why is the supplier important?
+Q-242: How can I find a Manual Inbound record?
+Q-243: What is an inbound transaction?
+Q-244: What are the inbound stages?
+Q-245: What does Draft mean?
+Q-246: What does On The Way mean?
+Q-247: What does Complete mean?
+Q-248: What does Create Inbound do?
+Q-249: What does Ship do on the Draft page?
+Q-250: What information appears in the inbound tables?
+Q-251: Why is the estimated arrival time blank?
+Q-252: When does inbound stock become available?
+Q-253: What does Bulk Action do on inbound pages?
+Q-254: What should I check when an inbound quantity does not appear in inventory?
+Q-255: What is an outbound transaction?
+Q-256: What are the outbound stages?
+Q-257: What does Outbound Draft mean?
+Q-258: What does Outbound On The Way mean?
+Q-259: What does Completed Outbound mean?
+Q-260: What does Create Outbound do?
+Q-261: What does Ship do on the Outbound Draft page?
+Q-262: What information appears in the outbound tables?
+Q-263: Why does the Outbound Draft page say “No items found”?
+Q-264: When is stock reduced during outbound processing?
+Q-265: What should I check if outbound stock was deducted incorrectly?
+Q-266: What is the Inventory Log?
+Q-267: What columns appear in Inventory Log?
+Q-268: What is Seller SKU?
+Q-269: What does Stock In Quantity mean?
+Q-270: What does Stock Out Quantity mean?
+Q-271: What does Purpose mean?
+Q-272: What does Remaining Quantity mean?
+Q-273: What does Operation Time mean?
+Q-274: What is the difference between Recent and History?
+Q-275: How do I search Inventory Log?
+Q-276: Why should I select a warehouse?
+Q-277: Which warehouses are currently available in the log filter?
+Q-278: How many log records are currently shown?
+Q-279: Why do several sales deductions occur close together?
+Q-280: How do I investigate a stock discrepancy using Inventory Log?
+Q-281: Can Inventory Log records be edited?
+Q-282: What pages are available under Order Management?
+Q-283: What is the purpose of Order Management?
+Q-284: What is the general order-processing workflow?
+Q-285: Does changing an order’s status change inventory?
+Q-286: Why might an order appear on more than one page?
+Q-287: What does the platform filter do?
+Q-288: What does the store filter do?
+Q-289: What is Single Search?
+Q-290: What is Batch Search?
+Q-291: Which fields can be used to search regular orders?
+Q-292: Which search field should I use first?
+Q-293: What does the date filter do?
+Q-294: Why can’t I find an older order?
+Q-295: What does the Status filter do?
+Q-296: What does Select All do?
+Q-297: What do Export and Print do?
+Q-298: What does the Image column show?
+Q-299: What does SKU mean in an order?
+Q-300: What is the Order Number?
+Q-301: What is the Platform column?
+Q-302: What is the Store column?
+Q-303: What is the Warehouse Package Number?
+Q-304: What is a Tracking Number?
+Q-305: Why might the tracking number be missing?
+Q-306: What is Create Time?
+Q-307: What does Status mean?
+Q-308: What does Details do?
+Q-309: What does Actions do?
+Q-310: What is “Exchange / Add SKU”?
+Q-311: What is the New Orders page?
+Q-312: What does To Pack mean?
+Q-313: What does Pack do?
+Q-314: What should I verify before packing an order?
+Q-315: What does Packed Successfully mean?
+Q-316: What does Pack Failed mean?
+Q-317: What does Out of Stock mean on New Orders?
+Q-318: What does Exchange/Add mean?
+Q-319: What does Platform Processing mean?
+Q-320: Why is the Pack button unavailable?
+Q-321: What is the Processed Orders page?
+Q-322: What does Push do?
+Q-323: What should I check before using Push?
+Q-324: What does Pushing mean?
+Q-325: What does Pushed Successful mean?
+Q-326: What does Withdraw mean?
+Q-327: Why might Push fail or remain pending?
+Q-328: What is the To Pickup page?
+Q-329: What should happen before an order reaches To Pickup?
+Q-330: What does Move to Shipped do?
+Q-331: Why might an order remain in To Pickup?
+Q-332: Can I mark an order shipped before courier pickup?
+Q-333: What is the Shipped Orders page?
+Q-334: Does Shipped mean the customer received the order?
+Q-335: Why might a shipped order not move to Completed?
+Q-336: Where should I check shipment progress?
+Q-337: Can shipped orders still be cancelled?
+Q-338: What is the Completed Orders page?
+Q-339: Does Completed always mean payment was settled?
+Q-340: Can a completed order still be returned?
+Q-341: Should completed orders be edited?
+Q-342: What is the All Orders page?
+Q-343: When should I use All Orders?
+Q-344: Why might an order still not appear in All Orders?
+Q-345: What is the Return Orders page?
+Q-346: What filters are available for returns?
+Q-347: What is a Return ID?
+Q-348: What is Return Status?
+Q-349: What is Platform Status?
+Q-350: What does Sync Return Orders do?
+Q-351: What does Add Manual Return Order do?
+Q-352: When should a manual return be created?
+Q-353: Does a return automatically restore inventory?
+Q-354: What should I verify before increasing stock from a return?
+Q-355: What is the Cancelled Orders page?
+Q-356: What status views are available?
+Q-357: What is a Cancellation Request?
+Q-358: What does Cancelled mean?
+Q-359: Why might an order remain under Cancellation Request?
+Q-360: What happens to reserved stock when an order is cancelled?
+Q-361: Should I process a cancellation directly from the table?
+Q-362: What is a Manual Order?
+Q-363: When should I create a Manual Order?
+Q-364: What does Add Manual Order do?
+Q-365: Where can I add product images to a Manual Order?
+Q-366: What does Add Gift do?
+Q-367: What does the payment filter do?
+Q-368: What do the Manual Order shipment statuses mean?
+Q-369: What does Created mean?
+Q-370: What does Booking Pending mean?
+Q-371: What does Booking Failed mean?
+Q-372: What does Self-arranged Delivery mean?
+Q-373: What does Schedule In Arrangement mean?
+Q-374: What does To Be Collected mean?
+Q-375: What does Drop Off mean?
+Q-376: What does Collected mean?
+Q-377: What does Delivery In Transit mean?
+Q-378: What does Delivery On Hold mean?
+Q-379: What does Delivered mean?
+Q-380: What does Returned mean?
+Q-381: What does Cancelled mean for a Manual Order?
+Q-382: What is a Platform Manual Order?
+Q-383: How is it different from a regular Manual Order?
+Q-384: What does Create Manual Order by Label do?
+Q-385: Where can I upload the shipping label?
+Q-386: Which search methods are available?
+Q-387: What does All status do?
+Q-388: What does Edit status do?
+Q-389: What does Details do?
+Q-390: What does Actions do?
+Q-391: How do I prevent duplicate platform-manual orders?
+Q-392: What is Warehouse Management?
+Q-393: How do I open Warehouse Management?
+Q-394: What is the Warehouses List?
+Q-395: Why would a business need multiple warehouses?
+Q-396: Does every warehouse maintain separate inventory?
+Q-397: Can the same SKU exist in several warehouses?
+Q-398: How do I search for a warehouse?
+Q-399: Can I search using only part of a warehouse name?
+Q-400: Can I search by city or ZIP code?
+Q-401: Why does my warehouse search return no result?
+Q-402: Does searching change warehouse data?
+Q-403: What does Add New Warehouse do?
+Q-404: What information should I prepare before adding a warehouse?
+Q-405: How should I choose a warehouse name?
+Q-406: Can two warehouses have the same name?
+Q-407: What is a warehouse attribute?
+Q-408: What is a third-party warehouse?
+Q-409: Why is the warehouse address important?
+Q-410: What happens if I enter the wrong country or ZIP code?
+Q-411: Can I add a virtual warehouse?
+Q-412: Does clicking Add New Warehouse immediately create one?
+Q-413: Can adding a warehouse affect existing stock?
+Q-414: What does Warehouse Name mean?
+Q-415: What does Warehouse Attribute mean?
+Q-416: What does Warehouse Location mean?
+Q-417: What does Total SKU mean?
+Q-418: What is the difference between Total SKU and total inventory quantity?
+Q-419: Why might Total SKU be zero?
+Q-420: Why might Total SKU differ from the Merchant SKU total?
+Q-421: What does Set As Default mean?
+Q-422: Why is a default warehouse needed?
+Q-423: Can more than one warehouse be the default?
+Q-424: What happens when I change the default warehouse?
+Q-425: Should I change the default warehouse while orders are being processed?
+Q-426: What does Actions do?
+Q-427: Can I edit a warehouse?
+Q-428: Can I delete a warehouse?
+Q-429: Can I rename a warehouse safely?
+Q-430: Can I change a warehouse location after transactions exist?
+Q-431: How do I add stock to a warehouse?
+Q-432: How do I remove stock from a warehouse?
+Q-433: How do I transfer stock between warehouses?
+Q-434: Why is a SKU missing from a warehouse?
+Q-435: Can inventory be negative?
+Q-436: How does a warehouse affect marketplace stock?
+Q-437: Can one marketplace store use multiple warehouses?
+Q-438: How does the ERP choose a warehouse for an order?
+Q-439: What happens if the selected warehouse has no stock?
+Q-440: Can I change an order’s warehouse?
+Q-441: Why might an order use the wrong warehouse?
+Q-442: What do Previous and Next do?
+Q-443: What does the page-size number control do?
+Q-444: Why are Previous and Next disabled?
+Q-445: Can I sort the Warehouse List?
+Q-446: Can I export or print the Warehouse List?
+Q-447: What should I check before creating a warehouse?
+Q-448: Why is a newly created warehouse missing from filters?
+Q-449: Why does a warehouse show the wrong number of SKUs?
+Q-450: Why does a warehouse address look incomplete?
+Q-451: What should I check before changing a warehouse?
+Q-452: Does searching or viewing a warehouse change anything?
+Q-453: Which warehouse actions require special care?
+Q-454: What is System Configuration?
+Q-455: Who should use System Configuration?
+Q-456: How do I open System Configuration?
+Q-457: What is Account Management?
+Q-458: Why is System Configuration sensitive?
+Q-459: Does viewing System Configuration change anything?
+Q-460: What is Store Authorization?
+Q-461: What information appears in the Authorized Store List?
+Q-462: What is Marketplace Name?
+Q-463: What is Store Nickname?
+Q-464: Is Store Nickname always the public marketplace name?
+Q-465: What is the Country column?
+Q-466: What does Authorization Status mean?
+Q-467: What does Authorized mean?
+Q-468: What does Disabled mean?
+Q-469: Why might a store become disabled?
+Q-470: What should I check if an authorized store is not synchronizing?
+Q-471: What is Current Plan?
+Q-472: What does Subscription mean?
+Q-473: What does Days Left mean?
+Q-474: What happens when a store subscription expires?
+Q-475: Is subscription expiration the same as authorization expiration?
+Q-476: What is Auto Order Accept?
+Q-477: What are the risks of Auto Order Accept?
+Q-478: When is Auto Order Accept useful?
+Q-479: When should Auto Order Accept be disabled?
+Q-480: What does Auto Process Days mean?
+Q-481: Can changing Auto Process Days affect existing orders?
+Q-482: What does Create Time mean?
+Q-483: What does Actions do?
+Q-484: What does Add Store do?
+Q-485: What should I prepare before adding a store?
+Q-486: Will clicking Add Store immediately connect a store?
+Q-487: Why might the marketplace ask me to sign in?
+Q-488: Should I share the marketplace password with ERP staff?
+Q-489: What permissions might store authorization request?
+Q-490: Can I authorize the wrong store accidentally?
+Q-491: What does the platform filter do?
+Q-492: What does the authorization-status filter do?
+Q-493: How do I find a store?
+Q-494: What does Select All do?
+Q-495: What do Export and Print do?
+Q-496: Can I remove or disconnect a store?
+Q-497: Does disconnecting a store delete its marketplace data?
+Q-498: What is the difference between disabling and removing a store?
+Q-499: How can I safely reauthorize a store?
+Q-500: What is a Sub Account?
+Q-501: Why should staff use Sub Accounts?
+Q-502: What information appears in the Sub Account table?
+Q-503: What does the Image column show?
+Q-504: Where can a Sub Account profile image be added?
+Q-505: What is the Sub Account ID?
+Q-506: What is the Role column?
+Q-507: What does Create Time mean?
+Q-508: What does Add Account do?
+Q-509: What should I check before adding a Sub Account?
+Q-510: What is least-privilege access?
+Q-511: Should several employees share one Sub Account?
+Q-512: How should a Sub Account password be created?
+Q-513: Should the administrator know every user’s password?
+Q-514: What does Actions do for a Sub Account?
+Q-515: How do I change a Sub Account’s role?
+Q-516: What should happen when an employee leaves?
+Q-517: Should I delete or disable a former employee’s account?
+Q-518: Can a Sub Account manage other accounts?
+Q-519: Can a Sub Account view customer information?
+Q-520: How do I search for a Sub Account?
+Q-521: What does Select do?
+Q-522: How does pagination work?
+Q-523: Why can’t a Sub Account access a page?
+Q-524: Why can a Sub Account see too much?
+Q-525: What is a role?
+Q-526: Why use roles instead of assigning permissions separately?
+Q-527: What information appears in the Roles List?
+Q-528: What is Role Name?
+Q-529: What does Sub Account Linking Status mean?
+Q-530: What does “Linked” mean?
+Q-531: What does “Not Linked” mean?
+Q-532: What does Create Time mean for a role?
+Q-533: What does Updated Time mean?
+Q-534: What does Add Role do?
+Q-535: What should I define before creating a role?
+Q-536: How should permissions be organized?
+Q-537: Should every role have delete permission?
+Q-538: Should warehouse staff have System Configuration access?
+Q-539: Should order-processing staff have subscription access?
+Q-540: What does Actions do for a role?
+Q-541: What happens when I edit a linked role?
+Q-542: Can I rename a role?
+Q-543: Can I delete a linked role?
+Q-544: What should I do before deleting an unused role?
+Q-545: How do I search for a role?
+Q-546: How does role pagination work?
+Q-547: How can I audit permissions?
+Q-548: How often should roles and Sub Accounts be reviewed?
+Q-549: What should I do if a user urgently needs temporary access?
+Q-550: What is the Upgrade Plan section?
+Q-551: How do I open the Upgrade Plan page?
+Q-552: Does clicking Upgrade Plan immediately charge me?
+Q-553: Who should manage subscription upgrades?
+Q-554: Does viewing the pricing page change the subscription?
+Q-555: What should I prepare before purchasing a plan?
+Q-556: Why must I select a platform first?
+Q-557: Which platforms are supported on this page?
+Q-558: Can I select both Shopee and TikTok?
+Q-559: Why are store checkboxes disabled?
+Q-560: What happens after I select a platform?
+Q-561: Can I change the selected platform before checkout?
+Q-562: Why is my platform not listed?
+Q-563: Does selecting a platform authorize a store?
+Q-564: Why must I select a store?
+Q-565: How do I select a store?
+Q-566: Can I select more than one store?
+Q-567: What does the store count in the amount summary mean?
+Q-568: Why does the amount change when I select another store?
+Q-569: Can different stores use different plans?
+Q-570: Why can’t I find a store on the pricing page?
+Q-571: Can I renew only one store?
+Q-572: What should I verify before selecting a store?
+Q-573: What does the plan-summary message mean?
+Q-574: Why is the Choose Plan button disabled?
+Q-575: What does the Country selector do?
+Q-576: Which countries are available?
+Q-577: Should I select the store’s country or billing country?
+Q-578: What happens if I select the wrong country?
+Q-579: What does the Currency selector do?
+Q-580: Which currencies are available?
+Q-581: Does changing currency convert the price?
+Q-582: Could my bank charge a conversion fee?
+Q-583: Should country and currency match?
+Q-584: Why does the displayed currency symbol not change immediately?
+Q-585: Which plans are available?
+Q-586: What is the Basic plan?
+Q-587: What is the Standard plan?
+Q-588: What is the Pro plan?
+Q-589: What is the Ultimate plan?
+Q-590: Are the displayed prices per store?
+Q-591: Are the displayed prices final?
+Q-592: Do all plans include the same features?
+Q-593: What features are listed?
+Q-594: What does “Support for Shopee & TikTok” mean?
+Q-595: What does “Unlimited order processing” mean?
+Q-596: What does “Inventory synchronisation” mean?
+Q-597: What does “Bulk order management” mean?
+Q-598: What does “Shipment tracking” mean?
+Q-599: What does “Customer support available” include?
+Q-600: What does “Free Mobile app” mean?
+Q-601: Which plan offers the best value?
+Q-602: Should I choose a longer plan because its monthly cost is lower?
+Q-603: Can I upgrade again before the current plan expires?
+Q-604: Will unused subscription time carry forward?
+Q-605: Can I downgrade later?
+Q-606: What does Choose Plan do?
+Q-607: What should I verify before pressing Choose Plan?
+Q-608: Does pressing Choose Plan charge the payment method?
+Q-609: What should I verify on the checkout page?
+Q-610: Should payment-card information be saved in the browser?
+Q-611: Can technical-support staff complete payment for the user?
+Q-612: What happens after successful payment?
+Q-613: What if payment succeeds but the plan does not activate?
+Q-614: What if the payment fails?
+Q-615: Could repeated clicks create duplicate charges?
+Q-616: How do I confirm that renewal worked?
+Q-617: Can I get an invoice or receipt?
+Q-618: What should I do if I selected the wrong store?
+Q-619: What should I do if I selected the wrong plan?
+Q-620: Can a subscription purchase be refunded?
+Q-621: Why is the Upgrade Plan page not loading?
+Q-622: Why are no stores selectable?
+Q-623: Why is my store not listed?
+Q-624: Why is Choose Plan disabled after selecting a platform?
+Q-625: Why is the amount different from the plan-card price?
+Q-626: Why does the Dashboard still show an expiration warning after renewal?
+Q-627: Why does Store Authorization still show the old Days Left?
+Q-628: Why should my business use this ERP?
+Q-629: What business problems can this ERP help solve?
+Q-630: Is this ERP suitable for a growing e-commerce business?
+Q-631: How can it save my team time?
+Q-632: Can this ERP replace spreadsheets?
+Q-633: How can it improve business visibility?
+Q-634: Will this ERP automatically make my business profitable?
+Q-635: What would make this ERP worth paying for?
+Q-636: How should I evaluate its return on investment?
+Q-637: How quickly can a business start using it?
+Q-638: Can I manage multiple marketplace stores?
+Q-639: Why is centralized store management valuable?
+Q-640: Can I see which stores are authorized?
+Q-641: What happens if a store authorization expires?
+Q-642: Can I manage stores from different countries?
+Q-643: How will it help if I expand into another marketplace?
+Q-644: Can the ERP accept marketplace orders automatically?
+Q-645: Why would I enable Auto Order Accept?
+Q-646: When should I avoid automatic acceptance?
+Q-647: How can the ERP help manage a large product catalog?
+Q-648: What is the advantage of Merchant SKUs?
+Q-649: How can SKU Mapping prevent mistakes?
+Q-650: Can the ERP help identify products that are not mapped?
+Q-651: What is Auto Mapping, and why is it useful?
+Q-652: Can it generate Merchant SKUs from marketplace products?
+Q-653: Can I sell product bundles?
+Q-654: How can bundles improve my business?
+Q-655: Can I monitor bundle availability?
+Q-656: How can this ERP help prevent overselling?
+Q-657: Does it show low-stock and out-of-stock products?
+Q-658: Can I configure low-stock warnings?
+Q-659: What is Lock Quantity, and why does it matter?
+Q-660: Can I synchronize inventory with marketplaces?
+Q-661: How can I identify synchronization problems?
+Q-662: Can I see why inventory changed?
+Q-663: How does Inventory Log help management?
+Q-664: Can I separate inventory by warehouse?
+Q-665: Can the same SKU have stock in different warehouses?
+Q-666: How can I move stock between warehouses?
+Q-667: Can this ERP manage incoming stock?
+Q-668: What is the benefit of inbound statuses?
+Q-669: Can I record supplier receipts manually?
+Q-670: Can the ERP manage stock leaving the warehouse?
+Q-671: Why are outbound records important?
+Q-672: Can management track in-transit stock?
+Q-673: How can this reduce warehouse mistakes?
+Q-674: Can this ERP manage the complete order lifecycle?
+Q-675: How can it improve order-processing speed?
+Q-676: Can my staff search by order or shipment information?
+Q-677: Can orders be filtered by store and marketplace?
+Q-678: Can the ERP help identify orders that cannot be packed?
+Q-679: What is the value of an exception-based workflow?
+Q-680: Can the ERP manage courier handoff?
+Q-681: Can it manage returns?
+Q-682: Can it manage cancelled orders?
+Q-683: Can I create an order that did not come from a marketplace?
+Q-684: When are Manual Orders useful?
+Q-685: What is a Platform Manual Order?
+Q-686: Can the ERP help prevent duplicate manual orders?
+Q-687: Can I manage multiple warehouses?
+Q-688: Why is multi-warehouse support valuable?
+Q-689: What is a default warehouse?
+Q-690: Can I see how many SKUs are associated with a warehouse?
+Q-691: Can I search warehouses by location?
+Q-692: Can multiple employees use the ERP?
+Q-693: Why are individual Sub Accounts better than a shared login?
+Q-694: Can I control what each employee can access?
+Q-695: Can I give warehouse staff different access from order staff?
+Q-696: Can I prevent staff from accessing subscription settings?
+Q-697: Can I prevent staff from deleting records?
+Q-698: What happens when an employee leaves?
+Q-699: How can roles reduce business risk?
+Q-700: What information can I monitor from the Dashboard?
+Q-701: Can I compare sales by marketplace?
+Q-702: Can I monitor stock movement by month?
+Q-703: Can this ERP replace my accounting system?
+Q-704: Can it show my true profit?
+Q-705: Can it help me make purchasing decisions?
+Q-706: Can I export information for further analysis?
+Q-707: How can I measure whether the ERP is improving operations?
+Q-708: What paid plans are available?
+Q-709: Which features are listed with the paid plans?
+Q-710: Why should I buy paid access instead of continuing manually?
+Q-711: Which plan should a new business choose?
+Q-712: When would a longer plan make sense?
+Q-713: Is the longest plan automatically the best?
+Q-714: Is pricing charged per account or per store?
+Q-715: Can I subscribe only the stores I need?
+Q-716: What should I verify before buying?
+Q-717: What is the strongest reason to consider paid access?
+Q-718: Does the ERP support all my required stores and countries?
+Q-719: Does inventory synchronization work with my actual SKU structure?
+Q-720: Can my team follow the order workflow easily?
+Q-721: Are roles detailed enough for my security requirements?
+Q-722: What happens if synchronization fails?
+Q-723: What customer-support response can I expect?
+Q-724: Can I recover deleted or incorrectly changed records?
+Q-725: How is my business data protected?
+Q-726: Can I export my data if I stop using the ERP?
+Q-727: What should convince me to purchase?
+Q-728: How can I get a referral code?
+Q-729: When will my referral code appear?
+Q-730: Will I receive a referral code just for creating an account?
+Q-731: If I purchase another plan later, will I receive another referral code?
+Q-732: Can I have more than one referral code?
+Q-733: Where can I see my referral codes?
+Q-734: What should I do if I cannot see My Referral Codes?
+Q-735: Does a referral code expire?
+Q-736: Can the same referral code be used by several people?
+Q-737: How do I know whether a referral code has already been used?
+Q-738: Can I delete a referral code?
+Q-739: Can I change my referral code?
+Q-740: How can I share my referral code?
+Q-741: Where is the Share referral code option?
+Q-742: What happens when I press Copy?
+Q-743: Does pressing Copy use the referral code?
+Q-744: What information should I send with the referral code?
+Q-745: Should I share my ERP password with the referral code?
+Q-746: What should my friend do with the referral code?
+Q-747: What if my friend forgets to enter the referral code?
+Q-748: What if my friend enters the wrong referral code?
+Q-749: How can my friend confirm that the code was accepted?
+Q-750: Does using my referral code automatically give my friend a discount?
+Q-751: How can I become eligible for a gift?
+Q-752: Which plan duration qualifies for a gift?
+Q-753: Will I receive a gift if someone purchases a plan for less than one year?
+Q-754: What gift will I receive?
+Q-755: Can I choose the printer model?
+Q-756: Is the gift guaranteed immediately after my friend pays?
+Q-757: What happens if my friend’s payment fails?
+Q-758: What happens if the qualifying purchase is cancelled or refunded?
+Q-759: Can I receive more than one gift?
+Q-760: Can I use my own referral code for my own purchase?
+Q-761: Can an existing customer use my referral code?
+Q-762: How can I receive my gift?
+Q-763: Where can I find the Gift section?
+Q-764: Why can’t I see the Gift option?
+Q-765: What does “No Gift” mean?
+Q-766: What information must I provide to receive the gift?
+Q-767: Why is my phone number required?
+Q-768: Why is my complete address required?
+Q-769: Can I provide another person’s delivery address?
+Q-770: Can I change the address after submitting it?
+Q-771: What should I check before confirming the address?
+Q-772: What happens after I submit the gift address?
+Q-773: Can I submit the gift address later?
+Q-774: How can I check the gift status?
+Q-775: What might the gift statuses mean?
+Q-776: Will the ERP show a tracking number?
+Q-777: How long will gift delivery take?
+Q-778: Do I need to pay for gift delivery?
+Q-779: What should I do when the gift arrives?
+Q-780: What does Confirm Received do?
+Q-781: What if I press Confirm Received before delivery?
+Q-782: What should I do if the gift arrives damaged?
+Q-783: What should I do if the wrong gift arrives?
+Q-784: What should I do if the gift never arrives?
+Q-785: How can the referral program help my business?
+Q-786: Can the referral program guarantee new customers?
+Q-787: How should I explain the program to a customer?
+Q-788: What should support staff verify when a gift is missing?
+Q-789: What should support staff never request?
+Q-790: What proof might be useful when contacting support?
+Q-791: What is Warehouse ERP used for?
+Q-792: What should I set up first in Warehouse ERP?
+Q-793: Can I use the ERP before connecting a store?
+Q-794: Why can I not see some menus?
+Q-795: Why does my sub account show fewer pages than the owner account?
+Q-796: Can the AI assistant change my ERP data?
+Q-797: What should I do if the AI answer does not match my screen?
+Q-798: What information should I never share in the AI chat or support chat?
+Q-799: How do I contact support from Warehouse ERP?
+Q-800: What details should I include when contacting support?
+Q-801: I cannot log in. What should I check first?
+Q-802: What should I do if I forgot my password?
+Q-803: Why am I sent back to the login page?
+Q-804: What is email verification?
+Q-805: Can two staff members use the same login?
+Q-806: What is the difference between owner account and Sub Account?
+Q-807: Why is a button disabled for me?
+Q-808: What should I do before deleting anything?
+Q-809: What should I do if a page keeps loading?
+Q-810: Why does an action fail even when I filled the form?
+Q-811: What does Export do?
+Q-812: What does Print do?
+Q-813: Why are there no records in a table?
+Q-814: What should I check before relying on inventory numbers?
+Q-815: What is EasyParcel in Manual Order?
+Q-816: Which countries are supported for Manual Order shipment booking?
+Q-817: Does EasyParcel manual booking support international shipping?
+Q-818: Why can I not book EasyParcel when sender and receiver countries are different?
+Q-819: What does Save Only mean in Manual Order?
+Q-820: What does Save and Submit EasyParcel mean?
+Q-821: What does Booking Pending mean for EasyParcel?
+Q-822: What does Booking Failed mean for EasyParcel?
+Q-823: What is an AWB?
+Q-824: What does PWB again or Open Waybill do For Manual order?
+Q-825: Why does PWB again not show a waybill?
+Q-826: What does Refresh Status do on a Manual Order?
+Q-827: When should I refresh EasyParcel status?
+Q-828: Can I cancel an EasyParcel manual order?
+Q-829: What is COD in Manual Order?
+Q-830: Why is COD not available for my manual order?
+Q-831: What is a payment certificate in Manual Order?
+Q-832: Why does the system ask for parcel weight and size?
+Q-833: Why are EasyParcel rates not loading?
+Q-834: What should I do if EasyParcel is unavailable?
+Q-835: What should I verify before submitting any manual shipment?
+Q-836: What is the safest way to report a problem?
+Q-837: What kind of questions can I ask the AI assistant?
+Q-838: What should I do if the AI assistant says it cannot find an answer?
+Q-839: Can I ask the AI assistant about another Grozziie product?
+Q-840: Can the AI assistant see my private order or inventory data?
+Q-841: Why should I include the page name in my question?
+Q-842: What should I ask if I am new to the ERP?
+Q-843: Can support staff ask for my password?
+Q-844: What should I do if someone asks for my password?

@@ -1,7 +1,7 @@
 import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { useUIStore } from '@/stores/uiStore';
-import { useWorkspaceTabsStore } from '@/stores/workspaceTabsStore';
+import { DASHBOARD_TAB_ID, isDashboardTabPath, useWorkspaceTabsStore } from '@/stores/workspaceTabsStore';
 import { useInitShopPlatform } from '../../stores/useInitShopPlatform';
 import FloatingAiChatbot from '../shared/FloatingAiChatbot';
 import WorkspaceTabs from './WorkspaceTabs';
@@ -10,7 +10,9 @@ export default function AppShell() {
     const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
     const location = useLocation();
     const tabs = useWorkspaceTabsStore((s) => s.tabs);
-    const activeRouteId = `${location.pathname === '/warehouse_management/' ? '/warehouse_management' : location.pathname}${location.search || ''}`;
+    const activeRouteId = isDashboardTabPath(location.pathname)
+        ? DASHBOARD_TAB_ID
+        : `${location.pathname}${location.search || ''}`;
     const activeTab = tabs.find((tab) => tab.id === activeRouteId);
     const outletKey = `${activeRouteId}:${activeTab?.reloadKey || 0}`;
 

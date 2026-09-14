@@ -1,12 +1,13 @@
-import { useEffect, useMemo } from "react";
+﻿import { useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { RefreshCw, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useWorkspaceTabsStore } from "@/stores/workspaceTabsStore";
+import { DASHBOARD_TAB_ID, isDashboardTabPath, useWorkspaceTabsStore } from "@/stores/workspaceTabsStore";
 
 const routeTitleRules = [
   { path: "/warehouse_management", key: "page.dashboard", title: "Dashboard", exact: true },
   { path: "/warehouse_management/contact", key: "page.contact", title: "Contact" },
+  { path: "/warehouse_management/help-center", key: "page.helpCenter", title: "Help Center" },
   { path: "/warehouse_management/chat", key: "page.chat", title: "Chat" },
   { path: "/warehouse_management/products/list", key: "nav.productList", title: "Product List" },
   { path: "/warehouse_management/products/combine_sku/add", key: "nav.combineSku", title: "Add Combine SKU" },
@@ -65,16 +66,16 @@ function isKnownWorkspacePath(pathname) {
 }
 
 function buildTabFromLocation(location) {
-  const path = location.pathname === "/warehouse_management/"
+  const path = isDashboardTabPath(location.pathname)
     ? "/warehouse_management"
     : location.pathname;
-  const search = location.search || "";
+  const search = isDashboardTabPath(path) ? "" : location.search || "";
 
   return {
-    id: `${path}${search}`,
+    id: isDashboardTabPath(path) ? DASHBOARD_TAB_ID : `${path}${search}`,
     path,
     search,
-    pinned: path === "/warehouse_management",
+    pinned: isDashboardTabPath(path),
   };
 }
 
@@ -93,7 +94,9 @@ export default function WorkspaceTabs() {
     openTab(buildTabFromLocation(location));
   }, [location.pathname, location.search, openTab]);
 
-  const activeRouteId = `${location.pathname === "/warehouse_management/" ? "/warehouse_management" : location.pathname}${location.search || ""}`;
+  const activeRouteId = isDashboardTabPath(location.pathname)
+    ? DASHBOARD_TAB_ID
+    : `${location.pathname}${location.search || ""}`;
 
   const visibleTabs = useMemo(
     () => tabs.filter((tab) => tab.path?.startsWith("/warehouse_management") && isKnownWorkspacePath(tab.path)),
@@ -176,3 +179,4 @@ export default function WorkspaceTabs() {
     </div>
   );
 }
+
