@@ -355,7 +355,7 @@ export const getOrderStoreContext = (store = {}, platform) => {
 
 const fetchPlatformStoresPage = (page) =>
   api
-    .get("/platform-stores", { params: { page, limit: PLATFORM_STORE_PAGE_LIMIT } })
+    .get("/order-management/platform-stores", { params: { page, limit: PLATFORM_STORE_PAGE_LIMIT } })
     .then((res) => ({
       rows: unwrapPlatformStores(res),
       totalPages: res?.pagination?.totalPages || res?.data?.pagination?.totalPages,

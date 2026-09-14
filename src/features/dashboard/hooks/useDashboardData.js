@@ -97,7 +97,7 @@ const fetchAllPlatformStores = async () => {
   let totalPages = 1;
 
   do {
-    const res = await api.get("/platform-stores", { params: { page, limit: PAGE_LIMIT } });
+    const res = await api.get("/order-management/platform-stores", { params: { page, limit: PAGE_LIMIT } });
     const rows = unwrapPlatformStores(res);
     allStores.push(...rows);
     totalPages = res?.pagination?.totalPages || res?.data?.pagination?.totalPages || (rows.length === PAGE_LIMIT ? page + 1 : page);

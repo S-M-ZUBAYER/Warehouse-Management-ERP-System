@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Bot, ExternalLink, Expand, ImageIcon, Minimize2, Move, PlayCircle, Send, UserRound, X } from "lucide-react";
+import { Bot, ExternalLink, Expand, ImageIcon, Minimize2, Move, PlayCircle, Send, Trash2, UserRound, X } from "lucide-react";
 import { getStoredWarehouseUser } from "../../utils/permissions";
 
 const CHATBOT_API_URL =
@@ -9,6 +9,7 @@ const CHATBOT_API_URL =
 const CHATBOT_DB_NAME = "grozziie-ai-chatbot";
 const CHATBOT_DB_VERSION = 1;
 const CHATBOT_STORE_NAME = "chatHistories";
+const CHATBOT_POSITION_STORAGE_KEY = "grozziie-ai-chatbot-position";
 const MAX_STORED_MESSAGES = 100;
 const URL_PATTERN = /https?:\/\/[^\s<>"']+/gi;
 
@@ -129,6 +130,27 @@ async function saveChatHistory(userKey, messages) {
       updatedAt: Date.now(),
     })
   );
+}
+
+async function deleteChatHistory(userKey) {
+  await runChatbotStoreTransaction("readwrite", (store) => store.delete(userKey));
+}
+
+function getStarterQuestions(t) {
+  return [
+    t("aiChatbot.starterAddProduct", {
+      defaultValue: "How can I add a new product?",
+    }),
+    t("aiChatbot.starterConnectStore", {
+      defaultValue: "How do I connect a TikTok or Shopee store?",
+    }),
+    t("aiChatbot.starterProcessOrder", {
+      defaultValue: "How do I process and print a waybill?",
+    }),
+    t("aiChatbot.starterInventory", {
+      defaultValue: "How can I check inventory and low stock?",
+    }),
+  ];
 }
 
 function normalizeMatchedUrl(value) {
@@ -272,13 +294,43 @@ function getDefaultWidgetPosition(size) {
   };
 }
 
+function getWidgetPositionFromLauncher(position, size) {
+  return clampPosition(
+    {
+      x: position.x + launcherSize - size.width,
+      y: position.y + launcherSize - size.height,
+    },
+    size
+  );
+}
+
+function getLauncherPositionFromWidget(position, size) {
+  return clampPosition(
+    {
+      x: position.x + size.width - launcherSize,
+      y: position.y + size.height - launcherSize,
+    },
+    { width: launcherSize, height: launcherSize }
+  );
+}
+
+function getStoredLauncherPosition() {
+  const stored = readJsonStorage(CHATBOT_POSITION_STORAGE_KEY, null);
+  if (!stored || typeof stored.x !== "number" || typeof stored.y !== "number") {
+    return getDefaultLauncherPosition();
+  }
+  return clampPosition(stored, { width: launcherSize, height: launcherSize });
+}
+
 export default function FloatingAiChatbot() {
   const { t, i18n } = useTranslation();
   const userHistoryKey = useMemo(() => getCurrentUserHistoryKey(), []);
   const [open, setOpen] = useState(false);
   const [large, setLarge] = useState(false);
-  const [launcherPosition, setLauncherPosition] = useState(getDefaultLauncherPosition);
-  const [widgetPosition, setWidgetPosition] = useState(() => getDefaultWidgetPosition(widgetSizes.normal));
+  const [launcherPosition, setLauncherPosition] = useState(getStoredLauncherPosition);
+  const [widgetPosition, setWidgetPosition] = useState(() =>
+    getWidgetPositionFromLauncher(getStoredLauncherPosition(), widgetSizes.normal)
+  );
   const [messages, setMessages] = useState(() => [createWelcomeMessage(t)]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -287,6 +339,7 @@ export default function FloatingAiChatbot() {
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const messagesEndRef = useRef(null);
   const messagesChangedBeforeLoadRef = useRef(false);
+  const starterQuestions = useMemo(() => getStarterQuestions(t), [t]);
 
   const widgetSize = useMemo(() => {
     const viewport = getViewportSize();
@@ -330,6 +383,11 @@ export default function FloatingAiChatbot() {
       console.warn("AI chatbot history could not be saved.", error);
     });
   }, [historyLoaded, messages, userHistoryKey]);
+
+  useEffect(() => {
+    if (typeof localStorage === "undefined") return;
+    localStorage.setItem(CHATBOT_POSITION_STORAGE_KEY, JSON.stringify(launcherPosition));
+  }, [launcherPosition]);
 
   useEffect(() => {
     setMessages((current) => {
@@ -408,15 +466,21 @@ export default function FloatingAiChatbot() {
 
   const handleLauncherClick = () => {
     if (launcherMoved) return;
+    setWidgetPosition(getWidgetPositionFromLauncher(launcherPosition, widgetSize));
     setOpen(true);
+  };
+
+  const handleClose = () => {
+    setLauncherPosition(getLauncherPositionFromWidget(widgetPosition, widgetSize));
+    setOpen(false);
   };
 
   const toggleLarge = () => {
     setLarge((current) => !current);
   };
 
-  const sendMessage = async () => {
-    const content = draft.trim();
+  const sendMessage = async (presetQuestion = "") => {
+    const content = String(presetQuestion || draft).trim();
     if (!content || sending) return;
 
     const nextMessages = [...messages, { role: "user", content }];
@@ -473,12 +537,28 @@ export default function FloatingAiChatbot() {
     }
   };
 
+  const clearChatHistory = async () => {
+    if (sending) return;
+    messagesChangedBeforeLoadRef.current = true;
+    const freshMessages = [createWelcomeMessage(t)];
+    setMessages(freshMessages);
+    setDraft("");
+
+    try {
+      await deleteChatHistory(userHistoryKey);
+    } catch (error) {
+      console.warn("AI chatbot history could not be cleared.", error);
+    }
+  };
+
   const handleDraftKeyDown = (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       sendMessage();
     }
   };
+
+  const hasConversationMessages = messages.some((message) => !message.isWelcome && !message.error);
 
   if (!open) {
     return (
@@ -534,6 +614,16 @@ export default function FloatingAiChatbot() {
           <div className="flex shrink-0 items-center gap-1" onPointerDown={(event) => event.stopPropagation()}>
             <button
               type="button"
+              onClick={clearChatHistory}
+              disabled={sending}
+              className="grid h-8 w-8 place-items-center rounded-lg text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60"
+              aria-label={t("aiChatbot.clearHistory", { defaultValue: "Clear chat history" })}
+              title={t("aiChatbot.clearHistoryShort", { defaultValue: "Clear history" })}
+            >
+              <Trash2 size={16} />
+            </button>
+            <button
+              type="button"
               onClick={toggleLarge}
               className="grid h-8 w-8 place-items-center rounded-lg text-white transition hover:bg-white/15"
               aria-label={
@@ -551,7 +641,7 @@ export default function FloatingAiChatbot() {
             </button>
             <button
               type="button"
-              onClick={() => setOpen(false)}
+              onClick={handleClose}
               className="grid h-8 w-8 place-items-center rounded-lg text-white transition hover:bg-white/15"
               aria-label={t("aiChatbot.close", { defaultValue: "Close AI chatbot" })}
               title={t("aiChatbot.closeShort", { defaultValue: "Close" })}
@@ -567,6 +657,26 @@ export default function FloatingAiChatbot() {
         </div>
 
         <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50/70 px-4 py-4">
+          {!hasConversationMessages && !sending && (
+            <div className="rounded-xl border border-primary/10 bg-white p-3 shadow-sm">
+              <p className="mb-3 text-xs font-semibold text-slate-500">
+                {t("aiChatbot.starterTitle", { defaultValue: "Try asking one of these:" })}
+              </p>
+              <div className="grid gap-2">
+                {starterQuestions.map((question) => (
+                  <button
+                    key={question}
+                    type="button"
+                    onClick={() => sendMessage(question)}
+                    className="rounded-lg border border-surface-border bg-slate-50 px-3 py-2 text-left text-xs font-semibold leading-5 text-[#004368] transition hover:border-primary/40 hover:bg-primary/5"
+                  >
+                    {question}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {messages.map((message, index) => {
             const fromUser = message.role === "user";
 

@@ -34,6 +34,11 @@ export const permissionPathMap = {
   role_management: ['system_configuration', 'account_management', 'role_management'],
 };
 
+export const ORDER_PAGE_PERMISSIONS = [
+  'new_order', 'processed_order', 'to_pickup_order', 'shipped_order',
+  'completed_order', 'all_order', 'return_order', 'canceled_order',
+];
+
 export const routePermissionMap = [
   ['/warehouse_management/contact', 'contact'],
   ['/warehouse_management/products/list', 'product_list'],
@@ -59,6 +64,7 @@ export const routePermissionMap = [
   ['/warehouse_management/orders/processing/all_order', 'all_order'],
   ['/warehouse_management/orders/processing/return_order', 'return_order'],
   ['/warehouse_management/orders/processing/canceled', 'canceled_order'],
+  ['/warehouse_management/orders/detail', 'order_detail'],
   ['/warehouse_management/orders/aftership_manual_order', 'manual_order'],
   ['/warehouse_management/orders/platform_manual_order', 'platform_manual_order'],
   ['/warehouse_management/orders/manual_order', 'manual_order'],
@@ -169,6 +175,9 @@ const getNodeValue = (permissions = {}, key) => permissions?.[key];
 export const hasPermissionKey = (user, key) => {
   if (!key || key === 'dashboard' || key === 'contact') return true;
   if (isOwnerUser(user)) return true;
+  if (key === 'order_detail') {
+    return ORDER_PAGE_PERMISSIONS.some((permission) => hasPermissionKey(user, permission));
+  }
   const permissions = user?.permissions || {};
   if (key === 'platform_manual_order') {
     const orderManagement = permissions?.order_management;

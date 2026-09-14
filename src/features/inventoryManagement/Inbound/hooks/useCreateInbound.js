@@ -86,7 +86,6 @@ export function useCreateInbound({ onSuccess }) {
         staleTime: 1000 * 60 * 2,
         gcTime: 1000 * 60 * 5,
         placeholderData: (prev) => prev,
-        select: (warehouses) => filterWarehousesByPermission(warehouses),
     });
 
     const pickerSkus = pickerData?.data ?? [];
@@ -115,6 +114,7 @@ export function useCreateInbound({ onSuccess }) {
         staleTime: 1000 * 60 * 2,
         gcTime: 1000 * 60 * 5,
         placeholderData: (prev) => prev,
+        select: (warehouses) => filterWarehousesByPermission(warehouses),
     });
 
     // ── SKU picker helpers ────────────────────────────────────────────────────

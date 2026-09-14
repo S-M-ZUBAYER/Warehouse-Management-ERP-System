@@ -30,7 +30,7 @@ function FormInput({
     <div className={className}>
       {label && (
         <label className="block text-xs text-slate-500 mb-1">
-          {required && <span className="mr-0.5">*</span>}
+          {required && <span className="mr-0.5 text-red-500">*</span>}
           {label}
         </label>
       )}
@@ -62,7 +62,7 @@ function SelectField({
     <div className={className}>
       {label && (
         <label className="block text-xs text-slate-500 mb-1">
-          {required && <span className="mr-0.5">*</span>}
+          {required && <span className="mr-0.5 text-red-500">*</span>}
           {label}
         </label>
       )}
@@ -90,6 +90,24 @@ function SelectField({
           className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
         />
       </div>
+    </div>
+  );
+}
+
+function MissingRequirementsTooltip({ title, items = [] }) {
+  if (!items.length) return null;
+
+  return (
+    <div className="pointer-events-auto absolute bottom-full right-0 z-30 hidden w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-surface-border bg-slate-900 p-3 text-left text-xs text-white shadow-xl group-hover:block hover:block">
+      <p className="mb-2 font-semibold">{title}</p>
+      <ul className="max-h-44 space-y-1 overflow-y-auto overscroll-contain pr-1">
+        {items.map((item) => (
+          <li key={item} className="flex gap-1.5">
+            <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-white" />
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -738,32 +756,82 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
       easyParcelServices.length === 0 &&
       isEasyParcelUnavailableMessage
   );
-  const hasSenderInformation = Boolean(
-    senderForm.senderName.trim() &&
-      senderForm.phone.trim() &&
-      senderForm.address.trim() &&
-      senderForm.country.trim() &&
-      senderForm.postcode.trim() &&
-      (senderCountry !== "MY" || senderForm.state.trim())
+  const missingOrderRequirements = useMemo(() => {
+    const missing = [];
+    const requiredField = (key, fallback) =>
+      tw(`manualOrderShipping.requiredFields.${key}`, fallback);
+
+    if (!orderForm.warehouseId) missing.push(requiredField("warehouse", "Warehouse"));
+    if (!orderForm.orderNumber.trim()) missing.push(requiredField("orderNumber", "Order number"));
+    if (!senderForm.senderName.trim()) missing.push(requiredField("senderName", "Sender name"));
+    if (!senderForm.phone.trim()) missing.push(requiredField("senderPhone", "Sender phone"));
+    if (!senderForm.address.trim()) missing.push(requiredField("senderAddress", "Sender address"));
+    if (!senderForm.country.trim()) missing.push(requiredField("senderCountry", "Sender country"));
+    if (!senderForm.postcode.trim()) missing.push(requiredField("senderPostcode", "Sender postcode"));
+    if (senderCountry === "MY" && !senderForm.state.trim()) missing.push(requiredField("senderState", "Sender state"));
+    if (!buyerForm.buyerName.trim()) missing.push(requiredField("receiverName", "Receiver name"));
+    if (!buyerForm.phone.trim()) missing.push(requiredField("receiverPhone", "Receiver phone"));
+    if (!buyerForm.address.trim()) missing.push(requiredField("receiverAddress", "Receiver address"));
+    if (!buyerForm.country.trim()) missing.push(requiredField("receiverCountry", "Receiver country"));
+    if (!buyerForm.zipCode.trim()) missing.push(requiredField("receiverPostcode", "Receiver postcode"));
+    if (receiverCountry === "MY" && !buyerForm.state.trim()) missing.push(requiredField("receiverState", "Receiver state"));
+    if (Number(packageForm.weight) <= 0) missing.push(requiredField("packageWeight", "Package weight"));
+    if (Number(packageForm.length) <= 0) missing.push(requiredField("packageLength", "Package length"));
+    if (Number(packageForm.width) <= 0) missing.push(requiredField("packageWidth", "Package width"));
+    if (Number(packageForm.height) <= 0) missing.push(requiredField("packageHeight", "Package height"));
+    if (!addedProducts.length) {
+      missing.push(requiredField("product", "At least one SKU/product"));
+    } else if (
+      addedProducts.some((product) =>
+        normalizeQuantityForSave(product.qty, product.availableForPlatform ?? product.available) <= 0
+      )
+    ) {
+      missing.push(requiredField("productQuantity", "Valid product quantity"));
+    }
+
+    return missing;
+  }, [
+    addedProducts,
+    buyerForm.address,
+    buyerForm.buyerName,
+    buyerForm.country,
+    buyerForm.phone,
+    buyerForm.zipCode,
+    buyerForm.state,
+    orderForm.orderNumber,
+    orderForm.warehouseId,
+    packageForm.height,
+    packageForm.length,
+    packageForm.weight,
+    packageForm.width,
+    receiverCountry,
+    senderCountry,
+    senderForm.address,
+    senderForm.country,
+    senderForm.phone,
+    senderForm.postcode,
+    senderForm.senderName,
+    senderForm.state,
+    tw,
+  ]);
+  const missingSubmitOrderRequirements = useMemo(
+    () =>
+      selectedLogistic
+        ? missingOrderRequirements
+        : [
+            ...missingOrderRequirements,
+            tw("manualOrderShipping.requiredFields.courierService", "Courier service"),
+          ],
+    [missingOrderRequirements, selectedLogistic, tw]
   );
-  const hasReceiverInformation = Boolean(
-    buyerForm.buyerName.trim() &&
-      buyerForm.phone.trim() &&
-      buyerForm.address.trim() &&
-      buyerForm.country.trim() &&
-      buyerForm.zipCode.trim() &&
-      (receiverCountry !== "MY" || buyerForm.state.trim())
+  const missingRequirementsTitle = tw(
+    "manualOrderShipping.missingRequiredTitle",
+    "Please fill these required fields:"
   );
-  const hasPackageInformation = [packageForm.weight, packageForm.length, packageForm.width, packageForm.height]
-    .every((value) => Number(value) > 0);
-  const hasSelectedSkus = addedProducts.length > 0 &&
-    addedProducts.every((product) => normalizeQuantityForSave(product.qty, product.availableForPlatform ?? product.available) > 0);
-  const isOrderActionDisabled = saveMutation.isPending ||
-    !hasSenderInformation ||
-    !hasReceiverInformation ||
-    !hasPackageInformation ||
-    !hasSelectedSkus;
-  const isSubmitOrderDisabled = isOrderActionDisabled || !selectedLogistic;
+  const createWithoutCourierTooltipItems = saveMutation.isPending ? [] : missingOrderRequirements;
+  const submitOrderTooltipItems = saveMutation.isPending ? [] : missingSubmitOrderRequirements;
+  const isOrderActionDisabled = saveMutation.isPending || missingOrderRequirements.length > 0;
+  const isSubmitOrderDisabled = saveMutation.isPending || missingSubmitOrderRequirements.length > 0;
 
   const handleSubmitOrder = () => {
     if (!selectedLogistic && noCourierRoute) {
@@ -855,18 +923,18 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
               <span className="text-[11px] text-slate-400">{tr("Used only for shipment rates and booking")}</span>
             </div>
             <div className="grid grid-cols-3 gap-3 mb-3">
-              <FormInput label="Sender Name" placeholder="Warehouse contact name" name="senderName" value={senderForm.senderName} onChange={handleSenderChange} />
+              <FormInput label="Sender Name" placeholder="Warehouse contact name" name="senderName" value={senderForm.senderName} onChange={handleSenderChange} required />
               <FormInput label="Company" placeholder="Company / warehouse name" name="company" value={senderForm.company} onChange={handleSenderChange} />
-              <FormInput label="Phone Number" placeholder="Sender phone" name="phone" value={senderForm.phone} onChange={handleSenderChange} />
+              <FormInput label="Phone Number" placeholder="Sender phone" name="phone" value={senderForm.phone} onChange={handleSenderChange} required />
             </div>
             <div className="grid grid-cols-3 gap-3 mb-3">
-              <FormInput className="col-span-2" label="Address" placeholder="Full address" name="address" value={senderForm.address} onChange={handleSenderChange} />
-              <SelectField label="Origin Country" name="country" placeholder="Country" options={countryOptions} value={senderForm.country} onChange={handleSenderChange} />
+              <FormInput className="col-span-2" label="Address" placeholder="Full address" name="address" value={senderForm.address} onChange={handleSenderChange} required />
+              <SelectField label="Origin Country" name="country" placeholder="Country" options={countryOptions} value={senderForm.country} onChange={handleSenderChange} required />
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <FormInput label="State" placeholder="MY-14 / Kuala Lumpur (SG optional)" name="state" value={senderForm.state} onChange={handleSenderChange} />
+              <FormInput label="State" placeholder="MY-14 / Kuala Lumpur (SG optional)" name="state" value={senderForm.state} onChange={handleSenderChange} required={senderCountry === "MY"} />
               <FormInput label="City" placeholder="City" name="city" value={senderForm.city} onChange={handleSenderChange} />
-              <FormInput label="Postcode" placeholder="Postcode" name="postcode" value={senderForm.postcode} onChange={handleSenderChange} />
+              <FormInput label="Postcode" placeholder="Postcode" name="postcode" value={senderForm.postcode} onChange={handleSenderChange} required />
             </div>
           </div>
 
@@ -875,19 +943,19 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
           >
             <h3 className="text-sm font-bold text-slate-800 font-display mb-4">Buyer / Receiver Information</h3>
             <div className="grid grid-cols-3 gap-3 mb-3">
-              <FormInput label="Buyer Name" placeholder="Buyer name here" name="buyerName" value={buyerForm.buyerName} onChange={handleBuyerChange} />
-              <FormInput label="Phone Number" placeholder="Phone Number Here" name="phone" value={buyerForm.phone} onChange={handleBuyerChange} />
+              <FormInput label="Buyer Name" placeholder="Buyer name here" name="buyerName" value={buyerForm.buyerName} onChange={handleBuyerChange} required />
+              <FormInput label="Phone Number" placeholder="Phone Number Here" name="phone" value={buyerForm.phone} onChange={handleBuyerChange} required />
               <FormInput label="Email" placeholder="Email for label/notification" name="email" value={buyerForm.email} onChange={handleBuyerChange} />
             </div>
             <div className="grid grid-cols-3 gap-3 mb-3">
-              <FormInput className="col-span-2" label="Address" placeholder="Buyer address here" name="address" value={buyerForm.address} onChange={handleBuyerChange} />
-              <SelectField label="Destination Country" name="country" placeholder="Country" options={countryOptions} value={buyerForm.country} onChange={handleBuyerChange} />
+              <FormInput className="col-span-2" label="Address" placeholder="Buyer address here" name="address" value={buyerForm.address} onChange={handleBuyerChange} required />
+              <SelectField label="Destination Country" name="country" placeholder="Country" options={countryOptions} value={buyerForm.country} onChange={handleBuyerChange} required />
             </div>
             <div className="grid grid-cols-5 gap-3">
-              <FormInput label="State" placeholder="MY-14 / Kuala Lumpur (SG optional)" name="state" value={buyerForm.state} onChange={handleBuyerChange} />
+              <FormInput label="State" placeholder="MY-14 / Kuala Lumpur (SG optional)" name="state" value={buyerForm.state} onChange={handleBuyerChange} required={receiverCountry === "MY"} />
               <FormInput label="City" placeholder="City name here" name="city" value={buyerForm.city} onChange={handleBuyerChange} />
               <FormInput label="Area" placeholder="Area name here" name="area" value={buyerForm.area} onChange={handleBuyerChange} />
-              <FormInput label="Zip Code" placeholder="Zip code here" name="zipCode" value={buyerForm.zipCode} onChange={handleBuyerChange} />
+              <FormInput label="Zip Code" placeholder="Zip code here" name="zipCode" value={buyerForm.zipCode} onChange={handleBuyerChange} required />
               <FormInput label="Unit" placeholder="Unit / floor / building" name="unit" value={buyerForm.unit} onChange={handleBuyerChange} />
             </div>
           </div>
@@ -1009,9 +1077,12 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
 
           <div className="bg-white rounded-xl border border-surface-border p-4">
             <div className="grid grid-cols-5 gap-3">
-              <FormInput label="Package Weight" placeholder="Package weight kg" name="weight" value={packageForm.weight} onChange={handlePackageChange} />
+              <FormInput label="Package Weight" placeholder="Package weight kg" name="weight" value={packageForm.weight} onChange={handlePackageChange} required />
               <div className="col-span-4">
-                <label className="block text-xs text-slate-500 mb-1">Package Size</label>
+                <label className="block text-xs text-slate-500 mb-1">
+                  <span className="mr-0.5 text-red-500">*</span>
+                  Package Size
+                </label>
                 <div className="grid grid-cols-3 gap-2">
                   <input name="length" value={packageForm.length} onChange={handlePackageChange} placeholder="Length" className="px-3 py-2 text-sm border border-surface-border rounded-lg bg-white text-slate-700 placeholder-slate-400 outline-none focus:border-primary" />
                   <input name="width" value={packageForm.width} onChange={handlePackageChange} placeholder="Width" className="px-3 py-2 text-sm border border-surface-border rounded-lg bg-white text-slate-700 placeholder-slate-400 outline-none focus:border-primary" />
@@ -1252,23 +1323,29 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
         >
           Cancel
         </button>
-        <button
-          onClick={() => setShowCreateWithoutCourierModal(true)}
-          disabled={isOrderActionDisabled}
-          className="px-7 py-2.5 text-sm font-semibold border border-surface-border rounded-xl whitespace-nowrap text-slate-700 bg-white hover:bg-surface-card transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {saveMutation.isPending
-            ? tr("Processing...")
-            : tw("manualOrderShipping.createWithoutCourier", "Create Without Courier")}
-        </button>
-        <button
-          onClick={handleSubmitOrder}
-          disabled={isSubmitOrderDisabled}
-          className="px-7 py-2.5 text-sm font-semibold bg-primary hover:bg-primary-dark whitespace-nowrap
-                           text-white rounded-xl transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {saveMutation.isPending ? tr("Processing...") : tr("Submit Order")}
-        </button>
+        <span className="relative inline-flex group">
+          <button
+            onClick={() => setShowCreateWithoutCourierModal(true)}
+            disabled={isOrderActionDisabled}
+            className="px-7 py-2.5 text-sm font-semibold border border-surface-border rounded-xl whitespace-nowrap text-slate-700 bg-white hover:bg-surface-card transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {saveMutation.isPending
+              ? tr("Processing...")
+              : tw("manualOrderShipping.createWithoutCourier", "Create Without Courier")}
+          </button>
+          <MissingRequirementsTooltip title={missingRequirementsTitle} items={createWithoutCourierTooltipItems} />
+        </span>
+        <span className="relative inline-flex group">
+          <button
+            onClick={handleSubmitOrder}
+            disabled={isSubmitOrderDisabled}
+            className="px-7 py-2.5 text-sm font-semibold bg-primary hover:bg-primary-dark whitespace-nowrap
+                             text-white rounded-xl transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {saveMutation.isPending ? tr("Processing...") : tr("Submit Order")}
+          </button>
+          <MissingRequirementsTooltip title={missingRequirementsTitle} items={submitOrderTooltipItems} />
+        </span>
       </div>
 
       {showNoCourierModal && (
