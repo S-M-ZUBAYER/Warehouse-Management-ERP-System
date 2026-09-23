@@ -8,6 +8,7 @@ const routeTitleRules = [
   { path: "/warehouse_management", key: "page.dashboard", title: "Dashboard", exact: true },
   { path: "/warehouse_management/contact", key: "page.contact", title: "Contact" },
   { path: "/warehouse_management/help-center", key: "page.helpCenter", title: "Help Center" },
+  { path: "/warehouse_management/chat/test-conversation", key: "page.chatTest", title: "Chat Test" },
   { path: "/warehouse_management/chat", key: "page.chat", title: "Chat" },
   { path: "/warehouse_management/products/list", key: "nav.productList", title: "Product List" },
   { path: "/warehouse_management/products/combine_sku/add", key: "nav.combineSku", title: "Add Combine SKU" },

@@ -268,6 +268,7 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
   const [showCreateWithoutCourierModal, setShowCreateWithoutCourierModal] = useState(false);
   const [showSubmitOrderConfirmModal, setShowSubmitOrderConfirmModal] = useState(false);
   const [showInsufficientBalanceModal, setShowInsufficientBalanceModal] = useState(false);
+  const [showTopUpGuidanceModal, setShowTopUpGuidanceModal] = useState(false);
   const [walletTopUpAmount, setWalletTopUpAmount] = useState("50");
   const [walletTopUpCurrency, setWalletTopUpCurrency] = useState("MYR");
 
@@ -524,6 +525,16 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
       toast.error(tw("manualOrderShipping.enterTopUpAmount", "Enter a valid top-up amount."));
       return;
     }
+    setShowTopUpGuidanceModal(true);
+  };
+
+  const handleConfirmShippingWalletTopUp = () => {
+    const amount = Number(walletTopUpAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error(tw("manualOrderShipping.enterTopUpAmount", "Enter a valid top-up amount."));
+      return;
+    }
+    setShowTopUpGuidanceModal(false);
     walletTopUpMutation.mutate({ amount, currency: walletTopUpCurrency });
   };
 
@@ -1534,6 +1545,69 @@ export default function AddManualOrderPage({ mode = "order", onBack, onCreated }
                 {saveMutation.isPending
                   ? tr("Processing...")
                   : tw("manualOrderShipping.confirmSubmitOrder", "Confirm Submit Order")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showTopUpGuidanceModal && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/50 px-4 py-6">
+          <div className="relative w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <button
+              type="button"
+              onClick={() => setShowTopUpGuidanceModal(false)}
+              className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="px-6 pb-5 pt-6">
+              <div className="flex items-start gap-4 pr-10">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-50 text-primary">
+                  <CreditCard size={22} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">
+                    {tw("manualOrderShipping.topUpGuidanceTitle", "Before topping up")}
+                  </h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    {tw("manualOrderShipping.topUpGuidanceIntro", "Please check courier availability before continuing to payment.")}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 space-y-3 rounded-xl border border-blue-100 bg-blue-50/60 p-4 text-sm leading-6 text-slate-700">
+                <p>{tw("manualOrderShipping.topUpGuidanceAddress", "First, go to the Add Manual Order or Add Gift page and enter the sender's and receiver's addresses.")}</p>
+                <p>{tw("manualOrderShipping.topUpGuidanceCourier", "Then, check whether a delivery company is available for that route.")}</p>
+                <p className="font-semibold text-primary">
+                  {tw("manualOrderShipping.topUpGuidancePayment", "If a courier is available, continue to the payment step.")}
+                </p>
+                <p className="font-semibold text-amber-800">
+                  {tw("manualOrderShipping.topUpGuidanceNoCourier", "If no courier is available, do not proceed with payment. Instead, create the order by clicking the Create Without Courier button.")}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col-reverse gap-3 border-t border-surface-border bg-slate-50 px-6 py-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setShowTopUpGuidanceModal(false)}
+                className="rounded-xl border border-surface-border bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-surface-card"
+              >
+                {tr("Cancel")}
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmShippingWalletTopUp}
+                disabled={walletTopUpMutation.isPending}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark disabled:opacity-60"
+              >
+                <CreditCard size={16} />
+                {walletTopUpMutation.isPending
+                  ? tw("manualOrderShipping.redirecting", "Redirecting...")
+                  : tw("manualOrderShipping.continueToPayment", "Continue to Payment")}
               </button>
             </div>
           </div>

@@ -40,6 +40,7 @@ import OutboundCompletedPage from "../features/inventoryManagement/Outbound/comp
 import OutboundOnTheWayPage from "../features/inventoryManagement/Outbound/onTheWay/OutboundOnTheWayPage";
 import OutboundDraftPage from "../features/inventoryManagement/Outbound/draft/OutboundDraftPage";
 import ChatPage from "../features/chat/ChatPage";
+import TikTokConversationTestPage from "../features/chat/TikTokConversationTestPage";
 import PricingPage from "../features/pricing/PricingPage";
 import PricingCheckoutPage from "../features/pricing/PricingCheckoutPage";
 import PricingPaymentSuccessPage from "../features/pricing/PricingPaymentSuccessPage";
@@ -196,6 +197,10 @@ export const routes = [
         element: <RoleManagementPage />,
       },
     ],
+  },
+  {
+    path: "/warehouse_management/chat/test-conversation",
+    element: <TikTokConversationTestPage />,
   },
   {
     path: "warehouse_management/login",

@@ -1,15 +1,32 @@
 import api from "../../lib/api";
-import { fetchOrders } from "../orderManagement/shared/utils/orderApi";
+import {
+  fetchOrders,
+  normalizeTikTokOrder,
+} from "../orderManagement/shared/utils/orderApi";
 
 const CHAT_REST_PREFIX = "/api/tiktok/customer-service";
 const CHAT_LOCAL_STORAGE_PREFIX = "warehouse-chat";
+const DEFAULT_TIKTOK_CHAT_BASE_URL = "https://grozziie.zjweiting.com:3091/product-notification";
+const CHAT_DEVELOPMENT_PROXY_PATH = "/product-notification";
+const TIKTOK_ORDER_DETAILS_PATH = "/tiktokshop-partner-country/api/dev/order/details";
 
 const trimSlash = (value = "") => String(value || "").replace(/\/+$/, "");
 
-const getJavaBaseUrl = () =>
-  trimSlash(import.meta.env.VITE_TIKTOK_CHAT_API_BASE_URL || import.meta.env.VITE_ORDER_PLATFORM_BASE_URL || window.location.origin);
+const getJavaBaseUrl = () => {
+  if (import.meta.env.DEV && typeof window !== "undefined") {
+    return `${window.location.origin}${CHAT_DEVELOPMENT_PROXY_PATH}`;
+  }
+  return trimSlash(import.meta.env.VITE_TIKTOK_CHAT_API_BASE_URL || DEFAULT_TIKTOK_CHAT_BASE_URL);
+};
 
 export const getChatWebSocketUrl = () => {
+  if (import.meta.env.DEV && typeof window !== "undefined") {
+    const proxyUrl = new URL(CHAT_DEVELOPMENT_PROXY_PATH, window.location.origin);
+    proxyUrl.protocol = proxyUrl.protocol === "https:" ? "wss:" : "ws:";
+    proxyUrl.pathname = `${trimSlash(proxyUrl.pathname)}/ws`;
+    return proxyUrl.toString();
+  }
+
   const configured = import.meta.env.VITE_TIKTOK_CHAT_WS_URL;
   if (configured) return configured;
 
@@ -17,7 +34,7 @@ export const getChatWebSocketUrl = () => {
   try {
     const url = new URL(base, window.location.origin);
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    url.pathname = "/ws";
+    url.pathname = `${trimSlash(url.pathname)}/ws`;
     url.search = "";
     url.hash = "";
     return url.toString();
@@ -27,7 +44,7 @@ export const getChatWebSocketUrl = () => {
 };
 
 const buildJavaUrl = (path, params = {}) => {
-  const url = new URL(`${getJavaBaseUrl()}${path}`);
+  const url = new URL(`${getJavaBaseUrl()}${path}`, window.location.origin);
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null && String(value).trim() !== "") {
       url.searchParams.set(key, String(value));
@@ -43,7 +60,13 @@ const requestJson = async (path, { method = "GET", params, body } = {}) => {
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
   const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    const message = text?.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+    throw new Error(message || `Request failed (${response.status})`);
+  }
   if (!response.ok) {
     throw new Error(data?.message || data?.error || `Request failed (${response.status})`);
   }
@@ -101,13 +124,22 @@ const unwrapRows = (response) => {
   const payload = response?.data || response;
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.stores)) return payload.stores;
+  if (Array.isArray(payload?.data?.stores)) return payload.data.stores;
   if (Array.isArray(payload?.rows)) return payload.rows;
   if (Array.isArray(payload?.items)) return payload.items;
   return [];
 };
 
 export const fetchChatStores = async () => {
-  const response = await api.get("/platform-stores", { params: { page: 1, limit: 1000 } });
+  const response = await api.get("/platform-stores", {
+    params: {
+      platform: "tiktok",
+      isActive: true,
+      page: 1,
+      limit: 20,
+    },
+  });
   return unwrapRows(response)
     .map(normalizeChatStore)
     .filter((store) => store.platform.includes("tik"));
@@ -234,7 +266,7 @@ export const uploadConversationMedia = async ({ store, conversationId, file }) =
   } else if (type.startsWith("video/")) {
     formData.set("video", file);
   } else {
-    formData.set("file", file);
+    throw new Error("The existing backend supports image and video uploads only.");
   }
 
   const response = await fetch(buildJavaUrl(`${CHAT_REST_PREFIX}/media/upload`), {
@@ -284,8 +316,10 @@ const parseJsonBody = (body) => {
 export function createTikTokChatSocket({ onConnected, onEvent, onError, onStatus } = {}) {
   let socket = null;
   let connected = false;
+  let manuallyDisconnected = false;
+  let reconnectTimer = null;
   let subscriptionId = 0;
-  let pendingSubscriptions = [];
+  const subscriptions = new Map();
 
   const notifyStatus = (status) => onStatus?.(status);
 
@@ -296,28 +330,26 @@ export function createTikTokChatSocket({ onConnected, onEvent, onError, onStatus
   };
 
   const subscribe = (destination, id = `sub-${subscriptionId += 1}`) => {
-    const payload = { destination, id };
-    if (!connected) {
-      pendingSubscriptions.push(payload);
-      return id;
-    }
-    sendRaw(formatStompFrame("SUBSCRIBE", { id, destination, ack: "auto" }));
+    subscriptions.set(id, destination);
+    if (connected) sendRaw(formatStompFrame("SUBSCRIBE", { id, destination, ack: "auto" }));
     return id;
   };
 
   const unsubscribe = (id) => {
-    pendingSubscriptions = pendingSubscriptions.filter((item) => item.id !== id);
+    subscriptions.delete(id);
     if (connected) sendRaw(formatStompFrame("UNSUBSCRIBE", { id }));
   };
 
   const flushSubscriptions = () => {
-    pendingSubscriptions.forEach(({ destination, id }) => {
+    subscriptions.forEach((destination, id) => {
       sendRaw(formatStompFrame("SUBSCRIBE", { id, destination, ack: "auto" }));
     });
   };
 
   const connect = () => {
     if (socket && [WebSocket.CONNECTING, WebSocket.OPEN].includes(socket.readyState)) return;
+    manuallyDisconnected = false;
+    if (reconnectTimer) clearTimeout(reconnectTimer);
     notifyStatus("connecting");
     socket = new WebSocket(getChatWebSocketUrl());
     socket.onopen = () => {
@@ -360,18 +392,44 @@ export function createTikTokChatSocket({ onConnected, onEvent, onError, onStatus
     socket.onclose = () => {
       connected = false;
       notifyStatus("disconnected");
+      socket = null;
+      if (!manuallyDisconnected) {
+        reconnectTimer = window.setTimeout(connect, 3000);
+      }
     };
   };
 
   const disconnect = () => {
+    manuallyDisconnected = true;
+    if (reconnectTimer) clearTimeout(reconnectTimer);
     if (connected) sendRaw(formatStompFrame("DISCONNECT"));
     connected = false;
     if (socket) socket.close();
     socket = null;
-    pendingSubscriptions = [];
+    subscriptions.clear();
   };
 
-  return { connect, disconnect, subscribe, unsubscribe };
+  const publish = (destination, body = {}) => {
+    if (!connected) return false;
+    const jsonBody = JSON.stringify(body);
+    return sendRaw(formatStompFrame("SEND", {
+      destination,
+      "content-type": "application/json",
+      "content-length": new TextEncoder().encode(jsonBody).length,
+    }, jsonBody));
+  };
+
+  const createConversation = ({ openId, cipher }) => publish(
+    "/app/tiktok/customer-service/conversations/create",
+    { openId, cipher }
+  );
+
+  const sendCustomerMessage = ({ openId, cipher, conversationId, message }) => publish(
+    "/app/tiktok/customer-service/messages",
+    { openId, cipher, conversationId, message }
+  );
+
+  return { connect, disconnect, subscribe, unsubscribe, publish, createConversation, sendCustomerMessage };
 }
 
 export const buildOrderContextFromStore = (store = {}) => ({
@@ -385,6 +443,93 @@ export const buildOrderContextFromStore = (store = {}) => ({
   external_store_name: store.label,
   region: store.region,
 });
+
+const getOrderPlatformBaseUrl = () => {
+  if (import.meta.env.DEV && typeof window !== "undefined") return window.location.origin;
+  return trimSlash(import.meta.env.VITE_ORDER_PLATFORM_BASE_URL || "https://grozziie.zjweiting.com:3091");
+};
+
+const normalizeReturnOrder = (returnOrder = {}) => {
+  const raw = returnOrder.raw || returnOrder;
+  return {
+    ...returnOrder,
+    id: String(returnOrder.id || returnOrder.returnOrderId || returnOrder.return_order_id || ""),
+    orderNumber: String(
+      returnOrder.orderNumber ||
+      returnOrder.orderNo ||
+      returnOrder.platformOrderId ||
+      returnOrder.originalOrderId ||
+      raw.order_id ||
+      raw.orderId ||
+      ""
+    ),
+    returnId: returnOrder.returnId || returnOrder.platformReturnId || returnOrder.return_id || "",
+    returnType: returnOrder.returnType || returnOrder.refundType || returnOrder.return_type || returnOrder.refund_type || raw.returnType || raw.return_type || "",
+    platformStatus: returnOrder.platformStatusLabel || returnOrder.platformStatus || returnOrder.platform_status || raw.status || "",
+    refundAmount: returnOrder.refundTotal || returnOrder.refundAmount || returnOrder.refund_amount || raw.refund_total || "",
+    refundCurrency: returnOrder.refundCurrency || returnOrder.refund_currency || raw.currency || "",
+    trackingNumber: returnOrder.trackingNo || returnOrder.trackingNumber || returnOrder.tracking_number || raw.return_tracking_number || "",
+    raw,
+  };
+};
+
+export const fetchTikTokConversationOrderContext = async ({ store, orderId }) => {
+  if (!store?.openId || !store?.cipher || !orderId) {
+    return { orderId: "", order: null, returns: [], returnError: "" };
+  }
+
+  const orderUrl = new URL(`${getOrderPlatformBaseUrl()}${TIKTOK_ORDER_DETAILS_PATH}`, window.location.origin);
+  orderUrl.searchParams.set("openId", store.openId);
+  orderUrl.searchParams.set("orderIds", orderId);
+  orderUrl.searchParams.set("cipher", store.cipher);
+
+  const [orderResult, returnsResult] = await Promise.allSettled([
+    fetch(orderUrl.toString(), { headers: { Accept: "application/json" } }).then(async (response) => {
+      const text = await response.text();
+      let data = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        throw new Error(text || `Order request failed (${response.status})`);
+      }
+      if (!response.ok || (data?.code !== undefined && Number(data.code) !== 0)) {
+        throw new Error(data?.message || data?.error || `Order request failed (${response.status})`);
+      }
+      return data;
+    }),
+    api.get("/return-orders", {
+      params: {
+        page: 1,
+        limit: 100,
+        platform: "tiktok",
+        storeId: store.raw ? store.id || "all" : "all",
+        search: orderId,
+        searchType: "Single Search",
+        skuType: "Order Number",
+      },
+    }),
+  ]);
+
+  if (orderResult.status === "rejected") throw orderResult.reason;
+
+  const rawOrder = orderResult.value?.data?.orders?.[0] || orderResult.value?.body?.data?.orders?.[0] || null;
+  const orderStoreContext = buildOrderContextFromStore(store);
+  const order = rawOrder ? normalizeTikTokOrder(rawOrder, orderStoreContext) : null;
+  const returns = returnsResult.status === "fulfilled"
+    ? unwrapRows(returnsResult.value)
+      .map(normalizeReturnOrder)
+      .filter((item) => String(item.orderNumber) === String(orderId))
+    : [];
+
+  return {
+    orderId: String(orderId),
+    order,
+    returns,
+    returnError: returnsResult.status === "rejected"
+      ? returnsResult.reason?.message || "Unable to load return or refund information"
+      : "",
+  };
+};
 
 const extractReferenceTerms = (conversation, messages = []) => {
   const text = [

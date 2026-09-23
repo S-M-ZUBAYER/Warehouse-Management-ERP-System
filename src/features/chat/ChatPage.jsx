@@ -1,54 +1,46 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import {
   Bot,
   ChevronDown,
   Edit2,
-  ExternalLink,
   FileUp,
   Filter,
   ImageUp,
-  Menu,
   Plus,
   Search,
   Send,
 } from "lucide-react";
 import Topbar from "../../components/layout/Topbar";
+import {
+  createTikTokChatSocket,
+  fetchChatStores,
+  fetchConversationMessages,
+  fetchConversations,
+  fetchTikTokConversationOrderContext,
+  getStoredChatValue,
+  setStoredChatValue,
+  normalizeConversation,
+  normalizeMessage,
+  sendConversationReply,
+  uploadConversationMedia,
+} from "./chatApi";
+import {
+  setCachedOrderDetailForId,
+  setStoredOrderContext,
+} from "../orderManagement/shared/utils/orderApi";
 
 const chatT = (t, key, defaultValue, options = {}) =>
   t(`chatPage.${key}`, { defaultValue, ...options });
 
-const avatars = [
-  "https://i.pravatar.cc/96?img=32",
-  "https://i.pravatar.cc/96?img=12",
-  "https://i.pravatar.cc/96?img=47",
-  "https://i.pravatar.cc/96?img=5",
-  "https://i.pravatar.cc/96?img=18",
-  "https://i.pravatar.cc/96?img=26",
-  "https://i.pravatar.cc/96?img=40",
-  "https://i.pravatar.cc/96?img=9",
-];
+const CHAT_PAGE_SELECTION_KEY = "chat-page-selection";
+let chatPageMemoryCache = null;
 
-const customers = [
-  { name: "Esther Howard", timeKey: "minutesAgo", timeCount: 8, avatar: avatars[0], active: true, category: "Bad Review", issue: "Printhead Issue" },
-  { name: "Ralph Edwards", timeKey: "minutesAgo", timeCount: 15, avatar: avatars[1], active: true, category: "No Rating", issue: "Paper Jam" },
-  { name: "Jenny Wilson", timeKey: "hoursAgo", timeCount: 1, avatar: avatars[2], active: true, category: "5 Star", issue: "Connectivity" },
-  { name: "Eleanor Pena", timeKey: "hoursAgo", timeCount: 2, avatar: avatars[3], active: true, category: "4 Star", issue: "Ink Smudge" },
-  { name: "Cameron Williamson", timeKey: "minutesAgo", timeCount: 30, avatar: avatars[4], active: false, category: "3 Star", issue: "Slow Printing" },
-  { name: "Savannah Nguyen", timeKey: "minutesAgo", timeCount: 5, avatar: avatars[5], active: true, category: "2 Star", issue: "Printer Error" },
-  { name: "Marvin McKinney", timeKey: "yesterday", avatar: avatars[6], active: true, category: "1 Star", issue: "Low Ink" },
-  { name: "Dianne Russell", timeKey: "minutesAgo", timeCount: 10, avatar: avatars[7], active: true, category: "Bad Review", issue: "Paper Jam" },
-];
-
-const orderItems = Array.from({ length: 3 }, (_, index) => ({
-  title: "Ergonomic wireless mouse with 3k...",
-  sku: "WM124",
-  model: "Evo 124",
-  price: "$35.00",
-  image: "https://images.unsplash.com/photo-1527814050087-3793815479db?auto=format&fit=crop&w=160&q=80",
-  shipping: "Ship before 21:41 on December 14",
-  id: index,
-}));
+const avatars = Array.from(
+  { length: 70 },
+  (_, index) => `https://i.pravatar.cc/96?img=${index + 1}`
+);
 
 const quickMessages = [
   ["Hi", "Hi, Sir how can I help you?"],
@@ -124,16 +116,29 @@ const settingsRowKeys = {
 };
 
 function customerTime(t, customer) {
+  if (customer?.updatedAt || customer?.createdAt) {
+    const timestamp = new Date(customer.updatedAt || customer.createdAt).getTime();
+    if (Number.isFinite(timestamp)) {
+      const elapsedMinutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
+      if (elapsedMinutes < 60) return chatT(t, "time.minutesAgo", "{{count}} minutes ago", { count: elapsedMinutes });
+      const elapsedHours = Math.floor(elapsedMinutes / 60);
+      if (elapsedHours < 24) return chatT(t, "time.hoursAgo", "{{count}} hours ago", { count: elapsedHours });
+      return new Date(timestamp).toLocaleDateString();
+    }
+  }
   return chatT(t, `time.${customer.timeKey}`, customer.timeKey, { count: customer.timeCount });
 }
 
-function SelectBox({ label, options }) {
+function SelectBox({ label, options, value, onChange, disabled = false }) {
   return (
     <label className="block min-w-0">
       <span className="mb-2 block text-[11px] font-medium text-slate-700">{label}</span>
       <span className="relative block">
-        <select className="h-9 w-full appearance-none rounded-lg border border-slate-200 bg-white px-3 pr-8 text-xs text-slate-500 outline-none focus:border-primary">
-          {options.map((option) => <option key={option}>{option}</option>)}
+        <select value={value} onChange={onChange} disabled={disabled} className="h-9 w-full appearance-none rounded-lg border border-slate-200 bg-white px-3 pr-8 text-xs text-slate-500 outline-none focus:border-primary disabled:cursor-not-allowed disabled:bg-slate-50">
+          {options.map((option) => {
+            const item = typeof option === "string" ? { label: option, value: option } : option;
+            return <option key={item.value} value={item.value} disabled={item.disabled}>{item.label}</option>;
+          })}
         </select>
         <ChevronDown size={13} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
       </span>
@@ -148,6 +153,42 @@ function Metric({ label, value }) {
       <p className="text-lg font-bold text-slate-600">{value}</p>
     </div>
   );
+}
+
+const HIDDEN_TEST_CHAT_MESSAGE = "test customer service conversation created";
+
+function normalizeChatText(value) {
+  return String(value || "")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function isHiddenTestChatMessage(messageOrText) {
+  const rawText =
+    typeof messageOrText === "object" && messageOrText !== null
+      ? messageOrText.message
+      : messageOrText;
+
+  return normalizeChatText(rawText) === HIDDEN_TEST_CHAT_MESSAGE;
+}
+
+function isAwaitingSellerResponse(conversation) {
+  if (isHiddenTestChatMessage(conversation?.lastMessage)) return false;
+  return String(conversation?.lastMessageDirection || "").toUpperCase() === "INCOMING";
+}
+
+function isSellerResponse(conversation) {
+  return String(conversation?.lastMessageDirection || "").toUpperCase() === "OUTGOING";
+}
+
+function formatResponseDuration(totalSeconds) {
+  const seconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
+  return `${hours}h ${minutes}m ${remainingSeconds}s`;
 }
 
 function Avatar({ src, online = true, size = "h-9 w-9" }) {
@@ -246,47 +287,23 @@ function TransferModal({ onClose, t }) {
   );
 }
 
-function SupportAssignPopover({ t }) {
-  const teams = [
-    ["Customer Support 1", "Pre Sale", chatT(t, "activeCount", "Active (16)", { count: 16 }), chatT(t, "assign", "Assign"), "emerald"],
-    ["Customer Support 2", "Aftersales", chatT(t, "activeCount", "Active (05)", { count: 5 }), chatT(t, "reassign", "Reassign"), "emerald"],
-    ["Customer Support 3", "Technical Support", chatT(t, "activeCount", "Active (02)", { count: 2 }), chatT(t, "assign", "Assign"), "emerald"],
-    ["Customer Support 4", "Aftersales", chatT(t, "offlineCount", "Offline (01)", { count: 1 }), chatT(t, "unableToAssign", "Unable to Assign"), "rose"],
-  ];
-  return (
-    <div className="absolute right-12 top-14 z-20 w-72 rounded-xl bg-white p-4 shadow-2xl ring-1 ring-slate-100">
-      <div className="relative">
-        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input className="h-9 w-full rounded-lg border border-slate-200 pl-9 text-sm outline-none" placeholder={chatT(t, "search", "Search")} />
-      </div>
-      <div className="mt-4 space-y-4">
-        {teams.map(([name, team, status, action, color]) => (
-          <div key={name} className="flex items-center justify-between gap-4">
-            <div>
-              <p className="font-bold text-slate-700">{name}</p>
-              <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-400">
-                <span>{team}</span>
-                <span className={`rounded-full px-2 py-0.5 text-[10px] ${color === "rose" ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600"}`}>{status}</span>
-              </div>
-            </div>
-            <button className={`rounded-full px-2 py-1 text-[10px] ${color === "rose" ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600"}`}>{action}</button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ChatHistory({ selected, onSelect, setShowTransfer, setShowMark, t }) {
+function ChatHistory({ conversations, selected, onSelect, unreadCounts, setShowTransfer, setShowMark, loading, error, t }) {
   const [bulkMode, setBulkMode] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const visibleConversations = conversations.filter((conversation) => {
+    const needle = search.trim().toLowerCase();
+    if (!needle) return true;
+    return [conversation.customerName, conversation.conversationId, conversation.lastMessage, conversation.subject]
+      .some((value) => String(value || "").toLowerCase().includes(needle));
+  });
   return (
     <section className="flex h-full min-h-0 flex-col rounded-xl border border-slate-200 bg-white p-5">
       <h2 className="text-lg font-bold text-slate-800">{chatT(t, "chatHistory", "Chat History")}</h2>
       <div className="mt-4 flex items-center gap-2">
         <div className="relative flex-1">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input className="h-9 w-full rounded-lg border border-slate-100 bg-white pl-9 text-xs outline-none" placeholder={chatT(t, "search", "Search")} />
+          <input value={search} onChange={(event) => setSearch(event.target.value)} className="h-9 w-full rounded-lg border border-slate-100 bg-white pl-9 text-xs outline-none" placeholder={chatT(t, "search", "Search")} />
         </div>
         <button onClick={() => setFiltersOpen((value) => !value)} className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-white">
           <Filter size={16} />
@@ -315,21 +332,37 @@ function ChatHistory({ selected, onSelect, setShowTransfer, setShowMark, t }) {
         </label>
       )}
       <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
-        {customers.map((customer) => (
-          <button
-            key={customer.name}
-            onClick={() => onSelect(customer)}
-            className={`mb-2 flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left ${selected?.name === customer.name ? "bg-slate-100" : "hover:bg-slate-50"}`}
-          >
-            {bulkMode && <input type="checkbox" defaultChecked className="accent-primary" onClick={(event) => event.stopPropagation()} />}
-            <Avatar src={customer.avatar} online={customer.active} />
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-bold text-slate-800">{customer.name}</span>
-              <span className="block truncate text-[11px] text-slate-400">{chatT(t, "lastConnect", "Last connect {{time}}", { time: customerTime(t, customer) })}</span>
-            </span>
-            <Edit2 size={15} onClick={(event) => { event.stopPropagation(); setShowMark(customer); }} className="text-slate-400" />
-          </button>
-        ))}
+        {loading && <p className="px-2 py-3 text-xs text-slate-400">{chatT(t, "loadingConversations", "Loading conversations...")}</p>}
+        {!loading && error && <p className="px-2 py-3 text-xs text-rose-500">{error}</p>}
+        {!loading && !error && visibleConversations.length === 0 && (
+          <p className="px-2 py-3 text-xs text-slate-400">{chatT(t, "noConversations", "No conversations found")}</p>
+        )}
+        {visibleConversations.map((customer) => {
+          const unreadCount = Number(unreadCounts?.[customer.conversationId] || 0);
+          return (
+            <button
+              key={customer.conversationId}
+              onClick={() => onSelect(customer)}
+              className={`mb-2 flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left ${selected?.conversationId === customer.conversationId ? "bg-slate-100" : "hover:bg-slate-50"}`}
+            >
+              {bulkMode && <input type="checkbox" defaultChecked className="accent-primary" onClick={(event) => event.stopPropagation()} />}
+              <Avatar src={customer.avatar} online={customer.active} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-bold text-slate-800">{customer.customerName}</span>
+                <span className="block truncate text-[11px] text-slate-400">{chatT(t, "lastConnect", "Last connect {{time}}", { time: customerTime(t, customer) })}</span>
+              </span>
+              {unreadCount > 0 && (
+                <span
+                  className="inline-flex h-5 min-w-5 flex-shrink-0 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold leading-none text-white"
+                  title={`${unreadCount} unread message${unreadCount === 1 ? "" : "s"}`}
+                >
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
+              <Edit2 size={15} onClick={(event) => { event.stopPropagation(); setShowMark(customer); }} className="text-slate-400" />
+            </button>
+          );
+        })}
       </div>
       <div className="mt-3 flex justify-end">
         {bulkMode ? (
@@ -344,11 +377,140 @@ function ChatHistory({ selected, onSelect, setShowTransfer, setShowMark, t }) {
   );
 }
 
-function Conversation({ selected, setShowAssign, t }) {
+function formatMessageTime(value) {
+  const date = new Date(value || Date.now());
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleString();
+}
+
+function isGeneratedMediaMessage(value) {
+  return ["image media", "video media", "image and video media"].includes(String(value || "").trim().toLowerCase());
+}
+
+function ChatImageAttachment({ src }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <div className="flex min-h-20 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white/70 px-4 py-3 text-center text-[11px] text-slate-500">
+        Image uploaded · preview unavailable
+      </div>
+    );
+  }
+  return <img src={src} alt="Chat attachment" onError={() => setFailed(true)} className="max-h-52 max-w-full rounded-lg object-contain" />;
+}
+
+function ChatVideoAttachment({ src }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <div className="flex min-h-20 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white/70 px-4 py-3 text-center text-[11px] text-slate-500">
+        Video uploaded · preview unavailable
+      </div>
+    );
+  }
+  return <video src={src} controls onError={() => setFailed(true)} className="max-h-52 max-w-full rounded-lg" />;
+}
+
+function extractOrderId(value) {
+  const match = String(value || "").match(/\border\s*id\s*:\s*([A-Za-z0-9_-]+)/i);
+  return match?.[1] || "";
+}
+
+function LinkedOrderMessage({ orderId, commerceContext, commerceLoading, commerceError, onViewOrder }) {
+  const isActiveOrder = String(commerceContext?.orderId || "") === String(orderId);
+  const order = isActiveOrder ? commerceContext?.order : null;
+  const rawOrder = order?.raw || {};
+  const firstItem = order?.items?.[0] || null;
+  const status = rawOrder.status || order?.rawStatus || order?.status;
+
+  if (commerceLoading && !order) {
+    return (
+      <div className="w-80 rounded-xl border border-blue-100 bg-blue-50 px-4 py-4 text-left shadow-sm">
+        <p className="text-xs font-bold text-primary">Customer shared an order</p>
+        <p className="mt-2 text-xs text-slate-500">Loading order details...</p>
+      </div>
+    );
+  }
+
+  if (!order) {
+    return (
+      <div className="w-80 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 text-left shadow-sm">
+        <p className="text-xs font-bold text-slate-700">Customer shared an order</p>
+        <p className="mt-2 text-xs text-slate-500">{commerceError || "Order details are unavailable."}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-80 overflow-hidden rounded-xl border border-blue-100 bg-white text-left shadow-sm">
+      <div className="flex items-start justify-between gap-3 bg-blue-50 px-4 py-3">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-primary">Customer shared an order</p>
+          <p className="mt-1 text-xs font-semibold text-slate-700">Order #{order.orderNo}</p>
+        </div>
+        <span className={`rounded-full px-2 py-1 text-[9px] font-bold ${commerceStatusClass(status)}`}>{status || "Order"}</span>
+      </div>
+      {firstItem && (
+        <div className="flex gap-3 border-b border-slate-100 p-3">
+          <img src={firstItem.image} alt={firstItem.name || "Order product"} className="h-14 w-14 shrink-0 rounded-lg object-cover" />
+          <div className="min-w-0 flex-1">
+            <p className="line-clamp-2 text-xs font-semibold leading-5 text-slate-700">{firstItem.name}</p>
+            <p className="mt-1 text-[10px] text-slate-400">SKU: {firstItem.sku} · Qty: {firstItem.quantity}</p>
+          </div>
+        </div>
+      )}
+      <div className="space-y-2 px-4 py-3">
+        <DetailRow label="Total" value={order.payment?.orderValue || order.price} />
+        <DetailRow label="Shipping" value={rawOrder.shippingProvider || rawOrder.lineItems?.[0]?.shippingProviderName || order.logistics?.logisticsName} />
+        <DetailRow label="Tracking" value={rawOrder.trackingNumber || rawOrder.lineItems?.[0]?.trackingNumber || order.trackingNo} />
+        <button type="button" onClick={() => onViewOrder(order)} className="mt-1 w-full rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white">View Order Details</button>
+      </div>
+    </div>
+  );
+}
+
+function Conversation({ selected, messages, loading, error, onSend, onUpload, sending, commerceContexts, onViewOrder, t }) {
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [draft, setDraft] = useState("");
+  const imageInputRef = useRef(null);
+  const videoInputRef = useRef(null);
+  const messagesEndRef = useRef(null);
+  const renderedMessageIdsRef = useRef(new Set());
+
+  const visibleMessages = messages.filter(
+    (message) => !isHiddenTestChatMessage(message)
+  );
+
+  useEffect(() => {
+    const nextMessageIds = new Set(messages.map((message) => String(message.id)));
+    const hasNewMessage = messages.some(
+      (message) => !renderedMessageIdsRef.current.has(String(message.id))
+    );
+    renderedMessageIdsRef.current = nextMessageIds;
+
+    if (hasNewMessage) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [messages]);
+
+  const submitReply = async () => {
+    const message = draft.trim();
+    if (!message || sending) return;
+    const sent = await onSend(message);
+    if (sent) setDraft("");
+  };
+
+  const uploadFile = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    setUploadOpen(false);
+    if (file) {
+      await onUpload(file);
+    }
+  };
+
   if (!selected) {
     return (
-      <section className="flex h-full min-h-[520px] items-center justify-center rounded-xl border border-slate-200 bg-white">
+      <section className="flex h-full min-h-0 items-center justify-center rounded-xl border border-slate-200 bg-white">
         <div className="text-center">
           <div className="mx-auto grid h-48 w-64 grid-cols-2 place-items-center gap-3">
             <div className="h-24 w-32 rounded-lg border border-primary/60 bg-blue-50" />
@@ -361,102 +523,316 @@ function Conversation({ selected, setShowAssign, t }) {
     );
   }
   return (
-    <section className="relative flex h-full min-h-[520px] flex-col rounded-xl border border-slate-200 bg-white p-5">
+    <section className="relative flex h-full min-h-0 flex-col rounded-xl border border-slate-200 bg-white p-5">
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <Avatar src={selected.avatar} />
           <div>
-            <h2 className="font-bold text-slate-800">{selected.name}</h2>
+            <h2 className="font-bold text-slate-800">{selected.customerName}</h2>
             <p className="text-[11px] text-slate-400">{chatT(t, "lastConnect", "Last connect {{time}}", { time: customerTime(t, selected) })}</p>
           </div>
         </div>
-        <div className="flex items-center gap-5 text-slate-500">
-          <button><ExternalLink size={18} /></button>
-          <button onClick={setShowAssign}><Menu size={20} /></button>
-        </div>
       </div>
       <div className="mt-7 flex-1 space-y-8 overflow-y-auto pr-2">
-        <div className="flex items-start gap-3">
-          <Avatar src={selected.avatar} size="h-8 w-8" />
-          <div>
-            <p className="mb-1 text-[11px] text-slate-400">2026-07-08 09:22:05</p>
-            <p className="rounded-xl bg-slate-100 px-4 py-3 text-xs text-slate-700">{chatT(t, "sampleCustomerMessage1", "Hello ! Help me about the thermal printer")}</p>
-          </div>
-        </div>
-        <div className="ml-auto max-w-xs text-right">
-          <p className="mb-1 text-[11px] text-slate-400">2026-07-08 09:23:05</p>
-          <p className="rounded-xl bg-slate-100 px-4 py-3 text-xs text-slate-700">{chatT(t, "sampleAgentMessage", "Hello sir, Let me know how can I help you?")}</p>
-        </div>
-        <div className="flex max-w-xs items-start gap-3">
-          <Avatar src={selected.avatar} size="h-8 w-8" />
-          <div>
-            <p className="mb-1 text-[11px] text-slate-400">2026-07-08 09:22:05</p>
-            <p className="rounded-xl bg-slate-100 px-4 py-3 text-xs text-slate-700">
-              {chatT(t, "sampleCustomerMessage2", "Hello! I am having a serious issue with my thermal printer. It keeps jamming and the print quality is terrible, which is causing major delays in my work.")}
-            </p>
-          </div>
-        </div>
-        <div className="ml-auto flex max-w-[210px] items-center justify-end gap-2 rounded-full bg-sky-50 px-4 py-2 text-xs text-slate-500">
-          <span className="flex gap-1"><i className="h-1.5 w-1.5 rounded-full bg-primary" /><i className="h-1.5 w-1.5 rounded-full bg-primary" /><i className="h-1.5 w-1.5 rounded-full bg-primary" /></span>
-          {chatT(t, "typing", "Typing")}
-        </div>
+        {loading && <p className="text-center text-xs text-slate-400">{chatT(t, "loadingMessages", "Loading messages...")}</p>}
+        {!loading && visibleMessages.length === 0 && <p className="text-center text-xs text-slate-400">{chatT(t, "noMessages", "No messages found")}</p>}
+        {visibleMessages.map((message) => {
+          const messageOrderId = message.incoming ? extractOrderId(message.message) : "";
+          const messageCommerceContext = messageOrderId
+            ? commerceContexts.find((context) => String(context.orderId) === String(messageOrderId))
+            : null;
+          return (
+            <div key={message.id} className={message.incoming ? `flex items-start gap-3 ${messageOrderId ? "max-w-md" : "max-w-xs"}` : `ml-auto text-right ${messageOrderId ? "max-w-md" : "max-w-xs"}`}>
+              {message.incoming && <Avatar src={selected.avatar} size="h-8 w-8" />}
+              <div className={message.incoming ? "" : "ml-auto"}>
+                <p className="mb-1 text-[11px] text-slate-400">{formatMessageTime(message.createdAt)}</p>
+                {messageOrderId ? (
+                  <LinkedOrderMessage
+                    orderId={messageOrderId}
+                    commerceContext={messageCommerceContext}
+                    commerceLoading={messageCommerceContext?.loading}
+                    commerceError={messageCommerceContext?.error}
+                    onViewOrder={onViewOrder}
+                  />
+                ) : (
+                  <div className="space-y-2 rounded-xl bg-slate-100 px-4 py-3 text-left text-xs text-slate-700">
+                    {message.message && !isGeneratedMediaMessage(message.message) && <p>{message.message}</p>}
+                    {message.imageUrl && <ChatImageAttachment src={message.imageUrl} />}
+                    {message.videoUrl && <ChatVideoAttachment src={message.videoUrl} />}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        <div ref={messagesEndRef} />
       </div>
+      {error && <p className="mt-2 text-xs text-rose-500">{error}</p>}
       <div className="relative mt-4 flex h-11 items-center rounded-full bg-slate-100 pl-3 pr-2">
         {uploadOpen && (
           <div className="absolute bottom-12 left-1 rounded-lg bg-slate-500 p-2 text-xs text-white shadow-lg">
-            <button className="flex w-28 items-center gap-2 rounded px-2 py-1 hover:bg-white/10"><ImageUp size={13} /> {chatT(t, "uploadImage", "Upload Image")}</button>
-            <button className="flex w-28 items-center gap-2 rounded px-2 py-1 hover:bg-white/10"><FileUp size={13} /> {chatT(t, "uploadFiles", "Upload Files")}</button>
+            <button onClick={() => imageInputRef.current?.click()} className="flex w-28 items-center gap-2 rounded px-2 py-1 hover:bg-white/10"><ImageUp size={13} /> {chatT(t, "uploadImage", "Upload Image")}</button>
+            <button onClick={() => videoInputRef.current?.click()} className="flex w-28 items-center gap-2 rounded px-2 py-1 hover:bg-white/10"><FileUp size={13} /> {chatT(t, "uploadVideo", "Upload Video")}</button>
           </div>
         )}
+        <input ref={imageInputRef} type="file" accept="image/*" onChange={uploadFile} className="hidden" />
+        <input ref={videoInputRef} type="file" accept="video/*" onChange={uploadFile} className="hidden" />
         <button onClick={() => setUploadOpen((value) => !value)} className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-600"><Plus size={18} /></button>
-        <input className="min-w-0 flex-1 bg-transparent px-3 text-xs outline-none" placeholder={chatT(t, "messagePlaceholder", "You can solve this problem with")} />
-        <button className="flex h-8 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-white">{chatT(t, "send", "Send")} <Send size={15} /></button>
+        <input value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submitReply(); } }} disabled={sending} className="min-w-0 flex-1 bg-transparent px-3 text-xs outline-none" placeholder={chatT(t, "messagePlaceholder", "You can solve this problem with")} />
+        <button onClick={submitReply} disabled={!draft.trim() || sending} className="flex h-8 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-white disabled:opacity-50">{sending ? chatT(t, "sending", "Sending...") : chatT(t, "send", "Send")} <Send size={15} /></button>
       </div>
     </section>
   );
 }
 
-function RightPanel({ setShowQuickModal, t }) {
+function formatCommerceDate(value) {
+  if (!value || value === "-") return "-";
+  const numeric = Number(value);
+  const date = Number.isFinite(numeric)
+    ? new Date(numeric > 9999999999 ? numeric : numeric * 1000)
+    : new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+}
+
+function DetailRow({ label, value }) {
   return (
-    <aside className="space-y-5">
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
-        <h2 className="text-lg font-bold text-slate-800">{chatT(t, "orderDetails", "Order Details")}</h2>
-        <div className="mt-5 space-y-4">
-          {orderItems.map((item) => (
-            <div key={item.id} className="flex gap-4">
-              <img src={item.image} alt="" className="h-20 w-20 rounded-xl object-cover" />
-              <div className="min-w-0 text-xs text-slate-500">
-                <p className="truncate text-slate-700">{item.title}</p>
-                <p>{chatT(t, "sku", "SKU")}: {item.sku} <span className="ml-6 text-orange-500">{chatT(t, "price", "Price")}: {item.price}</span></p>
-                <p>{chatT(t, "modelName", "Model Name")}: <span className="text-slate-700">{item.model}</span></p>
-                <p>{chatT(t, "shippingTime", "Shipping time")}: <span className="text-slate-700">{item.shipping}</span></p>
+    <div className="flex items-start justify-between gap-3 text-xs">
+      <span className="shrink-0 text-slate-400">{label}</span>
+      <span className="min-w-0 break-words text-right font-semibold text-slate-700">{value || "-"}</span>
+    </div>
+  );
+}
+
+function commerceStatusClass(status) {
+  const value = String(status || "").toUpperCase();
+  if (value.includes("DELIVER") || value.includes("COMPLETE") || value.includes("REFUND")) return "bg-emerald-50 text-emerald-700";
+  if (value.includes("CANCEL") || value.includes("REJECT") || value.includes("FAIL")) return "bg-rose-50 text-rose-700";
+  if (value.includes("SHIP") || value.includes("TRANSIT") || value.includes("COLLECTION")) return "bg-blue-50 text-blue-700";
+  return "bg-amber-50 text-amber-700";
+}
+
+function CommerceOrderDetails({ context, onViewOrder, onViewReturn }) {
+  const order = context?.order || null;
+  const rawOrder = order?.raw || {};
+  const firstReturn = context?.returns?.[0] || null;
+  const orderStatus = rawOrder.status || order?.rawStatus || order?.status;
+  const deliveryStatus = rawOrder.deliveryTime
+    ? "Delivered"
+    : rawOrder.rtsTime
+      ? "Shipped"
+      : rawOrder.collectionTime
+        ? "Collected"
+        : orderStatus || "-";
+
+  return (
+    <div className="rounded-xl border border-slate-100 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-primary">Linked order</p>
+          <p className="mt-1 break-all text-xs font-semibold text-slate-700">#{context.orderId}</p>
+        </div>
+        {orderStatus && <span className={`rounded-full px-2 py-1 text-[9px] font-bold ${commerceStatusClass(orderStatus)}`}>{orderStatus}</span>}
+      </div>
+
+      {context.loading && <p className="mt-3 text-xs text-slate-400">Loading order, shipment, and return details...</p>}
+      {!context.loading && context.error && <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-600">{context.error}</p>}
+      {!context.loading && !context.error && !order && <p className="mt-3 text-xs text-slate-400">No TikTok order was found for this order ID.</p>}
+
+      {order && (
+        <div className="mt-4 space-y-5">
+          <div className="space-y-2">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Order context</p>
+            <DetailRow label="Order number" value={order.orderNo} />
+            <DetailRow label="TikTok store" value={order.storeName} />
+            <DetailRow label="Order status" value={orderStatus} />
+            <DetailRow label="Payment / total" value={order.payment?.orderValue || order.price} />
+            <DetailRow label="Created" value={order.createdAt || formatCommerceDate(rawOrder.createTime)} />
+          </div>
+
+          <div className="space-y-2 border-t border-slate-100 pt-4">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Products</p>
+            {(order.items || []).map((item) => (
+              <div key={item.id} className="flex gap-3 rounded-lg bg-slate-50 p-2.5">
+                <img src={item.image} alt={item.name || "Product"} className="h-14 w-14 shrink-0 rounded-lg object-cover" />
+                <div className="min-w-0 text-xs">
+                  <p className="line-clamp-2 font-semibold text-slate-700">{item.name}</p>
+                  <p className="mt-1 text-slate-400">SKU: {item.sku}</p>
+                  <p className="text-slate-400">{item.currency} {item.unitPrice} × {item.quantity}</p>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
+
+          <div className="space-y-2 border-t border-slate-100 pt-4">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Fulfillment & shipment</p>
+            <DetailRow label="Fulfillment status" value={rawOrder.fulfillmentStatus || rawOrder.fulfillmentType} />
+            <DetailRow label="Shipping provider" value={rawOrder.shippingProvider || rawOrder.lineItems?.[0]?.shippingProviderName || order.logistics?.logisticsName} />
+            <DetailRow label="Tracking number" value={rawOrder.trackingNumber || rawOrder.lineItems?.[0]?.trackingNumber || order.trackingNo} />
+            <DetailRow label="Shipping deadline" value={formatCommerceDate(rawOrder.shippingDueTime)} />
+            <DetailRow label="Shipped / delivered status" value={deliveryStatus} />
+            <DetailRow label={rawOrder.deliveryTime ? "Delivered" : "Estimated delivery"} value={formatCommerceDate(rawOrder.deliveryTime || rawOrder.deliveryDueTime || order.logistics?.estimatedDeliveryTime)} />
+          </div>
+
+          <button type="button" onClick={() => onViewOrder(order)} className="w-full rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white">View Order Details</button>
+
+          <div className="space-y-2 border-t border-slate-100 pt-4">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">After-sales</p>
+            {context.returnError && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">{context.returnError}</p>}
+            {!context.returnError && !firstReturn && <p className="rounded-lg bg-slate-50 px-3 py-3 text-xs text-slate-500">No return or refund request</p>}
+            {firstReturn && (
+              <>
+                <DetailRow label="Return ID" value={firstReturn.returnId || firstReturn.id} />
+                <DetailRow label="Return / refund type" value={firstReturn.returnType} />
+                <DetailRow label="Platform status" value={firstReturn.platformStatus} />
+                <DetailRow label="Refund amount" value={firstReturn.refundAmount ? `${firstReturn.refundCurrency || ""} ${firstReturn.refundAmount}`.trim() : "-"} />
+                <DetailRow label="Return tracking" value={firstReturn.trackingNumber} />
+                <button type="button" onClick={() => onViewReturn(firstReturn)} disabled={!firstReturn.id} className="w-full rounded-lg border border-primary px-3 py-2 text-xs font-semibold text-primary disabled:opacity-40">View Return Details</button>
+              </>
+            )}
+          </div>
         </div>
-      </section>
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
-        <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-slate-800">{chatT(t, "quickMessages", "Quick Messages")}</h2>
-          <button onClick={() => setShowQuickModal(true)}><Plus size={18} /></button>
-        </div>
+      )}
+    </div>
+  );
+}
+
+function RightPanel({
+  setShowQuickModal,
+  selected,
+  onSend,
+  sending,
+  commerceContexts,
+  onViewOrder,
+  onViewReturn,
+  t,
+}) {
+  const [reply, setReply] = useState("");
+  const submitReply = async () => {
+    const text = reply.trim();
+    if (!text || !selected || sending) return;
+    const sent = await onSend(text);
+    if (sent) setReply("");
+  };
+
+  return (
+  <aside className="flex h-full min-h-0 flex-col gap-5">
+    {/* Order Details */}
+    <section className="flex max-h-[52%] min-h-0 flex-col rounded-xl border border-slate-200 bg-white p-5">
+      <div>
+        <h2 className="text-lg font-bold text-slate-800">
+          {chatT(t, "orderDetails", "Order Details")}
+        </h2>
+
+        {commerceContexts.length > 0 && (
+          <p className="mt-1 text-[10px] text-slate-400">
+            {commerceContexts.length} linked{" "}
+            {commerceContexts.length === 1 ? "order" : "orders"} in this
+            conversation
+          </p>
+        )}
+      </div>
+
+      <div className="mt-4 min-h-0 flex-1 space-y-5 overflow-y-auto pr-1">
+        {!selected && (
+          <p className="text-xs text-slate-400">
+            Select a conversation to view commerce information.
+          </p>
+        )}
+
+        {selected && commerceContexts.length === 0 && (
+          <p className="rounded-lg bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-500">
+            No order is linked to this conversation. The customer can send{" "}
+            <span className="font-semibold">orderId :123456</span>.
+          </p>
+        )}
+
+        {[...commerceContexts].reverse().map((context) => (
+          <CommerceOrderDetails
+            key={context.orderId}
+            context={context}
+            onViewOrder={onViewOrder}
+            onViewReturn={onViewReturn}
+          />
+        ))}
+      </div>
+    </section>
+
+    {/* Quick Messages */}
+    <section className="flex min-h-[320px] flex-1 flex-col rounded-xl border border-slate-200 bg-white p-5">
+      <div className="mb-5 flex items-center justify-between">
+        <h2 className="text-lg font-bold text-slate-800">
+          {chatT(t, "quickMessages", "Quick Messages")}
+        </h2>
+
+        <button onClick={() => setShowQuickModal(true)}>
+          <Plus size={18} />
+        </button>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+        {/* Saved Replies */}
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          {chatT(t, "savedReplies", "Saved Replies")}
+        </p>
+
         <div className="space-y-4">
           {quickMessages.map(([title, text], index) => {
             const [titleKey, textKey] = quickMessageKeys[index] || [];
+
             return (
-              <div key={title} className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-bold text-slate-800">{chatT(t, titleKey, title)}</p>
-                  <p className="mt-1 text-xs text-slate-500">{chatT(t, textKey, text)}</p>
+              <button
+                key={title}
+                onClick={() => setReply(chatT(t, textKey, text))}
+                className="flex w-full items-start justify-between gap-4 text-left"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-slate-800">
+                    {chatT(t, titleKey, title)}
+                  </p>
+
+                  <p className="mt-1 text-xs text-slate-500">
+                    {chatT(t, textKey, text)}
+                  </p>
                 </div>
-                <Edit2 size={15} className="mt-1 flex-shrink-0 text-slate-400" />
-              </div>
+
+                <Edit2
+                  size={15}
+                  className="mt-1 flex-shrink-0 text-slate-400"
+                />
+              </button>
             );
           })}
         </div>
-      </section>
-    </aside>
-  );
+      </div>
+
+      {/* Reply Input */}
+      <div className="mt-4 flex shrink-0 items-center gap-2 border-t border-slate-100 pt-4">
+        <input
+          value={reply}
+          onChange={(event) => setReply(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              submitReply();
+            }
+          }}
+          disabled={!selected || sending}
+          className="h-9 min-w-0 flex-1 rounded-full border border-slate-200 px-3 text-xs outline-none focus:border-primary disabled:bg-slate-50"
+          placeholder={chatT(t, "sellerReply", "Seller reply...")}
+        />
+
+        <button
+          onClick={submitReply}
+          disabled={!selected || !reply.trim() || sending}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-white disabled:opacity-50"
+          title={chatT(t, "send", "Send")}
+        >
+          <Send size={14} />
+        </button>
+      </div>
+    </section>
+  </aside>
+);
 }
 
 function SettingsView({ onBack, t }) {
@@ -564,59 +940,752 @@ function SettingsCard({ title, rows, t }) {
   );
 }
 
+function decorateConversation(conversation, index = 0) {
+  const conversationId = String(conversation.conversationId || conversation.id || "");
+  const avatarIndex = conversationId
+    ? [...conversationId].reduce((total, character) => total + character.charCodeAt(0), 0) % avatars.length
+    : index % avatars.length;
+  return {
+    ...conversation,
+    name: conversation.customerName,
+    avatar: conversation.avatar || avatars[avatarIndex],
+    active: true,
+  };
+}
+
+function sameChatStore(left, right) {
+  return Boolean(left && right && String(left.openId) === String(right.openId) && String(left.cipher) === String(right.cipher));
+}
+
+function mergeMessages(current, additions) {
+  const byId = new Map(
+    current
+      .filter((message) => !isHiddenTestChatMessage(message))
+      .map((message) => [String(message.id), message])
+  );
+
+  additions.forEach((message) => {
+    if (isHiddenTestChatMessage(message)) return;
+
+    const existing = byId.get(String(message.id));
+    byId.set(String(message.id), {
+      ...message,
+      imageUrl: existing?.imageUrl?.startsWith("blob:") ? existing.imageUrl : message.imageUrl,
+      videoUrl: existing?.videoUrl?.startsWith("blob:") ? existing.videoUrl : message.videoUrl,
+    });
+  });
+
+  return [...byId.values()]
+    .filter((message) => !isHiddenTestChatMessage(message))
+    .sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt));
+}
+
+function extractOrderIds(messages = []) {
+  const seen = new Set();
+  return messages.reduce((orderIds, message) => {
+    const orderId = message.incoming ? extractOrderId(message.message) : "";
+    if (orderId && !seen.has(orderId)) {
+      seen.add(orderId);
+      orderIds.push(orderId);
+    }
+    return orderIds;
+  }, []);
+}
+
 export default function ChatPage() {
   const { t } = useTranslation();
-  const [selectedCustomer, setSelectedCustomer] = useState(customers[0]);
+  const navigate = useNavigate();
+
+  // Restore the last rendered Chat page immediately when React mounts this route again.
+  // Full chat data stays in memory; only the small selected IDs are persisted in localStorage.
+  const initialStateRef = useRef(null);
+  if (initialStateRef.current === null) {
+    initialStateRef.current = {
+      cache: chatPageMemoryCache,
+      selection: getStoredChatValue(CHAT_PAGE_SELECTION_KEY, {}),
+    };
+  }
+
+  const initialCache = initialStateRef.current.cache || {};
+  const initialSelection = initialStateRef.current.selection || {};
+  const initialSelectedStoreId = initialCache.selectedStoreId || initialSelection.selectedStoreId || "";
+  const initialSelectedConversationId =
+    initialCache.selectedCustomer?.conversationId ||
+    initialSelection.selectedConversationId ||
+    "";
+
+  const [stores, setStores] = useState(() => initialCache.stores || []);
+  const [selectedStoreId, setSelectedStoreId] = useState(() => initialSelectedStoreId);
+  const [conversations, setConversations] = useState(() => initialCache.conversations || []);
+  const [selectedCustomer, setSelectedCustomer] = useState(() => initialCache.selectedCustomer || null);
+  const [messages, setMessages] = useState(() => initialCache.messages || []);
+  const [conversationsLoading, setConversationsLoading] = useState(false);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [conversationError, setConversationError] = useState("");
+  const [messageError, setMessageError] = useState("");
+  const [sending, setSending] = useState(false);
   const [quickModal, setQuickModal] = useState(false);
   const [markCustomer, setMarkCustomer] = useState(null);
   const [transferModal, setTransferModal] = useState(false);
-  const [assignOpen, setAssignOpen] = useState(false);
   const [settingsView, setSettingsView] = useState(false);
+  const [commerceContexts, setCommerceContexts] = useState(() => initialCache.commerceContexts || []);
+  const [unreadCounts, setUnreadCounts] = useState(() => initialCache.unreadCounts || {});
+  const [totalResponseSeconds, setTotalResponseSeconds] = useState(
+    () => Number(initialCache.totalResponseSeconds || 0)
+  );
+
+  const selectedStore = useMemo(
+    () => stores.find((store) => store.id === selectedStoreId) || null,
+    [selectedStoreId, stores]
+  );
+  const selectedStoreKey = selectedStore
+    ? `${selectedStore.id}::${selectedStore.openId || ""}::${selectedStore.cipher || ""}`
+    : "";
+
+  const selectedStoreRef = useRef(selectedStore);
+  const selectedCustomerRef = useRef(selectedCustomer);
+  const conversationsRef = useRef(initialCache.conversations || []);
+  const messagesRef = useRef(initialCache.messages || []);
+  const commerceContextsRef = useRef(initialCache.commerceContexts || []);
+  const restoredSnapshotRef = useRef(Boolean(initialStateRef.current.cache));
+  const restoredStoreIdRef = useRef(initialSelectedStoreId);
+  const restoredConversationIdRef = useRef(initialSelectedConversationId);
+  const activeDataStoreIdRef = useRef(initialCache.selectedStoreId || "");
+  const preferredConversationIdRef = useRef(initialSelectedConversationId);
+  const avatarAssignmentsRef = useRef(new Map(initialCache.avatarAssignments || []));
+  const pendingResponseStartedAtRef = useRef(new Map(initialCache.pendingResponseStartedAt || []));
+  const countedResponseIdsRef = useRef(new Set(initialCache.countedResponseIds || []));
+  const selectedConversationId = selectedCustomer?.conversationId || "";
+  const linkedOrderIdsKey = useMemo(() => JSON.stringify(extractOrderIds(messages)), [messages]);
+
+  useEffect(() => {
+    selectedStoreRef.current = selectedStore;
+  }, [selectedStore]);
+
+  useEffect(() => {
+    selectedCustomerRef.current = selectedCustomer;
+  }, [selectedCustomer]);
+
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    commerceContextsRef.current = commerceContexts;
+  }, [commerceContexts]);
+
+  const latestSnapshotRef = useRef(null);
+  latestSnapshotRef.current = {
+    stores,
+    selectedStoreId,
+    conversations,
+    selectedCustomer,
+    messages,
+    commerceContexts,
+    unreadCounts,
+    totalResponseSeconds,
+  };
+
+  // Keep a lightweight in-memory snapshot current. This is what makes route return instant.
+  useEffect(() => {
+    chatPageMemoryCache = {
+      ...latestSnapshotRef.current,
+      avatarAssignments: [...avatarAssignmentsRef.current.entries()],
+      pendingResponseStartedAt: [...pendingResponseStartedAtRef.current.entries()],
+      countedResponseIds: [...countedResponseIdsRef.current.values()],
+    };
+  });
+
+  // Keep only selected IDs in local storage so the preferred store/customer also survives a hard refresh.
+  useEffect(() => {
+    setStoredChatValue(CHAT_PAGE_SELECTION_KEY, {
+      selectedStoreId,
+      selectedConversationId: selectedConversationId || preferredConversationIdRef.current || "",
+    });
+  }, [selectedConversationId, selectedStoreId]);
+
+  // Capture the newest state synchronously when this route unmounts.
+  useEffect(() => () => {
+    chatPageMemoryCache = {
+      ...(latestSnapshotRef.current || {}),
+      avatarAssignments: [...avatarAssignmentsRef.current.entries()],
+      pendingResponseStartedAt: [...pendingResponseStartedAtRef.current.entries()],
+      countedResponseIds: [...countedResponseIdsRef.current.values()],
+    };
+  }, []);
+
+  const getConversationAvatar = useCallback((conversation) => {
+    const conversationId = String(conversation?.conversationId || conversation?.id || "");
+    const preferredAvatar = conversation?.avatar || "";
+    if (!conversationId) return preferredAvatar || avatars[0];
+
+    const assignedAvatar = avatarAssignmentsRef.current.get(conversationId);
+    if (assignedAvatar) return assignedAvatar;
+
+    const usedAvatars = new Set(avatarAssignmentsRef.current.values());
+    if (preferredAvatar && !usedAvatars.has(preferredAvatar)) {
+      avatarAssignmentsRef.current.set(conversationId, preferredAvatar);
+      return preferredAvatar;
+    }
+
+    const availableAvatar = avatars.find((avatar) => !usedAvatars.has(avatar));
+    const avatar = availableAvatar || `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(conversationId)}`;
+    avatarAssignmentsRef.current.set(conversationId, avatar);
+    return avatar;
+  }, []);
+
+  const markPendingResponse = useCallback((conversationId, startedAt) => {
+    const id = String(conversationId || "");
+    if (!id || pendingResponseStartedAtRef.current.has(id)) return;
+    const timestamp = new Date(startedAt || Date.now()).getTime();
+    if (Number.isFinite(timestamp)) pendingResponseStartedAtRef.current.set(id, timestamp);
+  }, []);
+
+  const recordCompletedResponse = useCallback(({ conversationId, responseAt, responseId }) => {
+    const id = String(conversationId || "");
+    if (!id) return;
+
+    const startedAt = pendingResponseStartedAtRef.current.get(id);
+    if (!Number.isFinite(startedAt)) return;
+
+    const completedAt = new Date(responseAt || Date.now()).getTime();
+    if (!Number.isFinite(completedAt) || completedAt < startedAt) return;
+
+    const uniqueResponseId = String(responseId || `${id}:${completedAt}`);
+    if (countedResponseIdsRef.current.has(uniqueResponseId)) return;
+
+    countedResponseIdsRef.current.add(uniqueResponseId);
+    pendingResponseStartedAtRef.current.delete(id);
+    setTotalResponseSeconds((current) => current + Math.max(0, Math.floor((completedAt - startedAt) / 1000)));
+  }, []);
+
+  const handleSelectCustomer = useCallback((customer) => {
+    restoredSnapshotRef.current = false;
+    preferredConversationIdRef.current = customer.conversationId;
+    messagesRef.current = [];
+    setMessages([]);
+    setSelectedCustomer(customer);
+    selectedCustomerRef.current = customer;
+    setUnreadCounts((current) => {
+      if (!current[customer.conversationId]) return current;
+      const next = { ...current };
+      delete next[customer.conversationId];
+      return next;
+    });
+  }, []);
+
+  const handleStoreChange = useCallback((event) => {
+    restoredSnapshotRef.current = false;
+    preferredConversationIdRef.current = "";
+    setSelectedStoreId(event.target.value);
+  }, []);
+
+  const loadConversations = useCallback(async (store, { silent = false } = {}) => {
+    if (!store) {
+      setConversations([]);
+      setSelectedCustomer(null);
+      return;
+    }
+    if (!silent) {
+      setConversationsLoading(true);
+      setConversationError("");
+    }
+    try {
+      const response = await fetchConversations({ store });
+      const rows = response.conversations.map((conversation, index) => {
+        const decorated = decorateConversation({
+          ...conversation,
+          avatar: getConversationAvatar(conversation),
+        }, index);
+
+        if (isHiddenTestChatMessage(decorated.lastMessage)) {
+          pendingResponseStartedAtRef.current.delete(String(decorated.conversationId || ""));
+        } else if (isAwaitingSellerResponse(decorated)) {
+          markPendingResponse(
+            decorated.conversationId,
+            decorated.updatedAt || decorated.createdAt
+          );
+        } else if (isSellerResponse(decorated)) {
+          recordCompletedResponse({
+            conversationId: decorated.conversationId,
+            responseAt: decorated.updatedAt || decorated.createdAt,
+            responseId: `poll:${store.id}:${decorated.conversationId}:${decorated.updatedAt || decorated.createdAt || ""}`,
+          });
+        }
+
+        return decorated;
+      });
+      setConversations(rows);
+      setSelectedCustomer((current) => {
+        const preferredId = current?.conversationId || preferredConversationIdRef.current;
+        const nextCustomer =
+          rows.find((row) => row.conversationId === preferredId) ||
+          rows[0] ||
+          null;
+
+        if (
+          current?.conversationId &&
+          nextCustomer?.conversationId &&
+          nextCustomer.conversationId !== current.conversationId
+        ) {
+          restoredSnapshotRef.current = false;
+        }
+
+        preferredConversationIdRef.current = nextCustomer?.conversationId || "";
+        return nextCustomer;
+      });
+    } catch (error) {
+      if (!silent) {
+        setConversations([]);
+        setSelectedCustomer(null);
+        setConversationError(error.message || "Unable to load conversations");
+      }
+    } finally {
+      if (!silent) setConversationsLoading(false);
+    }
+  }, [getConversationAvatar, markPendingResponse, recordCompletedResponse]);
+
+  useEffect(() => {
+    let active = true;
+    const loadStores = async () => {
+      const testStore = getStoredChatValue("test-store", null);
+      try {
+        const authorizedStores = await fetchChatStores();
+        if (!active) return;
+        const mergedStores = [...authorizedStores];
+        if (testStore?.openId && testStore?.cipher && !mergedStores.some((store) => sameChatStore(store, testStore))) {
+          mergedStores.push(testStore);
+        }
+        setStores(mergedStores);
+        setSelectedStoreId((current) => (
+          mergedStores.some((store) => store.id === current && !store.disabled)
+            ? current
+            : mergedStores.find((store) => !store.disabled)?.id || ""
+        ));
+      } catch (error) {
+        if (!active) return;
+        const fallbackStores = testStore?.openId && testStore?.cipher ? [testStore] : [];
+        setStores((current) => (current.length ? current : fallbackStores));
+        setSelectedStoreId((current) => current || fallbackStores[0]?.id || "");
+        if (!fallbackStores.length && !(initialCache.stores || []).length) {
+          setConversationError(error.message || "Unable to load TikTok stores");
+        }
+      }
+    };
+    loadStores();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    const store = selectedStoreRef.current;
+    if (!store) return;
+
+    const sameRenderedStore =
+      restoredSnapshotRef.current &&
+      String(activeDataStoreIdRef.current || "") === String(store.id || "");
+
+    if (sameRenderedStore) {
+      // Route return: keep the previous screen exactly as rendered and refresh behind it.
+      loadConversations(store, { silent: true });
+      return;
+    }
+
+    // Real store change / first uncached visit: reset store-specific state normally.
+    activeDataStoreIdRef.current = String(store.id || "");
+    messagesRef.current = [];
+    commerceContextsRef.current = [];
+    setMessages([]);
+    setCommerceContexts([]);
+    setSelectedCustomer(null);
+    selectedCustomerRef.current = null;
+    setUnreadCounts({});
+    setTotalResponseSeconds(0);
+    avatarAssignmentsRef.current = new Map();
+    pendingResponseStartedAtRef.current = new Map();
+    countedResponseIdsRef.current = new Set();
+    loadConversations(store);
+  }, [loadConversations, selectedStoreKey]);
+
+  useEffect(() => {
+    if (!selectedStoreKey) return undefined;
+    const intervalId = window.setInterval(() => {
+      const store = selectedStoreRef.current;
+      if (store) loadConversations(store, { silent: true });
+    }, 5000);
+    return () => window.clearInterval(intervalId);
+  }, [loadConversations, selectedStoreKey]);
+
+  useEffect(() => {
+    let active = true;
+    const store = selectedStoreRef.current;
+
+    if (!store || !selectedConversationId) {
+      messagesRef.current = [];
+      setMessages([]);
+      setMessagesLoading(false);
+      return () => { active = false; };
+    }
+
+    const keepPreviousDisplay =
+      restoredSnapshotRef.current &&
+      String(restoredStoreIdRef.current || "") === String(store.id || "") &&
+      String(restoredConversationIdRef.current || "") === String(selectedConversationId);
+
+    if (!keepPreviousDisplay) {
+      setMessagesLoading(true);
+      setMessageError("");
+    } else {
+      // Cached messages remain on screen while the request runs invisibly.
+      setMessagesLoading(false);
+    }
+
+    let firstLoad = true;
+    const refreshMessages = () => fetchConversationMessages({
+      store,
+      conversationId: selectedConversationId,
+    }).then((response) => {
+      if (active) {
+        setMessages((current) => mergeMessages(current, response.messages));
+        setMessageError("");
+      }
+    }).catch((error) => {
+      // If an old screen is already visible, a temporary refresh error should not replace it.
+      if (active && !keepPreviousDisplay) {
+        setMessageError(error.message || "Unable to load messages");
+      }
+    }).finally(() => {
+      if (active && firstLoad && !keepPreviousDisplay) setMessagesLoading(false);
+      firstLoad = false;
+    });
+
+    refreshMessages();
+    const intervalId = window.setInterval(refreshMessages, 2500);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
+  }, [selectedConversationId, selectedStoreKey]);
+
+  useEffect(() => {
+    let active = true;
+    const store = selectedStoreRef.current;
+    const linkedOrderIds = JSON.parse(linkedOrderIdsKey);
+
+    if (!store || !selectedConversationId || linkedOrderIds.length === 0) {
+      commerceContextsRef.current = [];
+      setCommerceContexts([]);
+      return () => { active = false; };
+    }
+
+    const keepPreviousDisplay =
+      restoredSnapshotRef.current &&
+      String(restoredStoreIdRef.current || "") === String(store.id || "") &&
+      String(restoredConversationIdRef.current || "") === String(selectedConversationId);
+
+    if (!keepPreviousDisplay) {
+      setCommerceContexts(linkedOrderIds.map((orderId) => ({
+        orderId,
+        order: null,
+        returns: [],
+        returnError: "",
+        loading: true,
+        error: "",
+      })));
+    }
+
+    Promise.all(linkedOrderIds.map(async (orderId) => {
+      try {
+        const context = await fetchTikTokConversationOrderContext({ store, orderId });
+        return { ...context, loading: false, error: "" };
+      } catch (error) {
+        return {
+          orderId,
+          order: null,
+          returns: [],
+          returnError: "",
+          loading: false,
+          error: error.message || "Unable to load order information",
+        };
+      }
+    })).then((contexts) => {
+      if (active) setCommerceContexts(contexts);
+    });
+
+    return () => { active = false; };
+  }, [linkedOrderIdsKey, selectedConversationId, selectedStoreKey]);
+
+  useEffect(() => {
+    const socket = createTikTokChatSocket({
+      onEvent: ({ destination, body }) => {
+        if (!body) return;
+        const store = selectedStoreRef.current;
+        if (!store) return;
+
+        if (destination === "/topic/tiktok/customer-service/conversations") {
+          const normalizedConversation = normalizeConversation(body, store);
+          if (!sameChatStore(store, normalizedConversation)) return;
+
+          const conversation = decorateConversation({
+            ...normalizedConversation,
+            avatar: getConversationAvatar(normalizedConversation),
+          });
+
+          if (isHiddenTestChatMessage(conversation.lastMessage)) {
+            pendingResponseStartedAtRef.current.delete(String(conversation.conversationId || ""));
+          } else if (isAwaitingSellerResponse(conversation)) {
+            markPendingResponse(
+              conversation.conversationId,
+              conversation.updatedAt || conversation.createdAt
+            );
+          } else if (isSellerResponse(conversation)) {
+            recordCompletedResponse({
+              conversationId: conversation.conversationId,
+              responseAt: conversation.updatedAt || conversation.createdAt,
+              responseId: `conversation:${conversation.conversationId}:${conversation.updatedAt || conversation.createdAt || ""}`,
+            });
+          }
+
+          setConversations((current) => [conversation, ...current.filter((item) => item.conversationId !== conversation.conversationId)]);
+          setSelectedCustomer((current) => current || conversation);
+          return;
+        }
+
+        if (destination?.includes("/tiktok/customer-service/") && destination?.endsWith("/messages")) {
+          const message = normalizeMessage(body);
+          if (!sameChatStore(store, message)) return;
+
+          if (isHiddenTestChatMessage(message)) {
+            pendingResponseStartedAtRef.current.delete(String(message.conversationId || ""));
+            setMessages((current) => current.filter((item) => !isHiddenTestChatMessage(item)));
+            return;
+          }
+
+          const isSelectedConversation = selectedCustomerRef.current?.conversationId === message.conversationId;
+          if (isSelectedConversation) {
+            setMessages((current) => mergeMessages(current, [message]));
+          } else if (message.incoming) {
+            setUnreadCounts((current) => ({
+              ...current,
+              [message.conversationId]: Number(current[message.conversationId] || 0) + 1,
+            }));
+          }
+
+          if (message.incoming) {
+            markPendingResponse(message.conversationId, message.createdAt);
+          } else {
+            recordCompletedResponse({
+              conversationId: message.conversationId,
+              responseAt: message.createdAt,
+              responseId: message.id,
+            });
+          }
+
+          setConversations((current) => {
+            const existing = current.find((item) => item.conversationId === message.conversationId);
+            const avatar = getConversationAvatar(existing || {
+              conversationId: message.conversationId,
+            });
+            const updated = decorateConversation(normalizeConversation({
+              ...(existing || {}),
+              conversationId: message.conversationId,
+              openId: message.openId,
+              cipher: message.cipher,
+              lastMessage: message.message,
+              lastMessageDirection: message.direction,
+              lastMessageSource: message.source,
+              updatedAt: message.createdAt,
+              avatar,
+            }, store));
+            return [updated, ...current.filter((item) => item.conversationId !== message.conversationId)];
+          });
+        }
+      },
+    });
+    socket.subscribe("/topic/tiktok/customer-service/conversations", "chat-conversations");
+    socket.subscribe("/topic/tiktok/customer-service/messages", "chat-messages");
+    socket.connect();
+    return () => socket.disconnect();
+  }, [getConversationAvatar, markPendingResponse, recordCompletedResponse]);
+
+  const updateConversationPreview = useCallback((message) => {
+    setConversations((current) => current.map((conversation) => (
+      conversation.conversationId === message.conversationId
+        ? {
+          ...conversation,
+          lastMessage: message.message,
+          lastMessageDirection: message.direction,
+          lastMessageSource: message.source,
+          updatedAt: message.createdAt,
+        }
+        : conversation
+    )));
+  }, []);
+
+  const handleSend = useCallback(async (messageText) => {
+    if (!selectedStore || !selectedCustomer) return false;
+    setSending(true);
+    setMessageError("");
+    try {
+      const savedMessage = await sendConversationReply({
+        store: selectedStore,
+        conversationId: selectedCustomer.conversationId,
+        message: messageText,
+      });
+      recordCompletedResponse({
+        conversationId: savedMessage.conversationId || selectedCustomer.conversationId,
+        responseAt: savedMessage.createdAt,
+        responseId: savedMessage.id,
+      });
+      setMessages((current) => mergeMessages(current, [savedMessage]));
+      updateConversationPreview(savedMessage);
+      return true;
+    } catch (error) {
+      setMessageError(error.message || "Unable to send message");
+      return false;
+    } finally {
+      setSending(false);
+    }
+  }, [recordCompletedResponse, selectedCustomer, selectedStore, updateConversationPreview]);
+
+  const handleUpload = useCallback(async (file) => {
+    if (!selectedStore || !selectedCustomer) return false;
+    setSending(true);
+    setMessageError("");
+    try {
+      const savedMessage = await uploadConversationMedia({
+        store: selectedStore,
+        conversationId: selectedCustomer.conversationId,
+        file,
+      });
+      const localPreviewUrl = URL.createObjectURL(file);
+      const previewMessage = {
+        ...savedMessage,
+        imageUrl: file.type.toLowerCase().startsWith("image/") ? localPreviewUrl : savedMessage.imageUrl,
+        videoUrl: file.type.toLowerCase().startsWith("video/") ? localPreviewUrl : savedMessage.videoUrl,
+      };
+      recordCompletedResponse({
+        conversationId: previewMessage.conversationId || selectedCustomer.conversationId,
+        responseAt: previewMessage.createdAt,
+        responseId: previewMessage.id,
+      });
+      setMessages((current) => mergeMessages(current, [previewMessage]));
+      updateConversationPreview(previewMessage);
+      return true;
+    } catch (error) {
+      setMessageError(error.message || "Unable to upload media");
+      return false;
+    } finally {
+      setSending(false);
+    }
+  }, [recordCompletedResponse, selectedCustomer, selectedStore, updateConversationPreview]);
+
+  const handleViewOrder = useCallback((order) => {
+    if (!order?.rawId) return;
+    const routeId = `tiktok:${order.rawId}`;
+    setStoredOrderContext(order.storeContext || {});
+    setCachedOrderDetailForId(routeId, order);
+    navigate(`/warehouse_management/orders/detail/${encodeURIComponent(routeId)}`);
+  }, [navigate]);
+
+  const handleViewReturn = useCallback((returnOrder) => {
+    if (!returnOrder?.id) return;
+    navigate(`/warehouse_management/orders/processing/return_order?returnId=${encodeURIComponent(returnOrder.id)}`);
+  }, [navigate]);
+
+  const notRespondCount = useMemo(() => (
+    conversations.filter(isAwaitingSellerResponse).length
+  ), [conversations]);
+
+  const totalResponse = useMemo(
+    () => formatResponseDuration(totalResponseSeconds),
+    [totalResponseSeconds]
+  );
 
   const metrics = useMemo(() => [
-    [chatT(t, "todaysReception", "Today's Reception"), "0"],
-    [chatT(t, "notRespond", "Not Respond"), "0"],
+    [chatT(t, "todaysReception", "Today's Reception"), String(conversations.length)],
+    [chatT(t, "notRespond", "Not Respond"), String(notRespondCount)],
     [chatT(t, "lateResponse", "Late Response"), "0"],
-    [chatT(t, "totalResponse", "Total Response"), "0h 0m 0s"],
+    [chatT(t, "totalResponse", "Total Response"), totalResponse],
     [chatT(t, "customerSatisfiedRate", "Customer Satisfied Rate"), "0"],
-  ], [t]);
+  ], [conversations.length, notRespondCount, t, totalResponse]);
 
   if (settingsView) return <SettingsView onBack={() => setSettingsView(false)} t={t} />;
 
   return (
     <div className="space-y-6 font-body text-slate-800">
       <Topbar PageTitle="Chat" />
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto overflow-y-hidden">
         <div
-          className="grid min-h-[calc(100vh-150px)] min-w-[1260px] gap-3"
-          style={{ gridTemplateColumns: "320px minmax(480px, 1fr) 300px" }}
+          className="grid h-[calc(100vh-250px)] min-h-[560px] min-w-[1260px] gap-3"
+          style={{ gridTemplateColumns: "320px minmax(480px, 1fr) 320px" }}
         >
-          <div className="flex min-h-[calc(100vh-150px)] flex-col gap-5">
-            <section className="grid min-h-[118px] grid-cols-3 gap-4 rounded-xl border border-slate-200 bg-white p-5">
+          <div className="flex h-full min-h-0 flex-col gap-5">
+            <section className="grid min-h-[118px] shrink-0 grid-cols-3 gap-4 rounded-xl border border-slate-200 bg-white p-5">
               <SelectBox label={chatT(t, "supportStatus", "Support Status")} options={[chatT(t, "online", "Online"), chatT(t, "offline", "Offline")]} />
-              <SelectBox label={chatT(t, "selectPlatform", "Select Platform")} options={[chatT(t, "platform", "Platform"), "Shopee", "TikTok"]} />
-              <SelectBox label={chatT(t, "selectStore", "Select Store")} options={[chatT(t, "store", "Store"), "Grozziie TH", "Grozziie MY"]} />
+              <SelectBox label={chatT(t, "selectPlatform", "Select Platform")} value="TikTok" disabled options={["TikTok"]} />
+              <SelectBox
+                label={chatT(t, "selectStore", "Select Store")}
+                value={selectedStoreId}
+                onChange={handleStoreChange}
+                disabled={!stores.length}
+                options={stores.length
+                  ? stores.map((store) => ({
+                    value: store.id,
+                    label: store.disabled ? `${store.label} (credentials unavailable)` : store.label,
+                    disabled: store.disabled,
+                  }))
+                  : [{ value: "", label: chatT(t, "store", "Store") }]}
+              />
             </section>
             <div className="min-h-0 flex-1">
               <ChatHistory
+                conversations={conversations}
                 selected={selectedCustomer}
-                onSelect={setSelectedCustomer}
+                onSelect={handleSelectCustomer}
+                unreadCounts={unreadCounts}
                 setShowTransfer={setTransferModal}
                 setShowMark={setMarkCustomer}
+                loading={conversationsLoading}
+                error={conversationError}
                 t={t}
               />
             </div>
           </div>
-          <div className="flex min-h-[calc(100vh-150px)] flex-col gap-5">
-            <section className="grid min-h-[118px] grid-cols-2 gap-4 rounded-xl border border-slate-200 bg-white p-5 md:grid-cols-5">
+          <div className="flex h-full min-h-0 flex-col gap-5">
+            <section className="grid min-h-[118px] shrink-0 grid-cols-2 gap-4 rounded-xl border border-slate-200 bg-white p-5 md:grid-cols-5">
               {metrics.map(([label, value]) => <Metric key={label} label={label} value={value} />)}
             </section>
             <div className="relative min-h-0 flex-1">
-              <Conversation selected={selectedCustomer} setShowAssign={() => setAssignOpen((value) => !value)} t={t} />
-              {assignOpen && <SupportAssignPopover t={t} />}
+              <Conversation
+                key={selectedConversationId || "no-conversation"}
+                selected={selectedCustomer}
+                messages={messages}
+                loading={messagesLoading}
+                error={messageError}
+                sending={sending}
+                onSend={handleSend}
+                onUpload={handleUpload}
+                commerceContexts={commerceContexts}
+                onViewOrder={handleViewOrder}
+                t={t}
+              />
             </div>
           </div>
-          <RightPanel setShowQuickModal={setQuickModal} t={t} />
+          <RightPanel
+            key={selectedConversationId || "quick-messages"}
+            setShowQuickModal={setQuickModal}
+            selected={selectedCustomer}
+            onSend={handleSend}
+            sending={sending}
+            commerceContexts={commerceContexts}
+            onViewOrder={handleViewOrder}
+            onViewReturn={handleViewReturn}
+            t={t}
+          />
         </div>
       </div>
       {quickModal && <AddQuickMessageModal onClose={() => setQuickModal(false)} t={t} />}

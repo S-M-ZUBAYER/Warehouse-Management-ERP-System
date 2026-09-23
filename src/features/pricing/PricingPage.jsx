@@ -711,6 +711,15 @@ const CURRENCY_SYMBOLS = {
   RMB: "¥",
 };
 const ZERO_DECIMAL_CURRENCIES = new Set(["IDR", "VND"]);
+const HIDDEN_PRICING_FEATURE_URLS = ["https://printernoble.com/ERP"];
+const normalizePricingFeature = (feature) =>
+  String(feature || "").trim().toLowerCase();
+const isVisiblePricingCardFeature = (feature) => {
+  const normalizedFeature = normalizePricingFeature(feature);
+  return !HIDDEN_PRICING_FEATURE_URLS.some((url) =>
+    normalizedFeature.includes(normalizePricingFeature(url)),
+  );
+};
 
 const FALLBACK_FEATURE_TRANSLATIONS = {
   en: {
@@ -1259,6 +1268,7 @@ function PlanCard({
   const currencySymbol = getCurrencySymbol(currencyCode);
   const durationParts = plan.duration.split(" ");
   const monthLabel = t("pricing.months", { defaultValue: durationParts[1] || "Months" });
+  const visibleFacilities = plan.facilities.filter(isVisiblePricingCardFeature);
 
   return (
     <article
@@ -1313,7 +1323,7 @@ function PlanCard({
           isActive ? "mt-[24px]" : "mt-[24px]"
         }`}
       >
-        {plan.facilities.map((facility) => (
+        {visibleFacilities.map((facility) => (
           <p
             key={facility}
             className="flex items-center gap-x-[9px] text-[15px] font-normal leading-[18px]"

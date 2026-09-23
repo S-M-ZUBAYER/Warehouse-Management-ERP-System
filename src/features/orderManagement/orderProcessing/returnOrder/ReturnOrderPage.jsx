@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Topbar from "../../../../components/layout/Topbar";
 import OrderFilterBar from "../../shared/components/OrderFilterBar";
 import OrderFooter from "../../shared/components/OrderFooter";
@@ -429,9 +429,11 @@ function PlatformInformation({ order }) {
 export default function ReturnOrderPage() {
   const { i18n, t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkedReturnId = searchParams.get("returnId");
   const language = i18n.resolvedLanguage || i18n.language || "en";
-  const [mode, setMode] = useState("list");
-  const [detailOrderId, setDetailOrderId] = useState(null);
+  const [mode, setMode] = useState(linkedReturnId ? "details" : "list");
+  const [detailOrderId, setDetailOrderId] = useState(linkedReturnId || null);
   const [orders, setOrders] = useState([]);
   const [pagination, setPagination] = useState({ total: 0, page: 1, limit: 10, totalPages: 1 });
   const [pageSizeInput, setPageSizeInput] = useState("10");
@@ -923,6 +925,11 @@ export default function ReturnOrderPage() {
         onBack={() => {
           setMode("list");
           setDetailOrderId(null);
+          if (searchParams.has("returnId")) {
+            const nextParams = new URLSearchParams(searchParams);
+            nextParams.delete("returnId");
+            setSearchParams(nextParams, { replace: true });
+          }
         }}
       />
     );
